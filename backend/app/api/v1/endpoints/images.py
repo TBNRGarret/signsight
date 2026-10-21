@@ -79,6 +79,19 @@ def image_content(image_id: str, request: Request, user: User = Depends(get_curr
     return Response(data, media_type="image/jpeg", headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
 
+
+@router.get("/images/{image_id}/thumbnail")
+def image_thumbnail(image_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    image = authorized_image(db, image_id, user)
+    data = request.app.state.image_store.read(image.storage_key, image.sha256)
+    with Image.open(io.BytesIO(data)) as source:
+        preview = source.convert("RGB")
+        preview.thumbnail((320, 320))
+        output = io.BytesIO()
+        preview.save(output, format="JPEG", quality=80, exif=b"", icc_profile=None)
+    return Response(output.getvalue(), media_type="image/jpeg",
+                    headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
 @router.post("/images/{image_id}/detect", response_model=RunResponse)
 def detect(image_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     image = authorized_image(db, image_id, user, owner_only=True)
