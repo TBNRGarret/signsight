@@ -2,12 +2,12 @@
 (function (root) {
   'use strict';
 
-  function mount({ L, document, environment = root }) {
-    const $ = id => document.getElementById(id);
+  function mount({ L, document, environment = root, idPrefix = '' }) {
+    const $ = id => document.getElementById(idPrefix + id);
     const notice = $('map-notice'), message = $('map-message');
     const retry = $('map-retry'), home = $('map-home');
     const sourceControl = $('map-source');
-    const map = L.map('map').setView([10.7769, 106.7009], 15);
+    const map = L.map(idPrefix + 'map').setView([10.7769, 106.7009], 15);
     const attribution = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>';
     const sources = [
       {id:'osm',url:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',attribution},

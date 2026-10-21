@@ -11,12 +11,12 @@ import re
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-ROOT_FILES = {".gitattributes", ".gitignore", ".env.example", "README.md", "CONTRIBUTING.md", "pytest.ini"}
+ROOT_FILES = {".gitattributes", ".gitignore", ".env.example", "README.md", "CONTRIBUTING.md", "pytest.ini", "package.json", "package-lock.json", "playwright.config.cjs"}
 TECHNICAL_DOCS = {
     "authentication_setup.md", "demo_benchmark.md", "drive_dataset_eda.md",
     "field_capture_quickstart.md", "field_dataset_protocol.md", "images_and_detection.md",
     "iphone_ipad_testing.md", "local_vietnam_pipeline.md", "vietnam_dataset_eda.md",
-    "vn_traffic_standards_mapping.md", "web_and_management.md", "github_preparation.md",
+    "vn_traffic_standards_mapping.md", "web_and_management.md", "github_preparation.md", "local_development.md", "contribution_flow.md",
 }
 SOURCE_SUFFIXES = {".py", ".txt", ".ini", ".json", ".sql", ".html", ".css", ".js", ".cjs", ".ipynb"}
 SENSITIVE_NAMES = {".env", "credentials.json", "kaggle.json", "login.txt"}
@@ -49,6 +49,8 @@ def is_public_path(name):
         return name == "data/taxonomy.json" or (
             path.parent.as_posix() == "data/processed" and path.name in {"train.csv", "val.csv", "test.csv"}
         )
+    if name == "tests/browser/fixtures/sign.png":
+        return True
     if name.startswith("backend/uploads/"):
         return name == "backend/uploads/.gitkeep"
     if name.startswith("ai_engine/checkpoints/"):
@@ -96,7 +98,7 @@ def export_repository(root, destination, paths):
     for name in selected:
         content = (root / name).read_bytes()
         # Preserve exact upstream Leaflet bytes: its assets use SRI hashes.
-        if name.startswith("frontend/vendor/"):
+        if name.startswith("frontend/vendor/") or name == "tests/browser/fixtures/sign.png":
             prepared[name] = content
             continue
         if b"\x00" in content:

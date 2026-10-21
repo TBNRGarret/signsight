@@ -74,7 +74,7 @@
         $('selected-evidence-button').hidden=!detail.evidence.length;
         $('report-form').hidden=Boolean(sign.merged_into_id)||sign.status==='removed';
         if(sign.merged_into_id)$('selected-meta').append(node('p','Biển này đã được gộp vào bản ghi khác; hãy báo cáo trên biển hiện tại.'));
-        showActionFields();map.flyTo([sign.latitude,sign.longitude],Math.max(map.getZoom(),17));
+        showActionFields();map.flyTo([sign.latitude,sign.longitude],Math.max(map.getZoom(),17));return detail;
       }catch(error){if(version===epoch&&generation===selectGeneration){$('selected-title').textContent=error.message;selected=null;}}
     }
 

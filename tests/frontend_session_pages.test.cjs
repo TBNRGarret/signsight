@@ -3,7 +3,9 @@ const fs = require('node:fs'), vm = require('node:vm'), path = require('node:pat
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const read = name => fs.readFileSync(path.join(__dirname, '../frontend', name), 'utf8');
 class Element {
-  constructor() { this.value=''; this.children=[]; this.textContent=''; this.hidden=false; }
+  constructor() { this.value=''; this.children=[]; this.textContent=''; this.hidden=false; this.dataset={}; }
+  get textContent(){return (this._text||'')+this.children.map(node=>node.textContent||'').join('');}
+  set textContent(value){this._text=String(value);this.children=[];}
   append(...nodes) { this.children.push(...nodes); }
   replaceChildren(...nodes) { this.children=nodes; }
   addEventListener() {}
@@ -20,7 +22,7 @@ function app(request) {
   const context=vm.createContext({window,document,URLSearchParams,clearTimeout,setTimeout,navigator:{},
     CustomEvent:class{constructor(type){this.type=type;}}});
   return {api,window,document,elements,context,calls,finish,
-    get:id=>document.getElementById(id), run:name=>vm.runInContext(read(name),context)};
+    get:id=>document.getElementById(id), run:name=>{if(name==='observations.js')vm.runInContext(read('contribution_history.js'),context);return vm.runInContext(read(name),context);}};
 }
 function mapApp(request) {
   const a=app(request), map={on(){},removeLayer(){},getBounds:()=>({getSouth:()=>10.7,getNorth:()=>10.9,getWest:()=>106.6,getEast:()=>106.8})};
@@ -28,7 +30,7 @@ function mapApp(request) {
   a.window.signSightMap={mount:()=>({map})};
   a.window.signSightReports={mount:()=>({refreshPin(){},select(){}})};
   a.get('nearby-radius').value='1000';
-  a.run('routing.js');
+  a.run('routing.js');a.run('sign_link.js');
   for(const script of read('index.html').matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))vm.runInContext(script[1],a.context);
   return a;
 }
@@ -87,6 +89,7 @@ test('restored session initializes the image workspace and loads history',async(
   a.api.user={id:'u',username:'rider',role:'user'};a.finish();await tick();
   assert.equal(a.get('login').hidden,true);
   assert.equal(a.get('workspace').hidden,false);
+  assert.equal(a.get('auth-intro').hidden,true);
   assert.equal(a.get('moderation').hidden,true);
   assert.ok(a.calls.some(route=>route.startsWith('/me/observations?')));
 });

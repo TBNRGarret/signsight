@@ -16,11 +16,13 @@
     @media(max-width:760px){.grid{grid-template-columns:1fr}header,main{padding:16px}}
   </style>
   <link rel="stylesheet" href="theme.css?v=20261020">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=1.9.4" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=">
+  <link rel="stylesheet" href="observations.css?v=20261021">
 </head>
 <body>
 <header><a href="index.html">← Bản đồ và tài khoản</a> <a href="management.html" data-staff-only hidden>· Reports &amp; nghi trùng</a><h1>Chụp ảnh và đóng góp</h1>
 <div class="theme-control"><label for="theme-mode">Giao diện</label><select id="theme-mode" data-theme-select><option value="system">Theo thiết bị</option><option value="light">Sáng</option><option value="dark">Tối</option></select></div>
-<p>Đăng nhập để chụp ảnh, nhận diện biển báo và gửi đóng góp.</p>
+<p id="auth-intro">Đăng nhập để chụp ảnh, nhận diện biển báo và gửi đóng góp.</p>
 <p class="muted">Chọn ảnh để nhận diện và gửi đóng góp. Ảnh chưa gửi đóng góp chỉ chủ ảnh xem được.</p></header>
 <main>
   <section>
@@ -32,15 +34,38 @@
     <p id="status" role="status" aria-live="polite"></p>
   </section>
   <div id="workspace" hidden>
-    <section><h2>Chụp ảnh và nhận diện biển báo</h2>
-      <p class="muted">Ảnh đường phố: dùng YOLO. CNN chỉ phân loại ảnh đã cắt một biển. Hãy xác nhận vị trí của từng biển; GPS camera có thể khác vị trí biển.</p>
+    <section id="capture-panel" aria-busy="false"><h2>Đóng góp ảnh biển báo</h2>
+      <p class="muted">Chọn ảnh, kiểm tra biển được nhận diện rồi xác nhận vị trí trước khi gửi duyệt.</p>
       <p id="model-status" class="muted"></p>
-      <label for="camera">Chụp ảnh → nhận diện bằng YOLO</label>
-      <input type="file" id="camera" accept="image/jpeg,image/png,image/webp" capture="environment" aria-describedby="camera-help">
-      <p id="camera-help" class="muted">Trên điện thoại: chụp bằng camera sau, xác nhận ảnh để tự tải lên và vẽ khung biển. Trên máy tính có thể hiện hộp chọn file. Hỗ trợ JPEG, PNG, WebP; nếu ảnh HEIC bị từ chối, chọn bản JPEG. Kết quả chỉ được gửi duyệt khi bạn xác nhận bên dưới.</p>
-      <label for="file">Ảnh JPEG, PNG hoặc WebP</label><input type="file" id="file" accept="image/jpeg,image/png,image/webp">
-      <button id="upload">Upload ảnh</button><button id="detect" disabled>Detect bằng YOLO</button><button id="classify" disabled>Phân loại ảnh cắt bằng CNN</button>
-      <p id="image-info" class="muted"></p><canvas id="preview" hidden></canvas>
+      <button id="choose-photo" type="button" aria-controls="photo-choices" aria-expanded="false">Chụp hoặc chọn ảnh</button>
+      <div id="photo-choices" hidden aria-label="Nguồn ảnh">
+        <button id="take-photo" type="button">Chụp ảnh</button>
+        <button id="choose-file" type="button">Chọn từ thư viện</button>
+      </div>
+      <input type="file" id="camera" accept="image/jpeg,image/png,image/webp" capture="environment" hidden aria-label="Ảnh chụp">
+      <input type="file" id="file" accept="image/jpeg,image/png,image/webp" hidden aria-label="Ảnh từ thư viện">
+      <p class="muted">JPEG, PNG hoặc WebP, tối đa 10 MB. Chụp rõ biển và giữ bối cảnh xung quanh.</p>
+      <p id="capture-stage" role="status" aria-live="polite">Chọn một ảnh để bắt đầu.</p>
+      <button id="retry-upload" type="button" hidden>Thử tải ảnh lại</button>
+      <button id="detect" type="button" hidden disabled>Thử nhận diện lại</button>
+      <p id="image-info" class="muted"></p><canvas id="preview" hidden aria-label="Ảnh và các biển được nhận diện"></canvas>
+      <div id="location-panel" class="location-panel" hidden>
+        <h3 id="location-title">Chọn vị trí biển</h3>
+        <p class="muted">Chạm bản đồ hoặc kéo ghim tới biển. Vị trí điện thoại chỉ là gợi ý.</p>
+        <div class="location-map-wrap">
+          <div id="location-map" aria-label="Bản đồ chọn vị trí biển"></div>
+          <div id="location-map-notice" class="location-notice" hidden>
+            <p id="location-map-message"></p><button id="location-map-retry" type="button">Thử tải lại</button>
+          </div>
+          <button id="location-map-home" type="button" class="location-home">Về TP.HCM</button>
+          <select id="location-map-source" class="location-source" aria-label="Nguồn nền bản đồ chọn vị trí">
+            <option value="osm">OpenStreetMap</option><option value="osm-de">OpenStreetMap · dự phòng</option>
+          </select>
+        </div>
+        <p id="location-status" role="status" aria-live="polite"></p>
+        <button id="location-gps" type="button">Gợi ý từ vị trí của tôi</button>
+        <button id="location-confirm" type="button" disabled>Xác nhận vị trí biển này</button>
+      </div>
       <form id="submission"><div id="detections"></div><button id="submit" disabled>Gửi các biển đã chọn để duyệt</button></form>
     </section>
     <section><h2>Đóng góp của tài khoản</h2>
@@ -52,5 +77,8 @@
       <button id="queue-prev" disabled>Trang trước</button><button id="queue-next" disabled>Trang sau</button><span id="queue-page" class="muted"></span></section>
   </div>
 </main>
-<script src="auth.js?v=20261020-remember"></script><script src="observations.js?v=20261020-remember"></script>
+<script src="vendor/leaflet/leaflet.js?v=1.9.4" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="></script>
+<script src="map.js?v=20261021"></script><script src="location_picker.js?v=20261021"></script>
+<script src="contribution_history.js?v=20261021"></script>
+<script src="auth.js?v=20261020-remember"></script><script src="observations.js?v=20261021-flow"></script>
 </body></html>

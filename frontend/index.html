@@ -194,6 +194,7 @@
     </div>
 
     <div class="content">
+      <p id="sign-link-status" class="hint" role="status" hidden></p>
       <a class="btn btn-secondary" href="observations.html">Chụp ảnh &amp; thử YOLO</a>
       <a class="btn btn-secondary" href="management.html" data-staff-only hidden>Reports, nghi trùng &amp; cấu hình</a>
       <div class="card">
@@ -400,6 +401,7 @@
   <script src="auth.js?v=20261020-remember"></script>
   <script src="routing.js"></script>
   <script src="reports.js"></script>
+  <script src="sign_link.js?v=20261021"></script>
   <script>
     const { map } = window.signSightMap.mount({L, document});
 
@@ -440,6 +442,12 @@
     const api = window.signSightAuth;
     const navigationController = window.signSightRouting.mount({api,map,L,document,getOrigin:()=>selectedCoords});
     const signReports = window.signSightReports.mount({api,map,document,getPinned:()=>selectedCoords});
+    window.signSightSignLink.mount({
+      api,environment:window,selectSign:id=>signReports.select(id),
+      createMarker:sign=>L.circleMarker([sign.latitude,sign.longitude],{radius:13,color:'#2563eb',weight:3,fillOpacity:.15}).addTo(map),
+      removeMarker:marker=>map.removeLayer(marker),
+      onMessage:text=>{const status=document.getElementById('sign-link-status');status.textContent=text;status.hidden=!text;}
+    });
     let accountOffset = 0;
     let authGeneration = 0;
     const accountLimit = 20;

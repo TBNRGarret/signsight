@@ -2,6 +2,8 @@
 
 Web responsive để đóng góp ảnh và quản lý bản đồ biển báo giao thông. Backend FastAPI phục vụ cả API lẫn frontend HTML/CSS/JavaScript trong một server.
 
+Hướng dẫn [đóng góp ảnh và xem biển được duyệt](docs/contribution_flow.md).
+
 Luồng chính: **chụp/upload ảnh → YOLO phát hiện → người dùng xác nhận nhãn và tọa độ → gửi đóng góp → manager duyệt → biển xuất hiện trên bản đồ**.
 
 ## Tính năng

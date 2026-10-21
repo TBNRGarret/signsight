@@ -42,3 +42,17 @@ jobs:
         run: python -m pytest tests -q
       - name: JavaScript tests
         run: node --test tests/*.test.cjs
+      - name: Install browser test dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Browser contribution flows
+        run: npm run test:e2e
+      - name: Preserve browser failure traces
+        if: failure()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: browser-failure-traces
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
