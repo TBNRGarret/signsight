@@ -1,6 +1,7 @@
 """Build a self-contained Colab/Kaggle notebook from tested pipeline sources."""
 import base64
 import gzip
+import io
 import hashlib
 import json
 from pathlib import Path
@@ -28,7 +29,14 @@ print(torch.__version__, torch.cuda.get_device_name(0))''')
         'ai_engine/config.py', 'ai_engine/detection.py', 'ai_engine/prepare_detection_data.py',
         'ai_engine/train_detection.py', 'ai_engine/notebook_data.py', 'data/taxonomy.json')}
     splits = {name:(ROOT/'data/processed'/name).read_bytes() for name in ('train.csv','val.csv','test.csv')}
-    payload = {name:base64.b64encode(gzip.compress(data,mtime=0)).decode() for name,data in splits.items()}
+    # GzipFile writes OS=255 on every platform. Python 3.11 gzip.compress
+    # with mtime=0 delegates the header to zlib, exposing the build OS.
+    payload = {}
+    for name, data in splits.items():
+        buffer = io.BytesIO()
+        with gzip.GzipFile(filename='', mode='wb', fileobj=buffer, compresslevel=9, mtime=0) as archive:
+            archive.write(data)
+        payload[name] = base64.b64encode(buffer.getvalue()).decode()
     checksums = {name:hashlib.sha256(data).hexdigest() for name,data in splits.items()}
     md('''## Code và splits có sẵn
 Giữ nguyên split theo track và taxonomy 10 lớp của repo, không chia lại dữ liệu khi mở notebook.
