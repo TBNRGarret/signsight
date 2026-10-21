@@ -202,3 +202,14 @@ def test_api_rejects_invalid_confidence_setting(monkeypatch, confidence):
     monkeypatch.setenv('SIGNSIGHT_YOLO_CONFIDENCE', confidence)
     with pytest.raises(ValueError, match='confidence'):
         Settings.from_env()
+
+
+def test_detector_configuration_prepares_an_explicit_writable_settings_directory(tmp_path, monkeypatch):
+    from ai_engine.detection import configure_ultralytics
+    config = tmp_path / "fresh-checkout" / "yolo-settings"
+    monkeypatch.setenv("YOLO_CONFIG_DIR", str(config))
+    monkeypatch.delenv("YOLO_AUTOINSTALL", raising=False)
+    configure_ultralytics()
+    assert config.is_dir(), "A new checkout must not fall back to writing Ultralytics/ into source"
+    import os
+    assert os.environ["YOLO_AUTOINSTALL"] == "false"

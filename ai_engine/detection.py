@@ -37,7 +37,8 @@ def checkpoint_hash(path: Path) -> str:
 
 
 def configure_ultralytics():
-    os.environ.setdefault("YOLO_CONFIG_DIR", str(Path(PROJECT_ROOT) / ".cache" / "ultralytics"))
+    config_dir = os.environ.setdefault("YOLO_CONFIG_DIR", str(Path(PROJECT_ROOT) / ".cache" / "ultralytics"))
+    Path(config_dir).mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("YOLO_AUTOINSTALL", "false")
 
 
