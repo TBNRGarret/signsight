@@ -1,0 +1,122 @@
+[
+  {
+    "new_id": 0,
+    "gtsrb_id": 2,
+    "qcvn_code": "P.127 (50)",
+    "name_vi": "Tốc độ tối đa cho phép (50 km/h)",
+    "name_en": "Speed limit (50 km/h)",
+    "category": "Biển báo cấm (Prohibitory)",
+    "vietnam_context": "Rất phổ biến trong khu vực đô thị, khu đông dân cư đường 2 chiều không có dải phân cách giữa.",
+    "shape": "circle",
+    "border_color": "red",
+    "background_color": "white"
+  },
+  {
+    "new_id": 1,
+    "gtsrb_id": 3,
+    "qcvn_code": "P.127 (60)",
+    "name_vi": "Tốc độ tối đa cho phép (60 km/h)",
+    "name_en": "Speed limit (60 km/h)",
+    "category": "Biển báo cấm (Prohibitory)",
+    "vietnam_context": "Phổ biến trong đô thị có dải phân cách giữa và các trục đường đôi tại Việt Nam.",
+    "shape": "circle",
+    "border_color": "red",
+    "background_color": "white"
+  },
+  {
+    "new_id": 2,
+    "gtsrb_id": 5,
+    "qcvn_code": "P.127 (80)",
+    "name_vi": "Tốc độ tối đa cho phép (80 km/h)",
+    "name_en": "Speed limit (80 km/h)",
+    "category": "Biển báo cấm (Prohibitory)",
+    "vietnam_context": "Áp dụng ngoài khu đông dân cư, đường vành đai, quốc lộ và một số đoạn đường cao tốc.",
+    "shape": "circle",
+    "border_color": "red",
+    "background_color": "white"
+  },
+  {
+    "new_id": 3,
+    "gtsrb_id": 9,
+    "qcvn_code": "P.125",
+    "name_vi": "Cấm vượt",
+    "name_en": "No passing / No overtaking",
+    "category": "Biển báo cấm (Prohibitory)",
+    "vietnam_context": "Biển cấm các loại xe cơ giới vượt nhau trên các đoạn đường hẹp, đường đèo dốc nguy hiểm tại Việt Nam.",
+    "shape": "circle",
+    "border_color": "red",
+    "background_color": "white"
+  },
+  {
+    "new_id": 4,
+    "gtsrb_id": 14,
+    "qcvn_code": "P.122",
+    "name_vi": "Dừng lại (STOP)",
+    "name_en": "Stop",
+    "category": "Biển báo cấm (Prohibitory / Safety)",
+    "vietnam_context": "Bắt buộc mọi phương tiện dừng lại trước vạch dừng tại các nút giao nguy hiểm hoặc giao cắt đường sắt.",
+    "shape": "octagon",
+    "border_color": "white",
+    "background_color": "red"
+  },
+  {
+    "new_id": 5,
+    "gtsrb_id": 17,
+    "qcvn_code": "P.102",
+    "name_vi": "Cấm đi ngược chiều",
+    "name_en": "No entry",
+    "category": "Biển báo cấm (Prohibitory)",
+    "vietnam_context": "Cấm tất cả các loại xe đi vào theo chiều đặt biển, đặc biệt tại các tuyến đường một chiều ở Hà Nội, TP.HCM.",
+    "shape": "circle",
+    "border_color": "red",
+    "background_color": "red"
+  },
+  {
+    "new_id": 6,
+    "gtsrb_id": 18,
+    "qcvn_code": "W.245a",
+    "name_vi": "Đi chậm / Nguy hiểm khác",
+    "name_en": "General caution / Danger",
+    "category": "Biển báo nguy hiểm (Warning)",
+    "vietnam_context": "Cảnh báo đoạn đường hay xảy ra tai nạn hoặc có nguy hiểm bất ngờ không có biển báo riêng.",
+    "shape": "triangle",
+    "border_color": "red",
+    "background_color": "yellow_or_white"
+  },
+  {
+    "new_id": 7,
+    "gtsrb_id": 25,
+    "qcvn_code": "W.227",
+    "name_vi": "Công trường đang thi công",
+    "name_en": "Road work",
+    "category": "Biển báo nguy hiểm (Temporary Warning)",
+    "vietnam_context": "Báo trước gần tới đoạn đường đang sửa chữa, thi công. Biển này mang tính tạm thời, rất phù hợp với luồng Revalidation/Expiration.",
+    "shape": "triangle",
+    "border_color": "red",
+    "background_color": "yellow_or_white"
+  },
+  {
+    "new_id": 8,
+    "gtsrb_id": 35,
+    "qcvn_code": "R.301a",
+    "name_vi": "Các xe chỉ được đi thẳng",
+    "name_en": "Ahead only",
+    "category": "Biển hiệu lệnh (Mandatory)",
+    "vietnam_context": "Đặt trước nút giao, bắt buộc các phương tiện chỉ được đi thẳng, không được rẽ trái hay rẽ phải.",
+    "shape": "circle",
+    "border_color": "blue",
+    "background_color": "blue"
+  },
+  {
+    "new_id": 9,
+    "gtsrb_id": 38,
+    "qcvn_code": "R.301e",
+    "name_vi": "Hướng đi phải theo: Đi vòng sang bên phải",
+    "name_en": "Keep right",
+    "category": "Biển hiệu lệnh (Mandatory)",
+    "vietnam_context": "Đặt tại các đảo giao thông, dải phân cách giữa, chướng ngại vật trên đường ở Việt Nam để chỉ dẫn luồng xe chạy.",
+    "shape": "circle",
+    "border_color": "blue",
+    "background_color": "blue"
+  }
+]

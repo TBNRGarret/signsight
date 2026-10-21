@@ -1,0 +1,30 @@
+:root {
+  color-scheme:light;
+  --bg:#f1f5f9; --card-bg:#ffffff; --panel:#f8fafc;
+  --border:#cbd5e1; --input-border:#94a3b8;
+  --primary:#2563eb; --primary-hover:#1d4ed8; --on-primary:#ffffff;
+  --secondary:#e2e8f0; --secondary-hover:#cbd5e1;
+  --text-main:#0f172a; --text-sub:#475569; --link:#1d4ed8;
+  --accent:#047857; --warning:#92400e; --danger:#b91c1c;
+  --badge-bg:#dbeafe; --badge-text:#1e40af;
+}
+:root[data-theme="dark"] {
+  color-scheme:dark;
+  --bg:#0f172a; --card-bg:#1e293b; --panel:#0f172a;
+  --border:#334155; --input-border:#64748b;
+  --primary:#2563eb; --primary-hover:#1d4ed8; --on-primary:#ffffff;
+  --secondary:#334155; --secondary-hover:#475569;
+  --text-main:#f8fafc; --text-sub:#cbd5e1; --link:#93c5fd;
+  --accent:#34d399; --warning:#fbbf24; --danger:#f87171;
+  --badge-bg:#1e3a5f; --badge-text:#bfdbfe;
+}
+a { color:var(--link); }
+input,select,textarea { accent-color:var(--primary); }
+:focus-visible { outline:3px solid var(--link); outline-offset:3px; }
+.theme-control { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:12px; color:var(--text-sub); font-size:13px; }
+.theme-control label { margin:0; font-size:inherit; }
+.theme-control select { width:auto; max-width:100%; min-height:44px; margin:0; padding:8px 12px; border:1px solid var(--input-border); border-radius:8px; background:var(--panel); color:var(--text-main); font:16px system-ui,sans-serif; }
+.leaflet-bar a,.leaflet-bar a:hover { background:var(--card-bg); color:var(--text-main); border-color:var(--border); }
+.leaflet-bar a.leaflet-disabled { background:var(--panel); color:var(--text-sub); }
+.leaflet-control-attribution { background:var(--card-bg)!important; color:var(--text-sub); }
+.leaflet-control-attribution a { color:var(--link); }

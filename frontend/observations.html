@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SignSight · Chụp ảnh và đóng góp</title>
+  <script src="theme.js?v=20261020"></script>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text-main);font:15px system-ui,sans-serif}
+    header,main{max-width:1200px;margin:auto;padding:24px}a{color:var(--link)}h1{font-size:26px;margin:8px 0}h2{font-size:20px}
+    p{line-height:1.6}section,article{background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:20px;margin:16px 0}
+    label{display:block;margin:12px 0 6px}input,select,textarea{width:100%;padding:10px;border:1px solid var(--input-border);border-radius:6px;background:var(--panel);color:inherit;font:inherit}
+    button{padding:10px 16px;margin:8px 8px 0 0;background:var(--primary);border:0;border-radius:6px;color:var(--on-primary);cursor:pointer;font:inherit}button:disabled{opacity:.4;cursor:default}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.muted{color:var(--text-sub);font-size:13px}canvas,img{max-width:100%;height:auto;border-radius:8px}
+    [hidden]{display:none!important}#status{min-height:24px;color:var(--warning);overflow-wrap:anywhere}.reject{background:#9f1239}.inline{display:flex;align-items:center;gap:8px}.inline input{width:auto}
+    @media(max-width:760px){.grid{grid-template-columns:1fr}header,main{padding:16px}}
+  </style>
+  <link rel="stylesheet" href="theme.css?v=20261020">
+</head>
+<body>
+<header><a href="index.html">← Bản đồ và tài khoản</a> <a href="management.html" data-staff-only hidden>· Reports &amp; nghi trùng</a><h1>Chụp ảnh và đóng góp</h1>
+<div class="theme-control"><label for="theme-mode">Giao diện</label><select id="theme-mode" data-theme-select><option value="system">Theo thiết bị</option><option value="light">Sáng</option><option value="dark">Tối</option></select></div>
+<p>Đăng nhập để chụp ảnh, nhận diện biển báo và gửi đóng góp.</p>
+<p class="muted">Chọn ảnh để nhận diện và gửi đóng góp. Ảnh chưa gửi đóng góp chỉ chủ ảnh xem được.</p></header>
+<main>
+  <section>
+    <form id="login"><div class="grid"><div><label for="username">Tên đăng nhập</label><input id="username" required autocomplete="username"></div>
+      <div><label for="password">Mật khẩu</label><input id="password" type="password" required autocomplete="current-password" maxlength="128"></div></div>
+      <label class="inline"><input id="remember" type="checkbox"> Ghi nhớ đăng nhập 30 ngày trên thiết bị này</label>
+      <button type="submit">Đăng nhập</button></form>
+    <p id="profile">Chưa đăng nhập</p><button id="logout" hidden>Đăng xuất</button>
+    <p id="status" role="status" aria-live="polite"></p>
+  </section>
+  <div id="workspace" hidden>
+    <section><h2>Chụp ảnh và nhận diện biển báo</h2>
+      <p class="muted">Ảnh đường phố: dùng YOLO. CNN chỉ phân loại ảnh đã cắt một biển. Hãy xác nhận vị trí của từng biển; GPS camera có thể khác vị trí biển.</p>
+      <p id="model-status" class="muted"></p>
+      <label for="camera">Chụp ảnh → nhận diện bằng YOLO</label>
+      <input type="file" id="camera" accept="image/jpeg,image/png,image/webp" capture="environment" aria-describedby="camera-help">
+      <p id="camera-help" class="muted">Trên điện thoại: chụp bằng camera sau, xác nhận ảnh để tự tải lên và vẽ khung biển. Trên máy tính có thể hiện hộp chọn file. Hỗ trợ JPEG, PNG, WebP; nếu ảnh HEIC bị từ chối, chọn bản JPEG. Kết quả chỉ được gửi duyệt khi bạn xác nhận bên dưới.</p>
+      <label for="file">Ảnh JPEG, PNG hoặc WebP</label><input type="file" id="file" accept="image/jpeg,image/png,image/webp">
+      <button id="upload">Upload ảnh</button><button id="detect" disabled>Detect bằng YOLO</button><button id="classify" disabled>Phân loại ảnh cắt bằng CNN</button>
+      <p id="image-info" class="muted"></p><canvas id="preview" hidden></canvas>
+      <form id="submission"><div id="detections"></div><button id="submit" disabled>Gửi các biển đã chọn để duyệt</button></form>
+    </section>
+    <section><h2>Đóng góp của tài khoản</h2>
+      <label for="history-status">Trạng thái đóng góp</label>
+      <select id="history-status"><option value="">Tất cả trạng thái</option><option value="pending">Chờ duyệt</option><option value="accepted">Đã duyệt</option><option value="rejected">Bị từ chối</option></select>
+      <button id="history-refresh">Tải lịch sử</button><div id="history" aria-live="polite" aria-busy="false"></div>
+      <button id="history-prev" disabled>Trang trước</button><button id="history-next" disabled>Trang sau</button><span id="history-page" class="muted"></span></section>
+    <section id="moderation" hidden><h2>Đóng góp chờ duyệt</h2><button id="queue-refresh">Tải danh sách</button><div id="queue"></div>
+      <button id="queue-prev" disabled>Trang trước</button><button id="queue-next" disabled>Trang sau</button><span id="queue-page" class="muted"></span></section>
+  </div>
+</main>
+<script src="auth.js?v=20261020-remember"></script><script src="observations.js?v=20261020-remember"></script>
+</body></html>

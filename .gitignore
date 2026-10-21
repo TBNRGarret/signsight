@@ -1,0 +1,109 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environments & Virtual Envs
+.venv/
+.venv-yolo/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# OS specific files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# Large Datasets & Archives (GitHub blocks files > 100MB)
+archive/
+archive.zip
+*.zip
+*.tar.gz
+*.rar
+*.7z
+/yolo_*_result/
+
+# Databases & Local Uploads
+*.db
+*.sqlite3
+backend/signsight.db
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/backups/
+backend/certs/
+*.pem
+*.key
+*.p12
+*.pfx
+.env
+.env.*
+!.env.example
+kaggle.json
+credentials.json
+
+# Model weights & checkpoints (Prevent large binary files pushing to Git)
+*.pth
+*.pt
+*.onnx
+*.engine
+ai_engine/checkpoints/*.pth
+ai_engine/checkpoints/*.pt
+ai_engine/checkpoints/*.onnx
+!ai_engine/checkpoints/.gitkeep
+!ai_engine/checkpoints/evaluation_report.json
+
+# IDEs & Editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Testing & Pytest
+# Keep Node tests even when the parent workspace ignores unlisted extensions.
+!tests/*.test.cjs
+.pytest_cache/
+.ipynb_checkpoints/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+.cache/
+data/yolo_bootstrap/
+data/field/
+data/vietnam_raw/
+data/vietnam_yolo/
+runs/
+/report_eda/
+/reportEDA/
+ai_engine/checkpoints/detection/*.pt
+ai_engine/checkpoints/detection/*.onnx
+ai_engine/checkpoints/detection/*.engine
+
+# SQLite sidecars and local tooling
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+.coverage.*
+coverage.xml
+node_modules/
+~$*.docx
+
+# Keep academic documents out of the public repository
+/*.docx
+/*.pdf
+/docs/qa/
+/docs/thinh_tasks.md
+/docs/roadmap_12_weeks.md
+/docs/implementation_plan.md

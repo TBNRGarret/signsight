@@ -1,0 +1,31 @@
+* text=auto
+*.py text eol=lf
+*.js text eol=lf
+*.cjs text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.md text eol=lf
+*.md whitespace=-blank-at-eol
+*.json text eol=lf
+*.ipynb text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.sql text eol=lf
+*.txt text eol=lf
+*.ps1 text eol=crlf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.docx binary
+
+# Preserve upstream bytes: changing line endings breaks Leaflet SRI hashes.
+frontend/vendor/leaflet/leaflet.css -text -whitespace
+frontend/vendor/leaflet/leaflet.js -text -whitespace
+
+.gitattributes text eol=lf
+.gitignore text eol=lf
+.env.example text eol=lf
+*.ini text eol=lf
+# Notebook split payloads hash the CSV writer output, including CRLF bytes.
+data/processed/*.csv text eol=crlf
