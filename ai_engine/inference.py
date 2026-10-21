@@ -21,7 +21,7 @@ try:
 except ImportError:
     HAS_TORCH = False
 
-MODEL_WEIGHTS_PATH = os.path.join(PROJECT_ROOT, "ai_engine", "checkpoints", "best_model.pth")
+MODEL_WEIGHTS_PATH = os.getenv("SIGNSIGHT_CNN_WEIGHTS", os.path.join(PROJECT_ROOT, "ai_engine", "checkpoints", "best_model.pth"))
 
 class TrafficSignClassifier:
     def __init__(self, weights_path: str = MODEL_WEIGHTS_PATH):
@@ -47,11 +47,11 @@ class TrafficSignClassifier:
                 ])
                 print(f"[AI Engine] Ready: Successfully loaded Deep Learning model from {self.weights_path} to {self.device}")
             except Exception as e:
-                print(f"[AI Engine] Could not load weights: {e}. Using heuristic fallback.")
+                print(f"[AI Engine] Could not load weights: {e}. Classification is disabled.")
                 self.model = None
                 self.model_version = None
         else:
-            print("[AI Engine] Checkpoint best_model.pth not found. Operating in prototype simulation mode.")
+            print("[AI Engine] Checkpoint best_model.pth not found. Classification is disabled.")
 
     def reload_weights(self):
         """Reloads checkpoint after training completes without restarting server."""

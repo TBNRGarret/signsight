@@ -17,6 +17,8 @@ Bản đồ chỉ hiển thị biển đã được ghi nhận/duyệt trong Sig
 
 ## Chạy trên máy mới
 
+Nếu đã có database, ảnh và weights local, xem [cách dùng lại dữ liệu](docs/local_development.md).
+
 Cần Python 3.11; Node.js 24 dùng cho kiểm thử frontend. Clone repo GitHub của bạn rồi chạy từ thư mục gốc.
 
 Windows PowerShell:
@@ -114,6 +116,6 @@ Tài liệu thêm: [quản lý và backup](docs/web_and_management.md), [đăng 
 
 ## Đưa lên GitHub
 
-Tên repo đề xuất: **`signsight`**, nhánh **`main`**. Bản làm việc phục vụ môn học có tài liệu cá nhân trong lịch sử; chỉ push bản public đã xuất riêng. Xem [quy trình chuẩn bị GitHub](docs/github_preparation.md).
+Repo source chính: signsight, nhánh main. Phát triển trực tiếp trong checkout GitHub cố định ngoài cache. Tài liệu môn học giữ riêng; không sao chép lịch sử Git từ thư mục tài liệu vào repo này. Xem [source và dữ liệu local](docs/local_development.md).
 
 Chưa chọn giấy phép cho source code của dự án. Leaflet giữ giấy phép riêng tại [frontend/vendor/leaflet/LICENSE](frontend/vendor/leaflet/LICENSE).

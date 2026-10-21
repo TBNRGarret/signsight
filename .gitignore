@@ -107,3 +107,10 @@ node_modules/
 /docs/thinh_tasks.md
 /docs/roadmap_12_weeks.md
 /docs/implementation_plan.md
+
+# Browser test artifacts
+/test-results/
+/playwright-report/
+
+# Third-party inference runtime fallback settings
+/Ultralytics/
