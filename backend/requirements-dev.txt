@@ -6,3 +6,4 @@ matplotlib>=3.8,<4.0
 
 # Standalone notebook integration tests execute progress bars.
 tqdm>=4.66,<5.0
+ipython>=8.0,<10.0
