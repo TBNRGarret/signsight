@@ -1,6 +1,6 @@
 # SignSight
 
-Web responsive để đóng góp ảnh và quản lý bản đồ biển báo giao thông. Backend FastAPI phục vụ cả API lẫn frontend HTML/CSS/JavaScript trong một server.
+Web quản trị cho admin/manager và backend FastAPI quản lý dữ liệu biển báo. Hướng sản phẩm user là app Flutter (chưa triển khai); web user hiện được giữ để kiểm tra luồng đóng góp. FastAPI phục vụ API và frontend HTML/CSS/JavaScript trong một server.
 
 Hướng dẫn [đóng góp ảnh và xem biển được duyệt](docs/contribution_flow.md).
 
@@ -10,6 +10,7 @@ Luồng chính: **chụp/upload ảnh → YOLO phát hiện → người dùng x
 
 - Đăng ký, đăng nhập dùng chung các trang/tab, tùy chọn ghi nhớ phiên 30 ngày; phân quyền user, manager, admin.
 - Upload ảnh, YOLO detection, duyệt đóng góp và xem ảnh bằng chứng.
+- Trang quản trị tập trung: hàng đợi công việc, bảng biển toàn bộ dữ liệu có tìm kiếm/bộ lọc và phân trang; tài khoản/cấu hình dành riêng admin.
 - MapLibre GL JS với nền vector OpenFreeMap, tìm điểm đến qua Photon, dựng tuyến qua OSRM; lọc biển gần điểm và dọc tuyến.
 - Báo cáo thay đổi, đề xuất trùng lặp và yêu cầu xác nhận lại sau thời hạn cấu hình.
 - Giao diện điện thoại, light/dark/system theme.
@@ -123,3 +124,5 @@ Repo source chính: signsight, nhánh main. Phát triển trực tiếp trong ch
 Chưa chọn giấy phép cho source code của dự án. MapLibre giữ giấy phép riêng tại [frontend/vendor/maplibre/LICENSE.txt](frontend/vendor/maplibre/LICENSE.txt).
 
 Chi tiết bản đồ và cách build renderer: [MapLibre + OFM](docs/maplibre.md).
+
+Luồng staff và quyền từng tab: [Web quản trị](docs/web_and_management.md).

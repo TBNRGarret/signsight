@@ -20,7 +20,7 @@
   <link rel="stylesheet" href="observations.css?v=20261023-ofm">
 </head>
 <body>
-<header><a href="index.html">← Bản đồ và tài khoản</a> <a href="management.html" data-staff-only hidden>· Reports &amp; nghi trùng</a><h1>Chụp ảnh và đóng góp</h1>
+<header><a href="index.html">← Bản đồ và tài khoản</a> <a href="management.html" data-staff-only hidden>· Quản trị</a><h1>Chụp ảnh và đóng góp</h1>
 <div class="theme-control"><label for="theme-mode">Giao diện</label><select id="theme-mode" data-theme-select><option value="system">Theo thiết bị</option><option value="light">Sáng</option><option value="dark">Tối</option></select></div>
 <p id="auth-intro">Đăng nhập để chụp ảnh, nhận diện biển báo và gửi đóng góp.</p>
 <p class="muted">Chọn ảnh để nhận diện và gửi đóng góp. Ảnh chưa gửi đóng góp chỉ chủ ảnh xem được.</p></header>
@@ -73,12 +73,10 @@
       <select id="history-status"><option value="">Tất cả trạng thái</option><option value="pending">Chờ duyệt</option><option value="accepted">Đã duyệt</option><option value="rejected">Bị từ chối</option></select>
       <button id="history-refresh">Tải lịch sử</button><div id="history" aria-live="polite" aria-busy="false"></div>
       <button id="history-prev" disabled>Trang trước</button><button id="history-next" disabled>Trang sau</button><span id="history-page" class="muted"></span></section>
-    <section id="moderation" hidden><h2>Đóng góp chờ duyệt</h2><button id="queue-refresh">Tải danh sách</button><div id="queue"></div>
-      <button id="queue-prev" disabled>Trang trước</button><button id="queue-next" disabled>Trang sau</button><span id="queue-page" class="muted"></span></section>
   </div>
 </main>
 <script src="vendor/maplibre/maplibre-gl.js?v=6.15.0" integrity="sha256-GjspOMZ2IS0Mxb/yYPkBu+Lz/g0fPeSeQrWq2t0Ov2U="></script>
 <script src="map.js?v=20261023-ofm"></script><script src="location_picker.js?v=20261023-ofm"></script>
 <script src="contribution_history.js?v=20261021"></script>
-<script src="auth.js?v=20261020-remember"></script><script src="observations.js?v=20261023-ofm"></script>
+<script src="auth.js?v=20261020-remember"></script><script src="observations.js?v=20261023-staff"></script>
 </body></html>

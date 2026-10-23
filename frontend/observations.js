@@ -3,8 +3,8 @@
   const api = window.signSightAuth;
   const $ = id => document.getElementById(id);
   const codes = ['P.127 (50)','P.127 (60)','P.127 (80)','P.125','P.122','P.102','W.245a','W.227','R.301a','R.301e'];
-  let epoch = 0, image = null, run = null, bitmap = null, historyOffset = 0, queueOffset = 0;
-  let queueVersion = 0, historyVersion = 0;
+  let epoch = 0, image = null, run = null, bitmap = null, historyOffset = 0;
+  let historyVersion = 0;
   let imageBusy = false, imageOperation = 0, pendingPhoto = null, captureState = 'idle';
   let locationPicker = null;
   const positionFields = new Map();
@@ -62,14 +62,15 @@
   function authChanged() {
     authInitialized = true;
     imageOperation++; imageBusy = false; epoch++; clearImage();
-    $('history').replaceChildren(); $('queue').replaceChildren(); historyOffset = queueOffset = 0;
+    $('history').replaceChildren(); historyOffset = 0;
     $('history-status').value = ''; $('history-status').disabled = !api.user;
     $('history-prev').disabled = $('history-next').disabled = true; $('history-page').textContent = '';
     $('history-refresh').disabled = !api.user; $('history').setAttribute('aria-busy','false');
     $('auth-intro').hidden = !!api.user;
     $('login').hidden = !!api.user; $('logout').hidden = !api.user; $('workspace').hidden = !api.user;
-    $('moderation').hidden = !reviewer(); $('profile').textContent = api.user ? api.user.username : 'Chưa đăng nhập';
-    if (api.user) { loadModels(); loadHistory(); if (reviewer()) loadQueue(); }
+    $('profile').textContent = api.user ? api.user.username : 'Chưa đăng nhập';
+    if (reviewer()) { $('workspace').hidden = true; window.location?.replace('management.html'); return; }
+    if (api.user) { loadModels(); loadHistory(); }
   }
   window.addEventListener('signsight-auth-changed', authChanged);
   api.ready.then(() => { if (!authInitialized) authChanged(); });
@@ -239,7 +240,7 @@
     const version = epoch;
     await api.request('/observations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image_id:image.id,items})});
     if (version !== epoch) return;
-    clearImage(); message('Đã gửi đóng góp. Theo dõi trạng thái ở phần bên dưới.'); await loadHistory(); if (reviewer()) await loadQueue();
+    clearImage(); message('Đã gửi đóng góp. Theo dõi trạng thái ở phần bên dưới.'); await loadHistory();
   }); };
   async function loadHistory() {
     if (!api.user) return;
@@ -289,38 +290,9 @@
     $(prefix+'-prev').disabled = result.offset === 0; $(prefix+'-next').disabled = result.offset+result.limit >= result.total;
     $(prefix+'-page').textContent = `${result.total ? result.offset+1 : 0}–${Math.min(result.total,result.offset+result.limit)} / ${result.total}`;
   }
-  async function loadQueue() {
-    if (!reviewer()) return; const version = epoch, requestVersion = ++queueVersion;
-    try {
-      const result = await api.request(`/manager/observations?offset=${queueOffset}&limit=10`); if (version !== epoch || requestVersion !== queueVersion) return;
-      $('queue').replaceChildren(); paginate('queue',result);
-      if (!result.items.length) $('queue').append(element('p','Không có đóng góp chờ duyệt.'));
-      for (const row of result.items) {
-        const card = element('article'); card.dataset.observationId=row.id; card.append(element('h3',row.detection.qcvn_code),element('p',`AI ${(100*row.detection.confidence).toFixed(1)}% · ${row.engine} · ${row.latitude}, ${row.longitude}`));
-        card.append(element('p',`Nhãn đề xuất: ${codes[row.proposed_class ?? row.detection.predicted_class]}${row.correction_reason ? ' · '+row.correction_reason : ''}`));
-        const canvas = element('canvas'); canvas.setAttribute('aria-label','Ảnh minh chứng và biển được chọn'); card.append(canvas);
-        const comment = element('textarea'); comment.maxLength = 1000; comment.setAttribute('aria-label','Ghi chú duyệt'); card.append(comment);
-        for (const decision of ['accept','reject']) {
-          const button = element('button',decision === 'accept' ? 'Chấp nhận' : 'Từ chối'); if (decision === 'reject') button.className = 'reject';
-          button.onclick = () => action(button,async () => {
-            await api.request(`/manager/observations/${row.id}/review`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:decision,comment:comment.value || null})});
-            if (version !== epoch) return;
-            message(decision === 'accept' ? 'Đã công bố biển báo.' : 'Đã từ chối đóng góp.'); await loadQueue(); await loadHistory();
-          }); card.append(button);
-        }
-        $('queue').append(card);
-        try {
-          const blob = await api.request(`/images/${row.image_id}/content`,{responseType:'blob'});
-          const decoded = await createImageBitmap(blob);
-          if (version !== epoch || requestVersion !== queueVersion || !card.isConnected) { decoded.close(); return; }
-          drawPreview(canvas,decoded,[row.detection]); decoded.close();
-        } catch (error) { if (version === epoch) card.append(element('p',error.message)); }
-      }
-    } catch (error) { if (version === epoch) message(error.message); }
-  }
-  $('history-refresh').onclick = loadHistory; $('queue-refresh').onclick = loadQueue;
+  $('history-refresh').onclick = loadHistory;
   $('history-status').onchange = () => { historyOffset = 0; return loadHistory(); };
-  for (const prefix of ['history','queue']) for (const [suffix,delta] of [['prev',-10],['next',10]]) {
-    $(prefix+'-'+suffix).onclick = () => { if (prefix === 'history') { historyOffset=Math.max(0,historyOffset+delta); loadHistory(); } else { queueOffset=Math.max(0,queueOffset+delta); loadQueue(); } };
+  for (const [suffix,delta] of [['prev',-10],['next',10]]) {
+    $('history-'+suffix).onclick = () => { historyOffset=Math.max(0,historyOffset+delta); loadHistory(); };
   }
 })();

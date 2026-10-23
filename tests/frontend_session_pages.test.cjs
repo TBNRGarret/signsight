@@ -89,7 +89,7 @@ test('restored session initializes the image workspace and loads history',async(
   assert.equal(a.get('login').hidden,true);
   assert.equal(a.get('workspace').hidden,false);
   assert.equal(a.get('auth-intro').hidden,true);
-  assert.equal(a.get('moderation').hidden,true);
+  assert.equal(a.calls.some(route=>route.startsWith('/manager/')),false);
   assert.ok(a.calls.some(route=>route.startsWith('/me/observations?')));
 });
 
@@ -130,4 +130,15 @@ test('history shows loading and error feedback while disabling stale pagination'
   fail(new Error('Network unavailable'));await tick();
   assert.match(a.get('history').children[0].textContent,/Không tải được.*Network unavailable/);
   assert.equal(a.get('history-prev').disabled,true);
+});
+
+test('staff map login goes directly to management instead of loading personal user tasks',async()=>{
+ const a=mapApp(async()=>page),redirects=[];a.window.location={replace:path=>redirects.push(path)};
+ a.api.user={id:'admin',username:'owner',role:'admin'};a.finish();await tick();
+ assert.deepEqual(redirects,['management.html']);assert.equal(a.calls.length,0);
+});
+test('staff photo page redirects to management and does not run the user capture workspace',async()=>{
+ const a=app(async()=>page),redirects=[];a.window.location={replace:path=>redirects.push(path)};
+ a.run('observations.js');a.api.user={id:'mod',username:'mod',role:'manager'};a.finish();await tick();
+ assert.deepEqual(redirects,['management.html']);assert.equal(a.get('workspace').hidden,true);assert.equal(a.calls.length,0);
 });

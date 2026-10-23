@@ -1,20 +1,66 @@
 <!DOCTYPE html>
 <html lang="vi">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SignSight · Quản lý dữ liệu</title>
-<script src="theme.js?v=20261020"></script>
-<style>
-*{box-sizing:border-box}body{background:var(--bg);color:var(--text-main);font:15px system-ui;margin:0}main{max-width:1100px;margin:auto;padding:24px}a{color:var(--link)}h1{font-size:26px}h2{font-size:20px}
-section,article{padding:20px;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;margin:16px 0}label{display:block;margin:12px 0 6px}input,textarea,select{width:100%;background:var(--panel);color:inherit;padding:10px;border:1px solid var(--input-border);border-radius:6px;font:inherit}
-button{background:var(--primary);color:var(--on-primary);border:0;border-radius:6px;padding:10px 16px;margin:8px 8px 0 0;cursor:pointer;font:inherit}button:disabled{opacity:.4;cursor:default}.reject{background:#9f1239}.muted{color:var(--text-sub);font-size:13px}img{max-width:100%;max-height:360px;object-fit:contain}p{line-height:1.6;overflow-wrap:anywhere}[hidden]{display:none!important}#message{color:var(--warning);min-height:24px}
-</style><link rel="stylesheet" href="theme.css?v=20261020"></head>
-<body><main><nav><a href="index.html">Bản đồ & tài khoản</a> · <a href="observations.html#moderation">Duyệt đóng góp mới</a></nav>
-<div class="theme-control"><label for="theme-mode">Giao diện</label><select id="theme-mode" data-theme-select><option value="system">Theo thiết bị</option><option value="light">Sáng</option><option value="dark">Tối</option></select></div>
-<h1>Quản lý dữ liệu biển báo</h1>
-<section><form id="login"><label for="username">Tên đăng nhập</label><input id="username" required autocomplete="username"><label for="password">Mật khẩu</label><input id="password" type="password" required autocomplete="current-password" maxlength="128"><button type="submit">Đăng nhập</button></form>
-<p id="profile">Chưa đăng nhập</p><button id="logout" hidden>Đăng xuất</button><p id="message" role="status" aria-live="polite"></p></section>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SignSight · Quản trị</title>
+<script src="theme.js?v=20261020"></script><link rel="stylesheet" href="theme.css?v=20261023-ofm"><link rel="stylesheet" href="management.css?v=20261023-staff"></head>
+<body>
+<header class="staff-header"><div><strong>SignSight</strong><span class="muted">Quản trị dữ liệu biển báo</span></div><div class="header-actions">
+<span id="profile">Đang kiểm tra phiên…</span>
+<details><summary>Giao diện</summary><div class="theme-control"><label for="theme-mode">Giao diện</label><select id="theme-mode" data-theme-select><option value="system">Theo thiết bị</option><option value="light">Sáng</option><option value="dark">Tối</option></select></div></details>
+<button id="logout" class="secondary" hidden>Đăng xuất</button></div></header>
+<main>
+<form id="login" hidden><label for="username">Tên đăng nhập</label><input id="username" required autocomplete="username"><label for="password">Mật khẩu</label><input id="password" type="password" required autocomplete="current-password" maxlength="128"><button type="submit">Đăng nhập</button></form>
+<p id="message" role="status" aria-live="polite"></p>
 <div id="workspace" hidden>
-<section><h2>Báo cáo thay đổi chờ duyệt</h2><button id="refresh-reports">Tải báo cáo</button><div id="reports"></div><button id="reports-prev" disabled>Trang trước</button><button id="reports-next" disabled>Trang sau</button><span id="reports-page" class="muted"></span></section>
-<section><h2>Các biển nghi trùng</h2><p class="muted">Kiểm tra ảnh và vị trí trước khi gộp. Bản ghi cũ và ảnh minh chứng vẫn giữ trong lịch sử.</p><button id="refresh-duplicates">Tải danh sách</button><div id="duplicates"></div><button id="duplicates-prev" disabled>Trang trước</button><button id="duplicates-next" disabled>Trang sau</button><span id="duplicates-page" class="muted"></span></section>
-<section id="policy-panel" hidden><h2>Thời hạn xác nhận dữ liệu</h2><p class="muted">Áp dụng cho đóng góp mới được duyệt. Biển đã có giữ chu kỳ xác nhận đã lưu. Quá hạn nghĩa là cần kiểm tra lại dữ liệu.</p>
-<form id="policy-form"><label for="days">Số ngày (1–365)</label><input id="days" type="number" min="1" max="365" required><button type="submit">Lưu cấu hình</button></form><div id="policy-history"></div></section>
-</div></main><script src="auth.js?v=20261020-remember"></script><script src="management.js?v=20261020-access"></script></body></html>
+<nav class="staff-tabs" role="tablist" aria-label="Công việc quản trị">
+<button id="tab-contributions" role="tab" aria-controls="panel-contributions">Đóng góp <span id="count-contributions" class="count"></span></button>
+<button id="tab-reports" role="tab" aria-controls="panel-reports">Báo cáo <span id="count-reports" class="count"></span></button>
+<button id="tab-duplicates" role="tab" aria-controls="panel-duplicates">Nghi trùng <span id="count-duplicates" class="count"></span></button>
+<button id="tab-signs" role="tab" aria-controls="panel-signs">Tất cả biển <span id="count-signs" class="count"></span></button>
+<button id="tab-accounts" role="tab" aria-controls="panel-accounts" hidden>Tài khoản</button>
+<button id="tab-policy" role="tab" aria-controls="policy-panel" hidden>Cấu hình</button>
+</nav>
+<div class="staff-layout">
+<div class="staff-main">
+<section id="panel-contributions" role="tabpanel" aria-labelledby="tab-contributions">
+<div class="section-heading"><div><h1>Duyệt đóng góp</h1><p class="muted">Chọn một dòng để xem ảnh, vị trí và xử lý ngay bên cạnh.</p></div><div class="toolbar"><label for="contribution-status">Trạng thái</label><select id="contribution-status"><option value="pending">Chờ duyệt</option><option value="accepted">Đã duyệt</option><option value="rejected">Đã từ chối</option></select><button id="refresh-contributions" class="secondary">Làm mới</button></div></div>
+<div class="table-wrap"><table><thead><tr><th scope="col">Biển đề xuất</th><th scope="col">Vị trí</th><th scope="col">Gửi lúc</th></tr></thead><tbody id="contributions"></tbody></table></div>
+<div class="pagination"><button id="contributions-prev" class="secondary" disabled>Trang trước</button><span id="contributions-page"></span><button id="contributions-next" class="secondary" disabled>Trang sau</button></div>
+</section>
+<section id="panel-reports" role="tabpanel" aria-labelledby="tab-reports" hidden>
+<div class="section-heading"><h1>Báo cáo thay đổi</h1><button id="refresh-reports" class="secondary">Làm mới</button></div>
+<div class="table-wrap"><table><thead><tr><th scope="col">Yêu cầu</th><th scope="col">Mô tả</th><th scope="col">Gửi lúc</th></tr></thead><tbody id="reports"></tbody></table></div>
+<div class="pagination"><button id="reports-prev" class="secondary" disabled>Trang trước</button><span id="reports-page"></span><button id="reports-next" class="secondary" disabled>Trang sau</button></div>
+</section>
+<section id="panel-duplicates" role="tabpanel" aria-labelledby="tab-duplicates" hidden>
+<div class="section-heading"><h1>Biển nghi trùng</h1><button id="refresh-duplicates" class="secondary">Làm mới</button></div><p class="muted">Đối chiếu ảnh và vị trí trước khi gộp; lịch sử và bằng chứng được giữ lại.</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">Cặp biển</th><th scope="col">Khoảng cách</th><th scope="col">Loại biển</th></tr></thead><tbody id="duplicates"></tbody></table></div>
+<div class="pagination"><button id="duplicates-prev" class="secondary" disabled>Trang trước</button><span id="duplicates-page"></span><button id="duplicates-next" class="secondary" disabled>Trang sau</button></div>
+</section>
+<section id="panel-signs" role="tabpanel" aria-labelledby="tab-signs" hidden>
+<div class="section-heading"><h1>Tất cả biển báo</h1><button id="refresh-signs" class="secondary">Làm mới</button></div>
+<form id="sign-filters" class="filters"><div><label for="sign-query">Tìm biển</label><input id="sign-query" placeholder="Mã biển, tên hoặc ID" maxlength="100" type="search"></div>
+<div><label for="sign-status">Trạng thái</label><select id="sign-status"><option value="">Tất cả</option><option value="active">Đang hiệu lực</option><option value="expired">Quá hạn xác nhận</option><option value="pending_revalidation">Chờ kiểm tra lại</option><option value="removed">Đã tháo</option></select></div>
+<div><label for="sign-verification">Xác minh</label><select id="sign-verification"><option value="">Tất cả</option><option value="current">Đã xác minh</option><option value="needs_confirmation">Cần xác nhận lại</option><option value="unverified">Chưa xác minh</option></select></div>
+<div><label for="sign-limit">Số dòng</label><select id="sign-limit"><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></div><button type="submit">Tìm / Lọc</button><button id="sign-reset" type="button" class="secondary">Xóa lọc</button></form>
+<p id="signs-count" class="muted" role="status"></p>
+<div class="table-wrap"><table><thead><tr><th scope="col">Biển</th><th scope="col">Tên</th><th scope="col">Trạng thái</th><th scope="col">Vị trí</th><th scope="col">Hạn xác nhận</th></tr></thead><tbody id="signs"></tbody></table></div>
+<div class="pagination"><button id="signs-prev" class="secondary" disabled>Trang trước</button><span id="signs-page"></span><button id="signs-next" class="secondary" disabled>Trang sau</button></div>
+</section>
+<section id="panel-accounts" role="tabpanel" aria-labelledby="tab-accounts" hidden>
+<div class="section-heading"><h1>Quản lý tài khoản</h1><button id="refresh-accounts" class="secondary">Làm mới</button></div>
+<div class="table-wrap"><table><thead><tr><th scope="col">Tài khoản</th><th scope="col">Email</th><th scope="col">Vai trò</th><th scope="col">Trạng thái</th><th scope="col">Thao tác</th></tr></thead><tbody id="accounts"></tbody></table></div>
+<div class="pagination"><button id="accounts-prev" class="secondary" disabled>Trang trước</button><span id="accounts-page"></span><button id="accounts-next" class="secondary" disabled>Trang sau</button></div>
+</section>
+<section id="policy-panel" role="tabpanel" aria-labelledby="tab-policy" hidden>
+<h1>Thời hạn xác nhận dữ liệu</h1><p class="muted">Áp dụng cho biển mới được duyệt. Biển đã có giữ chu kỳ xác nhận đã lưu.</p>
+<form id="policy-form"><label for="days">Số ngày (1–365)</label><input id="days" type="number" min="1" max="365" required><button type="submit">Lưu cấu hình</button></form>
+<details><summary>Lịch sử cấu hình</summary><div id="policy-history"></div></details>
+</section>
+</div>
+<aside id="review-detail" hidden aria-label="Chi tiết mục đang chọn"><h2 id="detail-title"></h2><div id="detail-meta"></div><div id="detail-evidence"></div>
+<div id="review-note"><label for="review-comment">Ghi chú duyệt</label><textarea id="review-comment" maxlength="1000" rows="2" placeholder="Thêm nhận xét nếu cần"></textarea></div>
+<div id="review-actions" class="review-actions"><button id="review-accept">Chấp nhận</button><button id="review-reject" class="reject">Từ chối</button></div>
+</aside>
+</div></div></main>
+<script src="auth.js?v=20261020-remember"></script><script src="management.js?v=20261023-staff"></script>
+</body></html>

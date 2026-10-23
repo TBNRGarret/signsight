@@ -5,6 +5,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 if __name__ == "__main__":
     import tempfile
+    import uuid
+    from datetime import datetime, timedelta
+    from backend.app.db.models import SignRecord
+    from ai_engine.config import CLASS_MAPPING
     import uvicorn
     from backend.app.core.settings import Settings
     from backend.app.db.database import make_engine, init_db
@@ -32,6 +36,18 @@ if __name__ == "__main__":
         with app.state.session_factory() as db:
             create_user(db, UserRegister(username="browser_manager", email="manager@example.com",
                                         password="Browser-test-password-123"), role="manager")
+            create_user(db, UserRegister(username="browser_admin", email="admin@example.com",
+                                        password="Browser-test-password-123"), role="admin")
+            info = CLASS_MAPPING[0]
+            for index in range(65):
+                db.add(SignRecord(id=str(uuid.uuid5(uuid.NAMESPACE_DNS, f"browser-sign-{index}")),
+                                  predicted_class=0, qcvn_code=info['qcvn_code'], name_vi=info['name_vi'],
+                                  confidence=.95, latitude=21.03, longitude=105.8,
+                                  status='removed' if index % 2 else 'active',
+                                  verification_status='current', confirmation_days=30,
+                                  expires_at=datetime.utcnow()+timedelta(days=30)))
+            db.commit()
+
         try:
             uvicorn.run(app, host="127.0.0.1", port=8765, log_level="warning")
         finally:

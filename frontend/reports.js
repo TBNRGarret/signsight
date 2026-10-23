@@ -38,6 +38,7 @@
 
   function mount({api,map,document,getPinned}){
     const $=id=>document.getElementById(id);
+    const staff=()=>['admin','manager'].includes(api.user?.role);
     const node=(tag,text)=>{const element=document.createElement(tag);if(text!==undefined)element.textContent=text;return element;};
     let epoch=0,selected=null,selectGeneration=0;
     const status=text=>{$('report-status').textContent=text;};
@@ -72,7 +73,7 @@
           node('p',sign.is_uncertain?'Nhãn AI có độ tin cậy thấp hoặc đã được sửa; cần người kiểm tra.':`AI: ${(sign.confidence*100).toFixed(1)}%`),
           node('p',`${detail.evidence.length} ảnh bằng chứng · ${sign.latitude.toFixed(5)}, ${sign.longitude.toFixed(5)}`));
         $('selected-evidence-button').hidden=!detail.evidence.length;
-        $('report-form').hidden=Boolean(sign.merged_into_id)||sign.status==='removed';
+        $('report-form').hidden=staff()||Boolean(sign.merged_into_id)||sign.status==='removed';
         if(sign.merged_into_id)$('selected-meta').append(node('p','Biển này đã được gộp vào bản ghi khác; hãy báo cáo trên biển hiện tại.'));
         showActionFields();map.flyTo([sign.latitude,sign.longitude],Math.max(map.getZoom(),17));return detail;
       }catch(error){if(version===epoch&&generation===selectGeneration){$('selected-title').textContent=error.message;selected=null;}}
@@ -107,7 +108,7 @@
 
     function signButton(text,signId){const button=node('button',text);button.type='button';button.className='btn btn-secondary list-button';button.onclick=()=>select(signId);return button;}
     async function loadLists(){
-      if(!api.user)return;const version=epoch;
+      if(!api.user||staff())return;const version=epoch;
       try{
         const [confirmations,reports]=await Promise.all([api.request('/me/confirmation-requests?limit=25'),api.request('/me/reports?limit=25')]);
         if(version!==epoch)return;
@@ -124,9 +125,9 @@
     root.addEventListener('signsight-auth-changed',()=>{
       epoch++;selected=null;$('selected-sign').hidden=true;$('report-form').reset();
       $('confirmation-list').replaceChildren();$('my-reports').replaceChildren();$('confirmation-count').textContent='';
-      $('user-lists').hidden=!api.user;if(api.user)loadLists();
+      $('user-lists').hidden=!api.user||staff();if(api.user&&!staff())loadLists();
     });
-    $('user-lists').hidden=!api.user;
+    $('user-lists').hidden=!api.user||staff();
     return {select,refreshPin,loadLists};
   }
 

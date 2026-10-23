@@ -13,7 +13,7 @@ Từ thư mục gốc project:
 .\.venv-yolo\Scripts\python.exe -m uvicorn backend.app.main:app --reload --port 8000
 ```
 
-Web đóng góp/manager: `http://127.0.0.1:8000/web/observations.html`. Đăng nhập, chọn ảnh, upload, bấm **Detect bằng YOLO**, chọn biển và xác nhận tọa độ từng biển rồi gửi. Manager/admin xem ảnh và duyệt; biển đã được chấp nhận xuất hiện trên bản đồ. Có phân trang cho lịch sử và queue. Chọn đúng interpreter `.venv-yolo` khi chạy backend; Python toàn cục chưa được cài runtime YOLO trong lần tích hợp này.
+Web user thử đóng góp: http://127.0.0.1:8000/web/observations.html. Chọn/chụp ảnh để tự upload và nhận diện; kiểm tra nhãn, xác nhận vị trí từng biển rồi gửi. Manager/admin vào http://127.0.0.1:8000/web/management.html để duyệt; staff tự chuyển về đây sau đăng nhập. Biển được chấp nhận xuất hiện trên bản đồ. App Flutter chưa triển khai. Xem [web quản trị](web_and_management.md) và [dữ liệu local](local_development.md).
 
 Nếu chưa có môi trường, tạo `.venv-yolo` và cài cả backend lẫn detector:
 

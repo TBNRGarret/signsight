@@ -1,7 +1,8 @@
 from fastapi import APIRouter
-from backend.app.api.v1.endpoints import accounts, auth, signs, navigation, revalidation, images, maps, reports, duplicates
+from backend.app.api.v1.endpoints import accounts, auth, signs, navigation, revalidation, images, maps, reports, duplicates, staff
 
 api_router = APIRouter()
+api_router.include_router(staff.router, tags=['Staff workspace'])
 api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 api_router.include_router(accounts.router, tags=["Accounts"])
 api_router.include_router(images.router, tags=["Images & Observations"])

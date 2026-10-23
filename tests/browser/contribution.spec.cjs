@@ -83,10 +83,17 @@ test('approved contribution shows a private thumbnail then opens its exact map r
     await manager.getByLabel('Tên đăng nhập',{exact:true}).fill('browser_manager');
     await manager.getByLabel('Mật khẩu',{exact:true}).fill(password);
     await manager.getByRole('button',{name:'Đăng nhập',exact:true}).click();
-    const target=manager.locator('#queue article[data-observation-id="'+submitted.id+'"]');
+    await expect(manager).toHaveURL(/management.html$/);
+    const target=manager.locator('#contributions tr[data-observation-id="'+submitted.id+'"]');
     await expect(target).toHaveCount(1);
-    await target.getByRole('textbox',{name:'Ghi chú duyệt'}).fill('Đã kiểm tra vị trí trong test.');
-    await target.getByRole('button',{name:'Chấp nhận',exact:true}).click();
+    await target.getByRole('button').click();
+    await manager.getByRole('textbox',{name:'Ghi chú duyệt'}).fill('Đã kiểm tra vị trí trong test.');
+    await expect(manager.locator('#review-accept')).toBeInViewport();
+    if(process.env.SIGNSIGHT_SCREENSHOT_DIR){
+      require('node:fs').mkdirSync(process.env.SIGNSIGHT_SCREENSHOT_DIR,{recursive:true});
+      await manager.screenshot({path:path.join(process.env.SIGNSIGHT_SCREENSHOT_DIR,'staff-review-'+testInfo.project.name+'.png'),fullPage:true});
+    }
+    await manager.getByRole('button',{name:'Chấp nhận',exact:true}).click();
     await expect(target).toHaveCount(0);
     await page.getByRole('button',{name:'Tải lịch sử',exact:true}).click();
     await expect(page.locator('#history .status-badge')).toHaveText('Đã duyệt');

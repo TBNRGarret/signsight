@@ -174,6 +174,6 @@ test('evidence blobs and structured API errors still work through the shared coo
 test('map integration JavaScript parses and management controls start disabled',()=>{
   const html=fs.readFileSync(path.join(__dirname,'../frontend/index.html'),'utf8');
   for(const script of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))new vm.Script(script[1]);
-  assert.match(html,/data-management onclick="submitSign\(\)" disabled/);
+  assert.doesNotMatch(html,/id="admin-panel"|id="manual-sign-card"|onclick="submitSign\(\)"/);
   assert.match(html,/\[hidden\]\s*\{\s*display:\s*none\s*!important/);
 });

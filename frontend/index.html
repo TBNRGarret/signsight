@@ -141,6 +141,9 @@
     .map-home { position: absolute; z-index: 1000; top: 10px; right: 12px; box-shadow: 0 2px 8px #0002; }
     .map-source { position:absolute;z-index:1000;bottom:26px;right:12px;padding:8px;border-radius:6px;background:var(--card-bg);color:var(--text-main);font-size:16px;max-width:calc(100% - 65px); }
 
+    .staff-inspection .content > .card:not(#selected-sign),
+    .staff-inspection .content > a[href="observations.html"],
+    .staff-inspection .mobile-nav a[href="observations.html"] { display:none !important; }
     /* MapLibre popup styling */
     .maplibregl-popup-content {
       background: var(--card-bg) !important;
@@ -195,8 +198,8 @@
 
     <div class="content">
       <p id="sign-link-status" class="hint" role="status" hidden></p>
-      <a class="btn btn-secondary" href="observations.html">Chụp ảnh &amp; thử YOLO</a>
-      <a class="btn btn-secondary" href="management.html" data-staff-only hidden>Reports, nghi trùng &amp; cấu hình</a>
+      <a class="btn btn-secondary" href="observations.html">Chụp ảnh &amp; đóng góp</a>
+      <a class="btn btn-secondary" href="management.html" data-staff-only hidden>Quản trị</a>
       <div class="card">
         <div class="card-title">Tài khoản</div>
         <p id="staff-access" class="hint" role="status" hidden></p>
@@ -232,14 +235,6 @@
         </details>
         <p id="auth-status" role="status" aria-live="polite" style="font-size: 12px; margin-top: 10px;">Đăng nhập để xem bản đồ biển báo.</p>
         <button id="logout-button" class="btn btn-secondary" onclick="logoutAccount()" hidden>Đăng xuất</button>
-      </div>
-      <div class="card" id="admin-panel" hidden>
-        <div class="card-title">Quản lý tài khoản</div>
-        <button class="btn btn-secondary" onclick="loadAccounts()">Tải danh sách</button>
-        <div id="account-list"></div>
-        <p id="account-pagination" style="font-size: 12px; margin-top: 8px;"></p>
-        <button id="accounts-prev" class="btn btn-secondary" onclick="changeAccountPage(-1)">Trang trước</button>
-        <button id="accounts-next" class="btn btn-secondary" onclick="changeAccountPage(1)">Trang sau</button>
       </div>
       <div class="card" id="selected-sign" hidden>
         <div class="card-title"><span id="selected-title"></span></div>
@@ -327,36 +322,6 @@
         <div class="sign-list" id="sign-list"></div>
       </div>
 
-      <div class="card" id="manual-sign-card" hidden>
-        <div class="card-title">
-          <span>Ghi nhận biển báo thủ công (manager)</span>
-        </div>
-        <div class="form-group">
-          <label>Loại biển báo (Quy chuẩn Việt Nam):</label>
-          <select id="sign-select">
-            <option value="0">P.127 (50) - Tốc độ tối đa 50 km/h</option>
-            <option value="1">P.127 (60) - Tốc độ tối đa 60 km/h</option>
-            <option value="2">P.127 (80) - Tốc độ tối đa 80 km/h</option>
-            <option value="3">P.125 - Cấm vượt</option>
-            <option value="4">P.122 - Dừng lại (STOP)</option>
-            <option value="5">P.102 - Cấm đi ngược chiều</option>
-            <option value="6">W.245a - Đi chậm / Nguy hiểm khác</option>
-            <option value="7">W.227 - Công trường đang thi công</option>
-            <option value="8">R.301a - Các xe chỉ được đi thẳng</option>
-            <option value="9">R.301e - Đi vòng sang bên phải</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Độ tin cậy (Confidence):</label>
-          <input type="number" id="sign-conf" value="0.95" step="0.01" min="0.5" max="1.0">
-        </div>
-        <div class="form-group">
-          <label>Tọa độ GPS (Click trên bản đồ để chọn):</label>
-          <input type="text" id="sign-coords" value="10.7769, 106.7009" readonly>
-        </div>
-        <button class="btn btn-primary" data-management onclick="submitSign()" disabled>Ghi nhận Biển Báo</button>
-      </div>
-
       <!-- Real provider route -->
       <div class="card">
         <div class="card-title">
@@ -412,7 +377,6 @@
       selectedCoords = [latitude, longitude];
       navigationController.reset();
       const label = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
-      document.getElementById('sign-coords').value = label;
       document.getElementById('origin-label').textContent = `Điểm đã chọn: ${label}`;
       signReports.refreshPin();
       loadNearby();
@@ -448,10 +412,12 @@
       removeMarker:marker=>map.removeLayer(marker),
       onMessage:text=>{const status=document.getElementById('sign-link-status');status.textContent=text;status.hidden=!text;}
     });
-    let accountOffset = 0;
     let authGeneration = 0;
-    const accountLimit = 20;
     const canManage = () => ['manager', 'admin'].includes(api.user?.role);
+    const staffInspection = () => {
+      const query = new URLSearchParams(window.location?.search || '');
+      return canManage() && query.get('staff_view') === '1' && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(query.get('sign') || '');
+    };
 
     function updateAuthUI() {
       const user = api.user;
@@ -462,16 +428,14 @@
       document.getElementById('login-form').hidden = Boolean(user);
       document.getElementById('register-panel').hidden = Boolean(user);
       document.getElementById('logout-button').hidden = !user;
-      document.getElementById('admin-panel').hidden = user?.role !== 'admin';
-      document.getElementById('manual-sign-card').hidden = !canManage();
-      document.querySelectorAll('[data-management]').forEach(button => { button.disabled = !canManage(); });
       document.getElementById('auth-status').textContent = user
         ? `${user.username} • ${user.role}` : 'Đăng nhập để xem bản đồ biển báo.';
-      if (user?.role !== 'admin') document.getElementById('account-list').replaceChildren();
     }
     let authInitialized = false;
     function authChanged() {
       authInitialized = true;
+      if (canManage() && !staffInspection()) { window.location?.replace('management.html'); return; }
+      document.body?.classList?.toggle('staff-inspection', staffInspection());
       authGeneration++;
       if (!api.user) {
         markers.forEach(marker => map.removeLayer(marker)); markers = [];
@@ -483,7 +447,6 @@
       updateAuthUI();
       loadSigns();
       loadNearby();
-      if (api.user?.role === 'admin') { accountOffset = 0; loadAccounts(); }
     }
     window.addEventListener('signsight-auth-changed', authChanged);
     api.ready.then(() => {
@@ -516,52 +479,6 @@
     async function logoutAccount() {
       try { await api.logout(); }
       catch (_) { document.getElementById('auth-status').textContent = 'Đã thoát trên thiết bị; chưa xác nhận được việc thu hồi phiên trên server.'; }
-    }
-
-    async function changeAccountPage(direction) {
-      accountOffset = Math.max(0, accountOffset + direction * accountLimit);
-      await loadAccounts();
-    }
-
-    async function loadAccounts() {
-      if (api.user?.role !== 'admin') return;
-      const generation = authGeneration;
-      const container = document.getElementById('account-list');
-      try {
-        const page = await api.request(`/admin/users?offset=${accountOffset}&limit=${accountLimit}`);
-        if (generation !== authGeneration || api.user?.role !== 'admin') return;
-        container.replaceChildren();
-        for (const account of page.items) {
-          const row = document.createElement('div'); row.className = 'account-row';
-          const label = document.createElement('p');
-          label.textContent = `${account.username} • ${account.email} • ${account.role} • ${account.is_active ? 'hoạt động' : 'đã khóa'}`;
-          row.appendChild(label);
-          if (account.role !== 'admin') {
-            const role = document.createElement('select'); role.setAttribute('aria-label', `Vai trò của ${account.username}`);
-            for (const value of ['user', 'manager']) {
-              const option = document.createElement('option'); option.value = value; option.textContent = value; role.appendChild(option);
-            }
-            role.value = account.role;
-            const active = document.createElement('input'); active.type = 'checkbox'; active.checked = account.is_active;
-            const activeLabel = document.createElement('label'); activeLabel.append(active, ' Hoạt động');
-            const save = document.createElement('button'); save.className = 'btn btn-secondary'; save.textContent = 'Lưu';
-            save.onclick = async () => {
-              save.disabled = true;
-              try {
-                await api.request(`/admin/users/${account.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ role: role.value, is_active: active.checked }) });
-                await loadAccounts();
-              } catch (err) { document.getElementById('auth-status').textContent = err.message; }
-              finally { save.disabled = false; }
-            };
-            row.append(role, activeLabel, save);
-          }
-          container.appendChild(row);
-        }
-        document.getElementById('account-pagination').textContent = `${page.total ? page.offset + 1 : 0}–${page.offset + page.items.length} / ${page.total} tài khoản`;
-        document.getElementById('accounts-prev').disabled = accountOffset === 0;
-        document.getElementById('accounts-next').disabled = accountOffset + accountLimit >= page.total;
-      } catch (err) { document.getElementById('auth-status').textContent = err.message; }
     }
 
     const STATUS_LABELS = { active: 'đang hiệu lực', expired: 'quá hạn xác nhận', pending_revalidation: 'chờ kiểm tra lại', removed: 'đã tháo' };
@@ -654,31 +571,6 @@
       }
     }
     document.getElementById('nearby-radius').onchange = loadNearby;
-
-    async function submitSign() {
-      if (!canManage()) return;
-      const classId = parseInt(document.getElementById('sign-select').value);
-      const conf = parseFloat(document.getElementById('sign-conf').value);
-      const payload = {
-        predicted_class: classId,
-        confidence: conf,
-        latitude: selectedCoords[0],
-        longitude: selectedCoords[1],
-        location_source: "manual_pin"
-      };
-
-      try {
-        await api.request('/signs/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        await loadSigns();
-        alert('Ghi nhận biển báo thành công!');
-      } catch (err) {
-        alert(err.message);
-      }
-    }
 
     updateAuthUI();
   </script>
