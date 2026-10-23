@@ -1,0 +1,90 @@
+# App Flutter cho user
+
+Đã có MVP trong `mobile/`, dùng chung FastAPI và database với web quản trị. YOLO chạy ở backend, nên cập nhật checkpoint tương thích sẽ phục vụ cả web và app. Không đưa model/dataset vào app.
+
+## Giao diện và phạm vi
+
+| Tab | Việc user làm |
+| --- | --- |
+| Bản đồ | Kéo/zoom MapLibre + OpenFreeMap, tìm điểm đến, xem tuyến ô tô và biển gần tuyến hoặc điểm đang xem. Danh sách mở khi cần, có lọc và tải thêm. |
+| Đóng góp | Chụp/chọn ảnh → tự upload và detect → chọn biển trong ảnh → xác nhận nhãn → đặt/xác nhận ghim → gửi chờ duyệt. |
+| Của tôi | Danh sách đóng góp và lọc trạng thái. Chạm một dòng để xem ảnh/nhận xét; biển được duyệt có nút mở đúng record trên bản đồ. |
+
+Một thanh tìm kiếm và một bảng tóm tắt trên bản đồ; không đưa các bảng công việc của staff vào app. Tài khoản và giao diện thiết bị/sáng/tối nằm trong menu góc trên. Lựa chọn theme hiện chỉ áp dụng trong lần mở app.
+
+Tuyến bắt đầu từ **điểm đang xem trên bản đồ**. Dùng nút GPS trước khi tìm tuyến nếu muốn xuất phát từ vị trí hiện tại. Hành lang tuyến hiện cố định 50 m; app chưa có dẫn đường từng chặng, theo dõi nền hay cảnh báo giọng nói. Đây là bản xem tuyến và biển, chưa thay thế ứng dụng dẫn đường.
+
+User phải xác nhận nhãn và vị trí; tọa độ GPS/EXIF chỉ gợi ý. Ảnh thiếu GPS vẫn đặt ghim được. Khi detect lỗi, thử lại dùng ảnh đã lưu, không upload trùng. Sau khi gửi thành công, user xem trạng thái trong **Của tôi**; bản đồ chỉ hiện biển sau khi staff duyệt.
+
+Các chức năng báo cáo thay đổi, đề xuất sửa class, xác nhận lại biển và lưu nháp offline của web chưa được chuyển hết sang Flutter. Chụp ảnh và gửi đóng góp là phần đầu đã triển khai; web quản trị tiếp tục sử dụng như hiện tại.
+
+## Xem ngay trên laptop
+
+Từ `signsight/mobile` (Flutter stable 3.47.7, Dart 3.13.5):
+
+```powershell
+flutter pub get --enforce-lockfile
+flutter build web --release --base-href=/app/ --no-web-resources-cdn
+```
+
+Nếu SDK ở thư mục Windows có dấu cách và test gặp lỗi native hooks, dùng đường dẫn ngắn của SDK, ví dụ máy hiện tại:
+
+```powershell
+& 'C:\Users\WINDOW~1\flutter\bin\flutter.bat' test
+& 'C:\Users\WINDOW~1\flutter\bin\flutter.bat' build web --release --base-href=/app/ --no-web-resources-cdn
+```
+
+Khởi động lại backend sau lần build đầu tiên để mount `/app/`, rồi mở:
+
+- App user: `http://127.0.0.1:8000/app/`
+- Web manager/admin: `http://127.0.0.1:8000/web/management.html`
+
+Dùng tài khoản **user** (hoặc đăng ký trong app). Tài khoản owner/admin dành cho web quản trị. Preview dùng cookie HttpOnly cùng origin với web, không lưu bearer token/mật khẩu vào browser storage. Chỉ marker đăng nhập/đăng xuất không bí mật được chia sẻ giữa các tab. Native dùng kho bảo mật của hệ điều hành cho token, tách theo API origin.
+
+Web preview ở địa chỉ HTTP LAN có thể không dùng được GPS; thử camera/GPS trên trình duyệt điện thoại cần HTTPS. Camera trên Flutter web do trình duyệt chọn hỗ trợ capture; không đồng nghĩa đã nghiệm thu camera Android/iOS native.
+
+## Android trên laptop
+
+Máy hiện có Flutter nhưng chưa có Android SDK. Cài Android Studio, Android SDK/Command-line Tools và tạo emulator có Google APIs. MapLibre plugin yêu cầu JDK 21. Kiểm tra:
+
+```powershell
+flutter doctor -v
+flutter doctor --android-licenses
+flutter emulators
+flutter devices
+```
+
+Backend ở máy host cần lắng nghe trên địa chỉ emulator truy cập được. Từ repo root có thể chạy trên `0.0.0.0` theo hướng dẫn local; không dùng database QA thay cho database cá nhân.
+
+Từ `mobile/`:
+
+```powershell
+flutter run -d <device-id> --dart-define=SIGNSIGHT_API_URL=http://10.0.2.2:8000
+```
+
+`10.0.2.2` chỉ dành cho Android emulator chuẩn. Thiết bị Android thật dùng IP LAN của máy host và cho phép cổng backend qua firewall. Bản debug cho HTTP local; bản release bắt buộc cấu hình API HTTPS:
+
+```powershell
+flutter build apk --debug --dart-define=SIGNSIGHT_API_URL=http://YOUR_LAN_IP:8000
+```
+
+CI tạo artifact **signsight-android-emulator-debug** (x86_64, API mặc định `10.0.2.2:8000`), dành cho emulator, không phải APK phát hành cho mọi điện thoại. Đăng nhập và ảnh được gửi về backend đã cấu hình, không có tài khoản mẫu trong app.
+
+iOS có khai báo quyền camera/thư viện/GPS nhưng cần macOS + Xcode, cấu hình signing và chạy thiết bị thật để nghiệm thu. Chưa xác minh build iOS. Android camera/GPS, từ chối quyền, khôi phục sau OS đóng activity khi chọn ảnh vẫn cần thử thật; nháp hiện ở RAM và có thể mất khi app bị đóng.
+
+## Kiểm thử
+
+```powershell
+# mobile/
+dart format --output=none --set-exit-if-changed lib test
+flutter analyze
+flutter test
+
+# repo root, sau khi build web preview
+python -m pytest tests/test_flutter_preview.py -q
+npx playwright test -c playwright.flutter.config.cjs
+```
+
+Browser test tạo API/SQLite/ảnh tạm, detector tổng hợp và bản đồ fixture. Kiểm tra guest, đăng nhập, upload/detect, xác nhận nhãn và ghim, gửi, duyệt và mở đúng biển. Các test này không đo chất lượng checkpoint thật, không đọc credentials/database cá nhân. Flutter test còn kiểm tra phiên hết hạn, logout trong lúc upload, retry và bố cục 360/430/1000 px.
+
+Nếu Playwright chưa có Chromium, chạy `npx playwright install chromium`. Windows có thể dùng Chrome đã cài bằng `$env:PLAYWRIGHT_CHANNEL = 'chrome'` và chỉ định Python venv qua `SIGNSIGHT_TEST_PYTHON`.

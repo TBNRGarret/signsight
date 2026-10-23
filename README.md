@@ -1,6 +1,8 @@
 # SignSight
 
-Web quản trị cho admin/manager và backend FastAPI quản lý dữ liệu biển báo. Hướng sản phẩm user là app Flutter (chưa triển khai); web user hiện được giữ để kiểm tra luồng đóng góp. FastAPI phục vụ API và frontend HTML/CSS/JavaScript trong một server.
+Web quản trị cho admin/manager và backend FastAPI quản lý dữ liệu biển báo. App Flutter cho user đã có MVP ba tab (bản đồ, đóng góp ảnh, lịch sử); web user tiếp tục được giữ để kiểm tra các luồng chưa chuyển sang app. FastAPI phục vụ API và frontend HTML/CSS/JavaScript trong một server.
+
+Hướng dẫn [chạy app Flutter và preview trên laptop](docs/flutter_user_app.md).
 
 Hướng dẫn [đóng góp ảnh và xem biển được duyệt](docs/contribution_flow.md).
 
@@ -51,7 +53,8 @@ python -m uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000
 
 | Trang | Địa chỉ |
 | --- | --- |
-| Bản đồ | http://127.0.0.1:8000/web/index.html |
+| App user (sau khi build Flutter) | http://127.0.0.1:8000/app/ |
+| Bản đồ web kiểm thử | http://127.0.0.1:8000/web/index.html |
 | Đóng góp ảnh | http://127.0.0.1:8000/web/observations.html |
 | Quản lý — manager/admin | http://127.0.0.1:8000/web/management.html |
 | API Swagger | http://127.0.0.1:8000/docs |
@@ -89,7 +92,8 @@ Nền bản đồ, tìm địa điểm và routing cần Internet tới các pro
 
 ```text
 backend/      API, auth, migrations, lưu ảnh và nghiệp vụ
-frontend/     Ba trang web, theme và MapLibre vendored
+frontend/     Web quản trị, web user kiểm thử, theme và MapLibre vendored
+mobile/       Flutter app user, Android/iOS và preview web
 ai_engine/    Inference, chuẩn bị dữ liệu và huấn luyện
 data/         Taxonomy và CSV split baseline, không chứa ảnh gốc
 notebooks/    EDA và train trên Colab/Kaggle

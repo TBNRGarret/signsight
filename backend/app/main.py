@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from backend.app.core.web_files import WebFiles
 from sqlalchemy.orm import sessionmaker
 
@@ -26,7 +27,7 @@ from backend.app.services.routing_service import RoutingProvider,make_place_prov
 from backend.app.services.lifecycle_service import expire_due_records
 
 
-def create_app(database_engine=None, settings: Settings | None = None) -> FastAPI:
+def create_app(database_engine=None, settings: Settings | None = None, *, user_app_directory: Path | None = None) -> FastAPI:
     db_engine = database_engine if database_engine is not None else engine
     settings = settings if settings is not None else Settings.from_env()
 
@@ -94,6 +95,10 @@ def create_app(database_engine=None, settings: Settings | None = None) -> FastAP
 
     frontend = Path(__file__).resolve().parents[2] / "frontend"
     application.mount("/web", WebFiles(directory=str(frontend), html=True), name="web")
+    # Optional same-origin Flutter preview; API authorization is unchanged.
+    user_app = user_app_directory if user_app_directory is not None else Path(__file__).resolve().parents[2] / 'mobile' / 'build' / 'web'
+    if user_app.is_dir():
+        application.mount('/app', StaticFiles(directory=str(user_app), html=True), name='user-app')
     return application
 
 

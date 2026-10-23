@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   test:
+    needs: mobile
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -48,8 +49,14 @@ jobs:
           npm run build:maps
           git diff --exit-code -- frontend/vendor/maplibre
           npx playwright install --with-deps chromium
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: signsight-flutter-preview
+          path: mobile/build/web
       - name: Browser contribution flows
         run: npm run test:e2e
+      - name: Flutter browser contribution flows
+        run: npx playwright test -c playwright.flutter.config.cjs
       - name: Preserve browser failure traces
         if: failure()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -57,4 +64,70 @@ jobs:
           name: browser-failure-traces
           path: test-results/
           if-no-files-found: ignore
+          retention-days: 7
+
+  mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Install Flutter dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Dart formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Flutter analysis
+        run: flutter analyze
+      - name: Flutter API, state and compact layout tests
+        run: flutter test
+      - name: Build same-origin laptop preview
+        run: flutter build web --release --base-href=/app/ --no-web-resources-cdn
+      - name: Preserve preview for browser tests
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: signsight-flutter-preview
+          path: mobile/build/web
+          retention-days: 3
+
+  android:
+    needs: mobile
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - name: Build Android emulator debug APK
+        run: flutter build apk --debug --target-platform android-x64
+      - name: Preserve Android test build
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: signsight-android-emulator-debug
+          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 7
