@@ -3,3 +3,6 @@ pytest>=8.0.0,<10.0
 httpx>=0.27.0,<1.0
 PyYAML>=6.0,<7.0
 matplotlib>=3.8,<4.0
+
+# Standalone notebook integration tests execute progress bars.
+tqdm>=4.66,<5.0
