@@ -26,7 +26,6 @@ function app(request) {
 }
 function mapApp(request) {
   const a=app(request), map={on(){},removeLayer(){},getBounds:()=>({getSouth:()=>10.7,getNorth:()=>10.9,getWest:()=>106.6,getEast:()=>106.8})};
-  a.context.L={circleMarker:()=>({bindPopup(){return this;},addTo(){return this;}})};
   a.window.signSightMap={mount:()=>({map})};
   a.window.signSightReports={mount:()=>({refreshPin(){},select(){}})};
   a.get('nearby-radius').value='1000';

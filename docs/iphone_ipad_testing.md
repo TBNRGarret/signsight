@@ -4,7 +4,7 @@ Muốn thử **chụp ảnh → tự nhận diện YOLO** trước khi cài HTTP
 
 Chọn **Ghi nhớ đăng nhập 30 ngày trên thiết bị này** khi đăng nhập để dùng lại phiên trên Safari và các trang cùng hostname. Không dùng IP làm bằng chứng đăng nhập. Sau cập nhật cookie ngày 20/10, đăng nhập lại một lần để trang quản lý nhận cookie mới; chỉ manager/admin được mở trang đó.
 
-Nếu nền bản đồ xám: bản web từ 20/10 có ô **Nguồn nền bản đồ** ở góc dưới phải. Chọn **OpenStreetMap · dự phòng** để dùng máy chủ `tile.openstreetmap.de`; nguồn chính lỗi hoàn toàn hoặc chậm quá 10 giây sẽ tự thử nguồn dự phòng một lần. Cả hai vẫn cần Internet. Tải lại trang để nhận bản JavaScript mới. Nguồn dự phòng do [OSM Deutschland/FOSSGIS](https://openstreetmap.de/nutzen/dienste-osm-de/) cung cấp, bản đồ có thể hiển thị thêm tên tiếng Đức.
+Nếu nền bản đồ xám: bản web từ 23/10 dùng MapLibre + OpenFreeMap. Tải lại trang để nhận JS/CSS mới, xem thông báo lỗi và bấm **Thử tải lại**. Ô **Kiểu nền bản đồ** chọn Đường phố/Sáng/Tối trên cùng dịch vụ OFM; không phải nguồn dự phòng. Thiết bị cần WebGL và Internet; hãy mở bằng Safari/Chrome riêng. [Chi tiết bản đồ](maplibre.md).
 
 Nguồn được chọn hoặc tải thành công được lưu trong trình duyệt 24 giờ, nên lần mở sau dùng ngay nguồn đó. Nếu nguồn đã nhớ bị lỗi, hệ thống thử nguồn còn lại một lần; không chuyển qua lại vô hạn. Khi storage bị chặn, bản đồ vẫn chạy nhưng không ghi nhớ lựa chọn.
 

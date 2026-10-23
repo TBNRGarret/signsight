@@ -1,7 +1,7 @@
 /* One shared map; each detected sign owns its own unconfirmed/confirmed position. */
 (function(root){
   'use strict';
-  function mount({L,document,environment=root,baseMap=root.signSightMap,onChange}){
+  function mount({document,environment=root,baseMap=root.signSightMap,onChange}){
     const $=id=>document.getElementById('location-'+id);
     let items=new Map(),active=null,map=null,marker=null,generation=0;
     const valid=(lat,lon)=>typeof lat==='number'&&typeof lon==='number'&&Number.isFinite(lat)&&Number.isFinite(lon)&&Math.abs(lat)<=90&&Math.abs(lon)<=180;
@@ -12,11 +12,11 @@
       $('confirm').disabled=!valid(item.latitude,item.longitude)||item.confirmed;
       $('status').textContent=item.confirmed?'Đã xác nhận vị trí biển này.':
         valid(item.latitude,item.longitude)?'Ghim mới là vị trí gợi ý. Kéo ghim nếu cần, rồi xác nhận.':'Chạm bản đồ để đặt ghim tại vị trí biển.';
-      if(!map)return;
+      if(!map||map.enabled===false)return;
       removeMarker();
       if(valid(item.latitude,item.longitude)){
         const id=active;
-        const current=L.marker([item.latitude,item.longitude],{draggable:true}).addTo(map);
+        const current=map.addMarker([item.latitude,item.longitude],{draggable:true});
         marker=current;
         current.on('dragend',()=>{
           if(marker!==current||active!==id)return;
@@ -36,7 +36,7 @@
       if(!items.has(id))return;
       generation++;active=id;$('panel').hidden=false;$('gps').disabled=false;
       if(!map){
-        map=baseMap.mount({L,document,environment,idPrefix:'location-'}).map;
+        map=baseMap.mount({document,environment,idPrefix:'location-'}).map;
         map.on('click',event=>{if(active)setPosition(active,event.latlng.lat,event.latlng.lng);});
       }
       render();

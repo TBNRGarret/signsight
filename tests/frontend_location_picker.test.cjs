@@ -9,7 +9,8 @@ function setup(){
   const L={marker(point){const handlers={};marker={point,handlers,on(n,f){handlers[n]=f;return this;},
     addTo(){return this;},getLatLng(){return {lat:this.point[0],lng:this.point[1]};}};return marker;}};
   const environment={navigator:{geolocation:{getCurrentPosition(success,error){gpsSuccess=success;gpsError=error;}}}};
-  const picker=mount({L,document:{getElementById:get},environment,
+  map.addMarker=(point,options)=>L.marker(point,options);
+  const picker=mount({document:{getElementById:get},environment,
     baseMap:{mount(options){assert.equal(options.idPrefix,'location-');mountCount++;return {map};}},
     onChange:change=>changes.push(change)});
   return {picker,get,events,changes,views,removed,get marker(){return marker;},get mountCount(){return mountCount;},

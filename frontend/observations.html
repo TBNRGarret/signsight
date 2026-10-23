@@ -15,9 +15,9 @@
     [hidden]{display:none!important}#status{min-height:24px;color:var(--warning);overflow-wrap:anywhere}.reject{background:#9f1239}.inline{display:flex;align-items:center;gap:8px}.inline input{width:auto}
     @media(max-width:760px){.grid{grid-template-columns:1fr}header,main{padding:16px}}
   </style>
-  <link rel="stylesheet" href="theme.css?v=20261020">
-  <link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=1.9.4" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=">
-  <link rel="stylesheet" href="observations.css?v=20261021">
+  <link rel="stylesheet" href="theme.css?v=20261023-ofm">
+  <link rel="stylesheet" href="vendor/maplibre/maplibre-gl.css?v=6.15.0" integrity="sha256-qQeYoZUwF3kOWQ9+G9Nf8QOopCY5cstHKQt4rfhvjCA=">
+  <link rel="stylesheet" href="observations.css?v=20261023-ofm">
 </head>
 <body>
 <header><a href="index.html">← Bản đồ và tài khoản</a> <a href="management.html" data-staff-only hidden>· Reports &amp; nghi trùng</a><h1>Chụp ảnh và đóng góp</h1>
@@ -58,8 +58,8 @@
             <p id="location-map-message"></p><button id="location-map-retry" type="button">Thử tải lại</button>
           </div>
           <button id="location-map-home" type="button" class="location-home">Về TP.HCM</button>
-          <select id="location-map-source" class="location-source" aria-label="Nguồn nền bản đồ chọn vị trí">
-            <option value="osm">OpenStreetMap</option><option value="osm-de">OpenStreetMap · dự phòng</option>
+          <select id="location-map-source" class="location-source" aria-label="Kiểu nền bản đồ chọn vị trí">
+            <option value="liberty">OFM · Đường phố</option><option value="bright">OFM · Sáng</option><option value="dark">OFM · Tối</option>
           </select>
         </div>
         <p id="location-status" role="status" aria-live="polite"></p>
@@ -77,8 +77,8 @@
       <button id="queue-prev" disabled>Trang trước</button><button id="queue-next" disabled>Trang sau</button><span id="queue-page" class="muted"></span></section>
   </div>
 </main>
-<script src="vendor/leaflet/leaflet.js?v=1.9.4" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="></script>
-<script src="map.js?v=20261021"></script><script src="location_picker.js?v=20261021"></script>
+<script src="vendor/maplibre/maplibre-gl.js?v=6.15.0" integrity="sha256-GjspOMZ2IS0Mxb/yYPkBu+Lz/g0fPeSeQrWq2t0Ov2U="></script>
+<script src="map.js?v=20261023-ofm"></script><script src="location_picker.js?v=20261023-ofm"></script>
 <script src="contribution_history.js?v=20261021"></script>
-<script src="auth.js?v=20261020-remember"></script><script src="observations.js?v=20261021-flow"></script>
+<script src="auth.js?v=20261020-remember"></script><script src="observations.js?v=20261023-ofm"></script>
 </body></html>

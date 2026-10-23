@@ -45,6 +45,8 @@ jobs:
       - name: Install browser test dependencies
         run: |
           npm ci
+          npm run build:maps
+          git diff --exit-code -- frontend/vendor/maplibre
           npx playwright install --with-deps chromium
       - name: Browser contribution flows
         run: npm run test:e2e

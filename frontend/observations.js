@@ -160,8 +160,8 @@
   function setupLocations(detections) {
     if(!detections.length)return;
     try {
-      if(!locationPicker && window.signSightLocation && window.signSightMap && window.L) {
-        locationPicker=window.signSightLocation.mount({L:window.L,document,onChange:change=>{
+      if(!locationPicker && window.signSightLocation && window.signSightMap && window.maplibregl) {
+        locationPicker=window.signSightLocation.mount({document,onChange:change=>{
           const fields=positionFields.get(change.id);if(!fields)return;
           fields.lat.value=change.latitude;fields.lon.value=change.longitude;fields.confirmed.checked=change.confirmed;
           fields.summary.textContent=change.confirmed?'Đã xác nhận vị trí biển.':'Ghim chưa được xác nhận.';

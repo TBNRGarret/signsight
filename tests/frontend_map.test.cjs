@@ -1,171 +1,101 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const { mount } = require('../frontend/map.js');
-
-function setup(store = new Map()) {
-  const elements = Object.fromEntries(['map', 'map-notice', 'map-message', 'map-retry', 'map-home', 'map-source']
-    .map(id => [id, { hidden: true, textContent: '', clientWidth: 600, clientHeight: 500 }]));
-  const mapEvents = {}, timers = new Map(), frames = new Map(), layers = [], removed = [];
-  const invalidations = [], views = [];
-  let serial = 0, observer, observed, disconnected = false, redraws = 0, tileConfig;
-  const map = {
-    setView(center, zoom) { views.push({ center, zoom }); return this; },
-    getContainer: () => elements.map,
-    invalidateSize: options => invalidations.push(options),
-    removeLayer(layer) { removed.push(layer); },
-    on(name, fn) { mapEvents[name] = fn; return this; }
-  };
-  const environment = {
-    localStorage:{getItem:key=>store.get(key)??null,setItem:(key,value)=>store.set(key,value)},
-    ResizeObserver: class {
-      constructor(fn) { observer = fn; }
-      observe(element) { observed = element; }
-      disconnect() { disconnected = true; }
-    },
-    requestAnimationFrame(fn) { frames.set(++serial, fn); return serial; },
-    cancelAnimationFrame(id) { frames.delete(id); },
-    setTimeout(fn) { timers.set(++serial, fn); return serial; },
-    clearTimeout(id) { timers.delete(id); }
-  };
-  const L = { map: () => map, tileLayer(url, options) {
-    tileConfig = {url,options}; const events={};
-    const layer={events,on(name,fn){events[name]=fn;return this;},off(){for(const key of Object.keys(events))delete events[key];},
-      addTo(){events.loading();return this;},redraw(){redraws++;events.loading();return this;}};
-    layers.push(layer);return layer;
-  } };
-  const result = mount({ L, document: { getElementById: id => elements[id] }, environment });
-  return {
-    ...result, elements, mapEvents, timers, frames, invalidations, views, layers, removed,
-    get events() { return layers.at(-1).events; },
-    get tileConfig() { return tileConfig; }, get redraws() { return redraws; },
-    get observed() { return observed; }, get disconnected() { return disconnected; },
-    resize: () => observer(),
-    flushFrames() { const pending = [...frames.values()]; frames.clear(); pending.forEach(fn => fn()); },
-    timeout() { const pending = [...timers.values()]; timers.clear(); pending.forEach(fn => fn()); }
-  };
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');
+const {mount}=require('../frontend/map.js');
+function setup(store=new Map(),{fail=false}={}){
+ const elements=Object.fromEntries(['map','map-notice','map-message','map-retry','map-home','map-source'].map(id=>[id,{hidden:true,textContent:'',clientWidth:600,clientHeight:500}]));
+ const events={},frames=new Map(),timers=new Map(),markers=[],popups=[],routes=new Map(),layers=new Map(),styles=[],views=[],controls=[];
+ let config,serial=0,resizeCount=0,disconnected=false,observer,loaded=false,removed=false;
+ const native={on(n,f){(events[n]??=[]).push(f);return this;},addControl(c){controls.push(c);},getContainer:()=>elements.map,
+  resize(){resizeCount++;},flyTo(o){views.push(o);},getZoom:()=>15,getBounds:()=>({}),
+  setStyle(s){styles.push(s);routes.clear();layers.clear();loaded=false;},
+  isStyleLoaded:()=>loaded,areTilesLoaded:()=>loaded,
+  addSource(id,s){routes.set(id,s);},getSource:id=>routes.get(id),removeSource:id=>routes.delete(id),
+  addLayer(l){layers.set(l.id,l);},getLayer:id=>layers.get(id),removeLayer:id=>layers.delete(id),
+  fitBounds(b,o){this.fitted={b,o};},remove(){removed=true;emit('remove');}};
+ function emit(n,e={}){for(const f of events[n]||[])f(e);}
+ const maplibregl={Map:class{constructor(o){if(fail)throw Error('WebGL unavailable');config=o;return native;}},
+  NavigationControl:class{},Marker:class{constructor(o){this.options=o;this.events={};markers.push(this);}
+   setLngLat(p){this.point=p;return this;}addTo(){return this;}getLngLat(){return {lng:this.point[0],lat:this.point[1]};}
+   on(n,f){this.events[n]=f;return this;}remove(){this.removed=true;}},
+  Popup:class{constructor(){popups.push(this);}setDOMContent(){return this;}setLngLat(){return this;}addTo(){return this;}remove(){this.removed=true;} }};
+ const document={getElementById:id=>elements[id],createElement(){return {style:{},dataset:{},events:{},setAttribute(){},addEventListener(n,f){this.events[n]=f;}};}};
+ const environment={localStorage:{getItem:k=>store.get(k)??null,setItem:(k,v)=>store.set(k,v)},
+  ResizeObserver:class{constructor(fn){observer=fn;}observe(){}disconnect(){disconnected=true;}},
+  requestAnimationFrame(fn){frames.set(++serial,fn);return serial;},cancelAnimationFrame:id=>frames.delete(id),
+  setTimeout(fn){timers.set(++serial,fn);return serial;},clearTimeout:id=>timers.delete(id)};
+ const result=mount({maplibregl,document,environment});
+ return {...result,elements,styles,views,controls,markers,popups,routes,layers,native,emit,store,
+  get config(){return config;},get resizeCount(){return resizeCount;},get disconnected(){return disconnected;},get removed(){return removed;},
+  resize:()=>observer(),ready(){loaded=true;emit('style.load');emit('idle');},
+  timeout(){const pending=[...timers.values()];timers.clear();pending.forEach(fn=>fn());},
+  flush(){const pending=[...frames.values()];frames.clear();pending.forEach(fn=>fn());},frames,timers};
 }
-
-test('base map starts in HCMC without login and sends a referrer to the canonical OSM endpoint', () => {
-  const s = setup();
-  assert.deepEqual(s.views, [{ center: [10.7769, 106.7009], zoom: 15 }]);
-  assert.equal(s.tileConfig.url, 'https://tile.openstreetmap.org/{z}/{x}/{y}.png');
-  assert.equal(s.tileConfig.options.referrerPolicy, 'strict-origin-when-cross-origin');
-  assert.match(s.tileConfig.options.attribution, /https:\/\/www.openstreetmap.org\/copyright/);
-  assert.equal(s.observed, s.elements.map);
+test('MapLibre starts at HCMC with interactive OFM vector tiles without a login or key',()=>{
+ const a=setup();assert.deepEqual(a.config.center,[106.7009,10.7769]);assert.equal(a.config.zoom,15);
+ assert.equal(a.config.style,'https://tiles.openfreemap.org/styles/liberty');assert.equal(a.config.renderWorldCopies,false);
+ assert.equal(a.controls.length,1);a.ready();assert.equal(a.elements['map-notice'].hidden,true);
+});
+test('application latitude/longitude is converted correctly for native camera, clicks and draggable markers',()=>{
+ const a=setup();a.map.flyTo([10.8,106.8],17);assert.deepEqual(a.views.at(-1).center,[106.8,10.8]);
+ let point;a.map.on('click',e=>point=e.latlng);a.emit('click',{lngLat:{lng:106.9,lat:10.9}});
+ assert.deepEqual(point,{lat:10.9,lng:106.9});
+ const pin=a.map.addMarker([10.7,106.7],{draggable:true});assert.deepEqual(a.markers[0].point,[106.7,10.7]);
+ assert.equal(a.markers[0].options.draggable,true);assert.deepEqual(pin.getLatLng(),{lat:10.7,lng:106.7});
+ a.map.removeLayer(pin);assert.equal(a.markers[0].removed,true);
+});
+test('style changes preserve markers, restore pending route geometry and never reset the camera',()=>{
+ const a=setup();const route=a.map.addRoute([{latitude:10,longitude:106},{latitude:11,longitude:107}]);
+ assert.equal(a.routes.size,0);a.ready();assert.equal(a.routes.size,1);
+ const source=[...a.routes.values()][0];assert.deepEqual(source.data.geometry.coordinates,[[106,10],[107,11]]);
+ a.elements['map-source'].value='dark';a.elements['map-source'].onchange();a.ready();
+ assert.equal(a.routes.size,1);assert.equal(a.views.length,0);assert.match(a.styles.at(-1),/styles\/dark$/);
+ a.map.removeLayer(route);assert.equal(a.routes.size,0);a.elements['map-source'].value='bright';a.elements['map-source'].onchange();a.ready();
+ assert.equal(a.routes.size,0,'removed/private routes must not reappear on a style reload');
+});
+test('only allowlisted OFM styles can be saved and disabled browser storage remains usable',()=>{
+ const store=new Map(),a=setup(store);a.elements['map-source'].value='bright';a.elements['map-source'].onchange();
+ assert.match(setup(store).config.style,/styles\/bright$/);
+ a.elements['map-source'].value='https://untrusted.example';a.elements['map-source'].onchange();assert.equal(a.styles.length,1);
+ assert.match(setup(new Map([['signsight.map-style','evil']])).config.style,/liberty$/);
+ const disabled={get(){throw Error('disabled');},set(){throw Error('disabled');}};
+ setup(disabled).ready();
+});
+test('network errors and stalls remain visible without automatic provider switching; retry recovers',()=>{
+ const a=setup();a.emit('error',{error:Error('tile blocked')});a.ready();
+ assert.equal(a.elements['map-notice'].hidden,false);assert.equal(a.styles.length,0);
+ a.elements['map-retry'].onclick();a.ready();assert.equal(a.elements['map-notice'].hidden,true);
+ assert.match(a.styles.at(-1),/openfreemap.org/);
+ const b=setup();b.timeout();assert.match(b.elements['map-message'].textContent,/tải chậm/);assert.equal(b.styles.length,0);
+});
+test('resizing hidden containers does not reset the camera and removal releases observers, timers and handlers',()=>{
+ const a=setup();a.elements.map.clientWidth=0;a.flush();assert.equal(a.resizeCount,0);
+ a.elements.map.clientWidth=390;a.resize();a.resize();a.flush();assert.equal(a.resizeCount,1);assert.equal(a.views.length,0);
+ a.elements['map-home'].onclick();assert.deepEqual(a.views.at(-1).center,[106.7009,10.7769]);
+ a.map.remove();assert.equal(a.disconnected,true);assert.equal(a.timers.size,0);assert.equal(a.frames.size,0);
+ assert.equal(a.elements['map-retry'].onclick,null);assert.equal(a.elements['map-source'].onchange,null);
+});
+test('WebGL initialization failure shows a usable message and leaves authentication/manual coordinates available',()=>{
+ const a=setup(new Map(),{fail:true});assert.equal(a.map.enabled,false);
+ assert.match(a.elements['map-message'].textContent,/WebGL/);assert.equal(a.elements['map-notice'].hidden,false);
+ assert.doesNotThrow(()=>a.map.flyTo([10,106],17));assert.equal(a.map.addMarker([10,106]),null);
+});
+test('both map pages load local MapLibre assets and expose OFM styles without Leaflet',()=>{
+ for(const name of ['index.html','observations.html']){
+  const html=fs.readFileSync(require.resolve('../frontend/'+name),'utf8');
+  assert.match(html,/vendor\/maplibre\/maplibre-gl.js/);assert.match(html,/vendor\/maplibre\/maplibre-gl.css/);
+  assert.doesNotMatch(html,/vendor\/leaflet|value="osm-de"/);assert.match(html,/value="liberty"/);assert.match(html,/value="dark"/);
+ }
 });
 
-test('a healthy alternate source is remembered so the next visit skips the failing primary',()=>{
-  const store=new Map(),first=setup(store);
-  first.events.tileerror({tile:{}});first.events.load();
-  first.events.tileload({tile:{}});first.events.load();
-  const next=setup(store);
-  assert.match(next.tileConfig.url,/tile\.openstreetmap\.de/);
-  assert.equal(next.layers.length,1);
+test('style.load restores route overlays while base tile requests are still pending',()=>{
+ const a=setup();a.map.addRoute([{latitude:10,longitude:106},{latitude:11,longitude:107}]);
+ a.emit('style.load');assert.equal(a.routes.size,1);
 });
 
-test('a remembered source can fail over once and expired preferences return to the primary',()=>{
-  const key='signsight.map-source',store=new Map([[key,JSON.stringify({id:'osm-de',savedAt:Date.now()})]]);
-  const current=setup(store);current.events.tileerror({tile:{}});current.events.load();
-  assert.match(current.tileConfig.url,/tile\.openstreetmap\.org/);
-  current.events.tileerror({tile:{}});current.events.load();assert.equal(current.layers.length,2);
-  store.set(key,JSON.stringify({id:'osm-de',savedAt:Date.now()-25*60*60*1000}));
-  assert.match(setup(store).tileConfig.url,/tile\.openstreetmap\.org/);
-});
 
-test('map source preference works without browser storage and ignores malformed entries',()=>{
-  const disabled={get(){throw Error('disabled');},set(){throw Error('disabled');}};
-  const s=setup(disabled);s.events.tileload({tile:{}});s.events.load();
-  assert.equal(s.elements['map-notice'].hidden,true);
-  for(const value of ['{bad',JSON.stringify({id:'https://untrusted.example',savedAt:Date.now()}),JSON.stringify({id:'osm-de',savedAt:Date.now()+10000})]){
-    assert.match(setup(new Map([['signsight.map-source',value]])).tileConfig.url,/tile\.openstreetmap\.org/);
-  }
-});
-
-test('container resize coalesces updates and preserves the chosen view; hidden containers recover', () => {
-  const s = setup();
-  s.elements.map.clientWidth = 0;
-  s.flushFrames();
-  assert.equal(s.invalidations.length, 0);
-  s.elements.map.clientWidth = 390;
-  s.resize(); s.resize(); s.resize(); s.flushFrames();
-  assert.deepEqual(s.invalidations, [{ pan: false, debounceMoveend: true }]);
-  assert.equal(s.views.length, 1);
-  s.elements['map-home'].onclick();
-  assert.deepEqual(s.views[1], s.views[0]);
-});
-
-test('failed tiles remain visible as an error even when other tiles finish; a manual retry can recover', () => {
-  const s = setup(), failed = {}, healthy = {};
-  s.events.tileerror({ tile: failed });
-  s.events.tileload({ tile: healthy });
-  s.events.load();
-  assert.equal(s.elements['map-notice'].hidden, false);
-  assert.match(s.elements['map-message'].textContent, /Không tải được/);
-  assert.equal(s.redraws, 0);
-  s.elements['map-retry'].onclick();
-  assert.equal(s.redraws, 1);
-  s.events.tileload({ tile: {} }); s.events.load();
-  assert.equal(s.elements['map-notice'].hidden, true);
-  assert.equal(s.timers.size, 0);
-});
-
-test('a stalled primary source switches once; a stalled fallback shows an error without looping', () => {
-  const stalled = setup(); stalled.timeout();
-  assert.equal(stalled.layers.length,2);
-  assert.match(stalled.tileConfig.url,/tile\.openstreetmap\.de/);
-  stalled.timeout();
-  assert.equal(stalled.elements['map-notice'].hidden, false);
-  assert.match(stalled.elements['map-message'].textContent, /tải chậm/);
-  stalled.events.tileload({ tile: {} });
-  assert.equal(stalled.elements['map-notice'].hidden, false, 'one late tile must not hide remaining stalled requests');
-  const loaded = setup(); loaded.events.tileload({ tile: {} }); loaded.events.load(); loaded.timeout();
-  assert.equal(loaded.elements['map-notice'].hidden, true);
-});
-
-test('all primary tiles failing switches to the alternate source without resetting the view',()=>{
-  const s=setup(), oldEvents={...s.events};
-  s.events.tileerror({tile:{}});s.events.load();
-  assert.equal(s.layers.length,2);
-  assert.equal(s.removed.length,1);
-  assert.match(s.tileConfig.url,/tile\.openstreetmap\.de/);
-  assert.equal(s.elements['map-source'].value,'osm-de');
-  assert.equal(s.views.length,1);
-  oldEvents.tileerror({tile:{}});oldEvents.load();
-  assert.equal(s.layers.length,2,'late events from old source are ignored');
-  s.events.tileload({tile:{}});s.events.load();
-  assert.equal(s.elements['map-notice'].hidden,true);
-});
-
-test('manual source change replaces only the basemap and ignores unknown selections',()=>{
-  const s=setup();
-  s.elements['map-source'].value='osm-de';s.elements['map-source'].onchange();
-  assert.equal(s.layers.length,2);assert.equal(s.views.length,1);
-  assert.match(s.tileConfig.options.attribution,/FOSSGIS/);
-  s.elements['map-source'].value='unknown';s.elements['map-source'].onchange();
-  assert.equal(s.layers.length,2);
-  s.mapEvents.unload();assert.equal(s.elements['map-source'].onchange,null);
-});
-
-test('failed tiles which leave the viewport no longer keep the error on screen', () => {
-  const s = setup(), tile = {};
-  s.events.tileerror({ tile }); s.events.tileunload({ tile }); s.events.load();
-  assert.equal(s.elements['map-notice'].hidden, true);
-});
-
-test('map removal releases the observer, pending callbacks and UI handlers', () => {
-  const s = setup(); s.mapEvents.unload();
-  assert.equal(s.disconnected, true);
-  assert.equal(s.frames.size, 0); assert.equal(s.timers.size, 0);
-  assert.equal(s.elements['map-retry'].onclick, null);
-  assert.equal(s.elements['map-home'].onclick, null);
-});
-
-test('the page mounts the shared base map and keeps mobile dimensions on its panel', () => {
-  const html = fs.readFileSync(require.resolve('../frontend/index.html'), 'utf8');
-  assert.match(html, /src="map\.js\?v=[^"]+"/);
-  assert.match(html, /signSightMap\.mount\(\{L,\s*document\}\)/);
-  for (const id of ['map-notice', 'map-message', 'map-retry', 'map-home', 'map-source']) assert.ok(html.includes(`id="${id}"`));
-  assert.match(html, /\.map-panel\s*\{[^}]*height:\s*55vh/);
-  assert.doesNotMatch(html, /L\.tileLayer\(/);
+test('removing a private sign marker closes its popup without closing a different marker popup',()=>{
+ const a=setup();const marker=a.map.addMarker([10,106],{popup:()=>({})}),highlight=a.map.addMarker([10,106],{highlight:true});
+ a.markers[0].options.element.events.click({stopPropagation(){}});
+ assert.equal(a.popups.length,1);
+ highlight.remove();assert.equal(a.popups[0].removed,undefined);
+ marker.remove();assert.equal(a.popups[0].removed,true);
 });

@@ -2,11 +2,9 @@ const {test,expect}=require('@playwright/test');
 const path=require('node:path'),crypto=require('node:crypto');
 const photo=path.join(__dirname,'fixtures/sign.png');
 const password='Browser-test-password-123';
+const {stubMaps}=require('./map_fixture.cjs');
 async function setup(page){
-  await page.route('https://**/*',route=>{
-    if(route.request().resourceType()==='image')return route.fulfill({path:photo,contentType:'image/png'});
-    return route.abort();
-  });
+  await stubMaps(page);
   const username='browser_'+crypto.randomUUID().slice(0,8);
   const created=await page.request.post('/api/v1/auth/register',{data:{username,email:username+'@example.com',password}});
   expect(created.status()).toBe(201);
@@ -103,7 +101,14 @@ test('approved contribution shows a private thumbnail then opens its exact map r
     await expect(page).toHaveURL(new RegExp('sign='+accepted.sign_record_id));
     await expect(page.locator('#selected-title')).toContainText('P.102');
     await expect(page.locator('#sign-link-status')).toHaveText('Đã mở biển từ đóng góp.');
+    await expect(page.locator('.maplibregl-canvas')).toBeVisible();
+    await expect(page.locator('#map-notice')).toBeHidden();
+    await page.locator('.sign-map-marker:not(.sign-map-highlight)').first().click();
+    await expect(page.locator('.maplibregl-popup-content')).toContainText('P.102');
     expect(errors).toEqual([]);
     if(process.env.SIGNSIGHT_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SIGNSIGHT_SCREENSHOT_DIR,'map-'+testInfo.project.name+'.png'),fullPage:true});
+    await page.locator('#logout-button').click();
+    await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
+    await expect(page.locator('.sign-map-marker')).toHaveCount(0);
   }finally{await staff.close();}
 });

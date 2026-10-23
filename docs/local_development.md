@@ -15,3 +15,7 @@ Chạy tests từ source repo bằng Python môi trường đã cài requirement
 Worklog, PDF, ảnh thực địa, credentials và dataset không đưa vào repo public.
 
 Kiểm thử trình duyệt dùng backend tạm ở 127.0.0.1:8765, không dùng database ở cổng 8000. Thiết lập SIGNSIGHT_TEST_PYTHON nếu Python không có trong PATH. Local có thể đặt PLAYWRIGHT_CHANNEL=chrome để dùng Chrome đã cài; nếu không, chạy npx playwright install chromium. Project phone là viewport Chromium mô phỏng điện thoại, chưa phải nghiệm thu Safari/iPhone thật.
+
+## Map renderer
+
+MapLibre + OpenFreeMap is shared by both map pages. Run npm ci and npm run build:maps to rebuild the pinned local browser assets. See [maplibre.md](maplibre.md). The committed assets let the Python server run without Node at runtime.

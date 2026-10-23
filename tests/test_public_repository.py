@@ -19,7 +19,7 @@ def test_public_policy_excludes_private_and_runtime_paths(name):
 
 @pytest.mark.parametrize("name", [
     "README.md", ".env.example", ".github/workflows/ci.yml",
-    "backend/app/main.py", "frontend/vendor/leaflet/images/marker-icon.png",
+    "backend/app/main.py", "frontend/vendor/maplibre/maplibre-gl-worker.mjs",
     "data/processed/train.csv", "docs/images_and_detection.md",
     "notebooks/SignSight_YOLO_Colab.ipynb",
 ])

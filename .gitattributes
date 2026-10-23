@@ -19,9 +19,9 @@
 *.pdf binary
 *.docx binary
 
-# Preserve upstream bytes: changing line endings breaks Leaflet SRI hashes.
-frontend/vendor/leaflet/leaflet.css -text -whitespace
-frontend/vendor/leaflet/leaflet.js -text -whitespace
+# Preserve exact renderer bytes and asset integrity across platforms.
+frontend/vendor/maplibre/* -text -whitespace
+*.mjs text eol=lf
 
 .gitattributes text eol=lf
 .gitignore text eol=lf

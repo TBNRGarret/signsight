@@ -10,12 +10,12 @@ Luồng chính: **chụp/upload ảnh → YOLO phát hiện → người dùng x
 
 - Đăng ký, đăng nhập dùng chung các trang/tab, tùy chọn ghi nhớ phiên 30 ngày; phân quyền user, manager, admin.
 - Upload ảnh, YOLO detection, duyệt đóng góp và xem ảnh bằng chứng.
-- Leaflet với nền OpenStreetMap, tìm điểm đến qua Photon, dựng tuyến qua OSRM; lọc biển gần điểm và dọc tuyến.
+- MapLibre GL JS với nền vector OpenFreeMap, tìm điểm đến qua Photon, dựng tuyến qua OSRM; lọc biển gần điểm và dọc tuyến.
 - Báo cáo thay đổi, đề xuất trùng lặp và yêu cầu xác nhận lại sau thời hạn cấu hình.
 - Giao diện điện thoại, light/dark/system theme.
 - Notebook EDA và huấn luyện, pipeline chuẩn hóa dữ liệu YOLO.
 
-Bản đồ chỉ hiển thị biển đã được ghi nhận/duyệt trong SignSight. OpenStreetMap cung cấp nền bản đồ, không tự bổ sung biển vào database. Database mới sẽ chưa có biển.
+Bản đồ chỉ hiển thị biển đã được ghi nhận/duyệt trong SignSight. OpenFreeMap cung cấp nền từ dữ liệu OpenStreetMap, không tự bổ sung biển vào database. Database mới sẽ chưa có biển.
 
 ## Chạy trên máy mới
 
@@ -86,7 +86,7 @@ Nền bản đồ, tìm địa điểm và routing cần Internet tới các pro
 
 ```text
 backend/      API, auth, migrations, lưu ảnh và nghiệp vụ
-frontend/     Ba trang web, theme và Leaflet vendored
+frontend/     Ba trang web, theme và MapLibre vendored
 ai_engine/    Inference, chuẩn bị dữ liệu và huấn luyện
 data/         Taxonomy và CSV split baseline, không chứa ảnh gốc
 notebooks/    EDA và train trên Colab/Kaggle
@@ -120,4 +120,6 @@ Tài liệu thêm: [quản lý và backup](docs/web_and_management.md), [đăng 
 
 Repo source chính: signsight, nhánh main. Phát triển trực tiếp trong checkout GitHub cố định ngoài cache. Tài liệu môn học giữ riêng; không sao chép lịch sử Git từ thư mục tài liệu vào repo này. Xem [source và dữ liệu local](docs/local_development.md).
 
-Chưa chọn giấy phép cho source code của dự án. Leaflet giữ giấy phép riêng tại [frontend/vendor/leaflet/LICENSE](frontend/vendor/leaflet/LICENSE).
+Chưa chọn giấy phép cho source code của dự án. MapLibre giữ giấy phép riêng tại [frontend/vendor/maplibre/LICENSE.txt](frontend/vendor/maplibre/LICENSE.txt).
+
+Chi tiết bản đồ và cách build renderer: [MapLibre + OFM](docs/maplibre.md).

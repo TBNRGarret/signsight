@@ -16,7 +16,7 @@ TECHNICAL_DOCS = {
     "authentication_setup.md", "demo_benchmark.md", "drive_dataset_eda.md",
     "field_capture_quickstart.md", "field_dataset_protocol.md", "images_and_detection.md",
     "iphone_ipad_testing.md", "local_vietnam_pipeline.md", "vietnam_dataset_eda.md",
-    "vn_traffic_standards_mapping.md", "web_and_management.md", "github_preparation.md", "local_development.md", "contribution_flow.md",
+    "vn_traffic_standards_mapping.md", "web_and_management.md", "github_preparation.md", "local_development.md", "contribution_flow.md", "maplibre.md",
 }
 SOURCE_SUFFIXES = {".py", ".txt", ".ini", ".json", ".sql", ".html", ".css", ".js", ".cjs", ".ipynb"}
 SENSITIVE_NAMES = {".env", "credentials.json", "kaggle.json", "login.txt"}
@@ -55,8 +55,8 @@ def is_public_path(name):
         return name == "backend/uploads/.gitkeep"
     if name.startswith("ai_engine/checkpoints/"):
         return name in {"ai_engine/checkpoints/.gitkeep", "ai_engine/checkpoints/detection/detection_report.json"}
-    if name.startswith("frontend/vendor/leaflet/"):
-        return path.suffix in {".css", ".js", ".png"} or path.name == "LICENSE"
+    if name.startswith("frontend/vendor/maplibre/"):
+        return path.suffix in {".css", ".js", ".mjs", ".txt"}
     return path.parts[0] in {"backend", "frontend", "ai_engine", "scripts", "tests", "database", "notebooks"} and path.suffix in SOURCE_SUFFIXES
 
 
@@ -97,7 +97,7 @@ def export_repository(root, destination, paths):
     prepared = {}
     for name in selected:
         content = (root / name).read_bytes()
-        # Preserve exact upstream Leaflet bytes: its assets use SRI hashes.
+        # Preserve vendored renderer bytes: page assets use SRI hashes.
         if name.startswith("frontend/vendor/") or name == "tests/browser/fixtures/sign.png":
             prepared[name] = content
             continue

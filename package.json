@@ -3,9 +3,14 @@
   "private": true,
   "scripts": {
     "test:frontend": "node --test tests/*.test.cjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "build:maps": "node scripts/build_maplibre.cjs"
   },
   "devDependencies": {
-    "@playwright/test": "1.64.1"
+    "@playwright/test": "1.64.1",
+    "esbuild": "0.28.2"
+  },
+  "dependencies": {
+    "maplibre-gl": "6.15.0"
   }
 }

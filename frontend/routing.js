@@ -18,12 +18,12 @@
       }catch(error){if(generation!==this.generation)return null;throw error;}
     }
   }
-  function mount({api,map,getOrigin,L,document}){
+  function mount({api,map,getOrigin,document}){
     const $=id=>document.getElementById(id);
     let destination=null,line=null,searchGeneration=0;
     const controller=new RouteController(api,{
       clear(){if(line){map.removeLayer(line);line=null;}$('nav-summary').textContent='';$('route-signs').replaceChildren();},
-      draw(data){line=L.polyline(data.geometry.map(p=>[p.latitude,p.longitude]),{color:'#3b82f6',weight:6,opacity:.8}).addTo(map);
+      draw(data){line=map.addRoute(data.geometry);
         map.fitBounds(line.getBounds(),{padding:[40,40]});
         $('nav-summary').textContent=`${(data.distance_meters/1000).toFixed(1)} km · ${Math.ceil(data.duration_seconds/60)} phút · ${data.signs.length} biển gần tuyến`;
         for(const row of data.signs){const item=document.createElement('button');item.className='btn btn-secondary';
