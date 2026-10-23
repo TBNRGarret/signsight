@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SignSight - Nền Tảng Bản Đồ & Quản Lý Biển Báo Giao Thông Việt Nam</title>
-  <script src="theme.js?v=20261020"></script>
+  <script src="theme.js?v=20261023-icons"></script>
   <link rel="stylesheet" href="vendor/maplibre/maplibre-gl.css?v=6.15.0" integrity="sha256-qQeYoZUwF3kOWQ9+G9Nf8QOopCY5cstHKQt4rfhvjCA=" />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -179,7 +179,7 @@
       .btn { min-height: 44px; }
     }
   </style>
-  <link rel="stylesheet" href="theme.css?v=20261023-ofm">
+  <link rel="stylesheet" href="theme.css?v=20261023-icons">
 </head>
 <body>
 
@@ -193,7 +193,11 @@
     <div class="header">
       <h1>SignSight <span class="badge">QCVN 41:2019</span></h1>
       <p>Nền tảng Quản lý & Bản đồ Biển báo Giao thông Việt Nam</p>
-      <div class="theme-control"><label for="theme-mode">Giao diện</label><select id="theme-mode" data-theme-select><option value="system">Theo thiết bị</option><option value="light">Sáng</option><option value="dark">Tối</option></select></div>
+      <div class="theme-control"><div class="theme-options" role="group" aria-label="Giao diện">
+<button type="button" data-theme-choice="system" aria-label="Theo thiết bị" title="Theo thiết bị" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8m-4-4v4"/></svg></button>
+<button type="button" data-theme-choice="light" aria-label="Sáng" title="Sáng" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg></button>
+<button type="button" data-theme-choice="dark" aria-label="Tối" title="Tối" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.8 13A9 9 0 0 1 11 3.2 9 9 0 1 0 20.8 13Z"/></svg></button>
+</div></div>
     </div>
 
     <div class="content">

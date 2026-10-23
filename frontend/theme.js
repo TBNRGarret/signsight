@@ -11,15 +11,17 @@
   let preference = read();
   function apply() {
     document.documentElement.dataset.theme = preference === 'system' ? (media?.matches ? 'dark' : 'light') : preference;
-    for (const select of document.querySelectorAll('[data-theme-select]')) select.value = preference;
+    for (const button of document.querySelectorAll('[data-theme-choice]')) {
+      button.setAttribute('aria-pressed', String(button.dataset.themeChoice === preference));
+    }
   }
   apply();
   function bind() {
-    for (const select of document.querySelectorAll('[data-theme-select]')) {
-      select.value = preference;
-      select.addEventListener('change', () => {
-        if (!choices.includes(select.value)) return;
-        preference = select.value;
+    apply();
+    for (const button of document.querySelectorAll('[data-theme-choice]')) {
+      button.addEventListener('click', () => {
+        if (!choices.includes(button.dataset.themeChoice)) return;
+        preference = button.dataset.themeChoice;
         try { window.localStorage.setItem(key, preference); } catch (_) {}
         apply();
       });
