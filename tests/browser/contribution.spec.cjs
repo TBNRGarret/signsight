@@ -79,6 +79,9 @@ test('approved contribution shows a private thumbnail then opens its exact map r
   const staff=await browser.newContext({baseURL:'http://127.0.0.1:8765'});
   try{
     const manager=await staff.newPage();
+    let releaseEvidence;
+    const evidenceGate=new Promise(resolve=>releaseEvidence=resolve);
+    await manager.route('**/api/v1/images/*/content',async route=>{await evidenceGate;await route.continue();});
     await manager.goto('/web/observations.html');
     await manager.getByLabel('Tên đăng nhập',{exact:true}).fill('browser_manager');
     await manager.getByLabel('Mật khẩu',{exact:true}).fill(password);
@@ -88,6 +91,9 @@ test('approved contribution shows a private thumbnail then opens its exact map r
     await expect(target).toHaveCount(1);
     await target.getByRole('button').click();
     await manager.getByRole('textbox',{name:'Ghi chú duyệt'}).fill('Đã kiểm tra vị trí trong test.');
+    releaseEvidence();
+    await expect(manager.locator('#detail-evidence canvas')).toBeVisible();
+    await expect(manager.locator('#review-comment')).toHaveValue('Đã kiểm tra vị trí trong test.');
     await expect(manager.locator('#review-accept')).toBeInViewport();
     if(process.env.SIGNSIGHT_SCREENSHOT_DIR){
       require('node:fs').mkdirSync(process.env.SIGNSIGHT_SCREENSHOT_DIR,{recursive:true});

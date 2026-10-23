@@ -21,3 +21,10 @@
 }
 
 #message:empty{display:none}.staff-tabs{padding-top:12px;margin-bottom:12px}.filters{margin:8px 0}.section-heading{margin-bottom:12px}#signs-count{margin:8px 0}th,td{padding:7px 9px}td .row-open{min-height:28px}
+
+@media(max-width:1000px){
+ #review-detail{overflow:visible}
+ #detail-evidence img,#detail-evidence canvas{max-height:220px}
+ #review-detail:has(#review-actions:not([hidden])) #detail-evidence{min-height:240px}
+ #review-detail .review-actions{position:sticky;bottom:0;z-index:2;margin-top:0;padding:10px 0;background:var(--card-bg)}
+}
