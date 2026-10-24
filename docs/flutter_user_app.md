@@ -45,7 +45,7 @@ Web preview ở địa chỉ HTTP LAN có thể không dùng được GPS; thử
 
 ## Android trên laptop
 
-Máy hiện có Flutter nhưng chưa có Android SDK. Cài Android Studio, Android SDK/Command-line Tools và tạo emulator có Google APIs. MapLibre plugin yêu cầu JDK 21. Kiểm tra:
+Cài Android Studio, Android SDK/Command-line Tools và tạo emulator x86_64 có Google APIs hoặc Google Play. Build hiện tại cần Android SDK Platform 36, Build Tools 36 và **NDK (Side by side) 28.2.13676358**. Emulator có thể chạy API khác với compile SDK. CI dùng JDK 21; MapLibre cần Java 21 trở lên. Kiểm tra:
 
 ```powershell
 flutter doctor -v
@@ -59,8 +59,32 @@ Backend ở máy host cần lắng nghe trên địa chỉ emulator truy cập �
 Từ `mobile/`:
 
 ```powershell
-flutter run -d <device-id> --dart-define=SIGNSIGHT_API_URL=http://10.0.2.2:8000
+flutter run -d emulator-5554 --dart-define=SIGNSIGHT_API_URL=http://10.0.2.2:8000
 ```
+
+`emulator-5554` là ví dụ ID từ `flutter devices`: thay đúng ID đang chạy, không thêm dấu `< >`. Sau khi build thành công, `flutter run` tự cài và mở app; giữ terminal để dùng hot reload.
+
+### Nếu build báo thiếu NDK
+
+Đọc phần `What went wrong` trước `BUILD FAILED`. Lỗi `sdkmanager did not install NDK 28.2.13676358` là thiếu SDK component, không phải bằng chứng code Dart lỗi. Trong Android Studio → SDK Manager → SDK Tools → **Show Package Details** → **NDK (Side by side)**, chọn đúng `28.2.13676358` rồi Apply.
+
+Với Command-line Tools 23 dùng Android CLI mới, có thể cài trực tiếp bằng package ID dạng slash; không dùng lại wrapper `sdkmanager.bat` nếu wrapper tách nhầm `ndk;version` thành hai package:
+
+```powershell
+$android = Join-Path $env:LOCALAPPDATA 'Android/sdk/cmdline-tools/latest/bin/android.exe'
+& $android --no-metrics sdk install 'ndk/28.2.13676358'
+& $android --no-metrics sdk install 'platforms/android-36'
+```
+
+`flutter doctor -v` có thể báo SDK ở đường dẫn chứa dấu cách. Trên máy hiện tại, dùng alias Windows ngắn của **cùng thư mục** để không phải di chuyển SDK hoặc tải lại emulator:
+
+```powershell
+& 'C:\Users\WINDOW~1\flutter\bin\flutter.bat' config --android-sdk 'C:\Users\WINDOW~1\AppData\Local\Android\sdk'
+```
+
+Kiểm tra đường dẫn tồn tại trước khi áp dụng trên máy khác. `mobile/android/local.properties` là file local được Flutter tạo lại, không commit đường dẫn SDK cá nhân. Các dòng Java `WARNING: ... native access` không đồng nghĩa build fail; cần xem lỗi gốc ở phần `What went wrong`. Một số plugin còn dùng compile SDK 35; Gradle có thể cài thêm bản đó cạnh SDK 36.
+
+Tham khảo [cài NDK theo phiên bản](https://developer.android.com/studio/projects/install-ndk) và [Android CLI](https://developer.android.com/tools/agents/android-cli).
 
 `10.0.2.2` chỉ dành cho Android emulator chuẩn. Thiết bị Android thật dùng IP LAN của máy host và cho phép cổng backend qua firewall. Bản debug cho HTTP local; bản release bắt buộc cấu hình API HTTPS:
 
