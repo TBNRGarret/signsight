@@ -86,6 +86,12 @@ Kiểm tra đường dẫn tồn tại trước khi áp dụng trên máy khác.
 
 Tham khảo [cài NDK theo phiên bản](https://developer.android.com/studio/projects/install-ndk) và [Android CLI](https://developer.android.com/tools/agents/android-cli).
 
+### Nếu Kotlin báo `this and base files have different roots`
+
+Windows có thể đặt project trên D: và Pub cache trên C:. Kotlin incremental compilation khi đó có thể lỗi `Could not close incremental caches` ở các plugin như MapLibre, image_picker hoặc package_info_plus. Project đặt `kotlin.incremental=false` trong `mobile/android/gradle.properties` để tránh lỗi relative path qua hai ổ; không tắt toàn bộ Gradle cache hoặc thay source plugin. Các task không đổi vẫn được Gradle bỏ qua và Dart hot reload vẫn hoạt động.
+
+Lỗi đã được tái hiện bằng build thật trước khi áp dụng cấu hình. Nếu còn lỗi, giữ log `What went wrong`; không xóa SDK/Pub cache hoặc database để thử ngẫu nhiên. Xem [Kotlin incremental compilation](https://kotlinlang.org/docs/gradle-compilation-and-caches.html).
+
 `10.0.2.2` chỉ dành cho Android emulator chuẩn. Thiết bị Android thật dùng IP LAN của máy host và cho phép cổng backend qua firewall. Bản debug cho HTTP local; bản release bắt buộc cấu hình API HTTPS:
 
 ```powershell
@@ -95,6 +101,10 @@ flutter build apk --debug --dart-define=SIGNSIGHT_API_URL=http://YOUR_LAN_IP:800
 CI tạo artifact **signsight-android-emulator-debug** (x86_64, API mặc định `10.0.2.2:8000`), dành cho emulator, không phải APK phát hành cho mọi điện thoại. Đăng nhập và ảnh được gửi về backend đã cấu hình, không có tài khoản mẫu trong app.
 
 iOS có khai báo quyền camera/thư viện/GPS nhưng cần macOS + Xcode, cấu hình signing và chạy thiết bị thật để nghiệm thu. Chưa xác minh build iOS. Android camera/GPS, từ chối quyền, khôi phục sau OS đóng activity khi chọn ảnh vẫn cần thử thật; nháp hiện ở RAM và có thể mất khi app bị đóng.
+
+## Xác nhận native local ngày 24/10/2026
+
+Đã build APK debug x86_64 trên Windows sau khi cài NDK 28.2.13676358, SDK 36/35 và CMake 3.22.1, đồng thời tắt Kotlin incremental cache khác ổ. Đã cài và mở màn hình guest trên emulator Android 17/API 37, quan sát nền bản đồ và ba tab. Kiểm tra TCP từ UID app tới backend `10.0.2.2:8000` thành công; backend host trả HTTP 200. Đây là smoke test khởi động và kết nối, chưa nghiệm thu camera/GPS, luồng đóng góp native có đăng nhập hoặc chất lượng model trên ảnh thật. 22 test Flutter đạt và analyze không có issue.
 
 ## Kiểm thử
 
