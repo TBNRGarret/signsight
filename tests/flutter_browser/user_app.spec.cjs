@@ -14,11 +14,13 @@ async function registerAndLogin(page){
  expect((await page.request.post('/api/v1/auth/register',{data:{username,email:username+'@example.com',password}})).status()).toBe(201);
  await open(page);
  await page.getByRole('button',{name:'Tài khoản',exact:true}).click();
- await page.getByRole('textbox',{name:'Tên đăng nhập',exact:true}).click();
- await page.getByRole('textbox',{name:'Tên đăng nhập',exact:true}).pressSequentially(username);
- await page.getByRole('textbox',{name:'Mật khẩu',exact:true}).click();
- await page.getByRole('textbox',{name:'Mật khẩu',exact:true}).pressSequentially(password);
+ const usernameField=page.getByRole('textbox',{name:'Tên đăng nhập',exact:true});
+ const passwordField=page.getByRole('textbox',{name:'Mật khẩu',exact:true});
+ await usernameField.fill(username);await expect(usernameField).toHaveValue(username);
+ await passwordField.fill(password);await expect(passwordField).toHaveValue(password);
+ const loginResponse=page.waitForResponse(r=>r.request().method()==='POST'&&r.url().endsWith('/api/v1/auth/login'));
  await page.getByRole('button',{name:'Đăng nhập',exact:true}).click();
+ expect((await loginResponse).status()).toBe(200);
  await expect(page.getByRole('button',{name:'Danh sách biển',exact:true})).toBeVisible();
 }
 
