@@ -3,6 +3,12 @@ const path=require('node:path'),crypto=require('node:crypto');
 const {stubMaps}=require('../browser/map_fixture.cjs');
 const photo=path.join(__dirname,'../browser/fixtures/sign.png');
 const password='Browser-test-password-123';
+async function enterText(page,name,value){
+ const field=page.getByRole('textbox',{name,exact:true});
+ // Flutter may replace the semantic input when focus creates its editing host.
+ await field.click();await expect(field).toBeFocused();
+ await field.fill(value);await expect(field).toHaveValue(value);
+}
 async function open(page){
   await stubMaps(page);
   await page.goto('/app/');
@@ -14,10 +20,8 @@ async function registerAndLogin(page){
  expect((await page.request.post('/api/v1/auth/register',{data:{username,email:username+'@example.com',password}})).status()).toBe(201);
  await open(page);
  await page.getByRole('button',{name:'Tài khoản',exact:true}).click();
- const usernameField=page.getByRole('textbox',{name:'Tên đăng nhập',exact:true});
- const passwordField=page.getByRole('textbox',{name:'Mật khẩu',exact:true});
- await usernameField.fill(username);await expect(usernameField).toHaveValue(username);
- await passwordField.fill(password);await expect(passwordField).toHaveValue(password);
+ await enterText(page,'Tên đăng nhập',username);
+ await enterText(page,'Mật khẩu',password);
  const loginResponse=page.waitForResponse(r=>r.request().method()==='POST'&&r.url().endsWith('/api/v1/auth/login'));
  await page.getByRole('button',{name:'Đăng nhập',exact:true}).click();
  expect((await loginResponse).status()).toBe(200);
@@ -75,8 +79,7 @@ test('upload, verify label and pin, approval and exact map record',async({page,b
  await page.getByRole('button',{name:'Báo cáo / xác nhận',exact:true}).click();
  const reportSubmit=page.getByRole('button',{name:'Gửi báo cáo',exact:true});
  await expect(reportSubmit).toBeDisabled();
- await page.getByRole('textbox',{name:'Mô tả quan sát'}).click();
- await page.getByRole('textbox',{name:'Mô tả quan sát'}).pressSequentially('Biển vẫn còn tại vị trí này');
+ await enterText(page,'Mô tả quan sát','Biển vẫn còn tại vị trí này');
  const proofChooser=page.waitForEvent('filechooser');
  await page.getByRole('button',{name:'Chọn ảnh',exact:true}).click();
  await (await proofChooser).setFiles(photo);
