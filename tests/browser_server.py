@@ -33,6 +33,11 @@ if __name__ == "__main__":
         init_db(engine)
         app = create_app(engine, Settings(storage_root=directory / "images"))
         app.state.detector = FixtureDetector()
+        @app.get('/test-map.json')
+        def test_map():
+            return {'version': 8, 'sources': {},
+                    'layers': [{'id': 'background', 'type': 'background',
+                                'paint': {'background-color': '#e8eee6'}}]}
         with app.state.session_factory() as db:
             create_user(db, UserRegister(username="browser_manager", email="manager@example.com",
                                         password="Browser-test-password-123"), role="manager")

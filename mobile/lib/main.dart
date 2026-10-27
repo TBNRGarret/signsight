@@ -9,6 +9,7 @@ import 'app.dart';
 import 'controller.dart';
 import 'session_store.dart';
 import 'cookie_session_store.dart';
+import 'native_draft_store.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +38,7 @@ void main() {
   final controller = AppController(
     SignSightApi(origin, browser: kIsWeb),
     kIsWeb ? CookieSessionStore() : SecureSessionStore(scope: origin.origin),
+    drafts: createDraftStore(origin.origin),
   );
   runApp(SignSightApp(controller: controller));
   unawaited(controller.initialize());

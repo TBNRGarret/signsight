@@ -88,7 +88,7 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get --enforce-lockfile
       - name: Dart formatting
-        run: dart format --output=none --set-exit-if-changed lib test
+        run: dart format --output=none --set-exit-if-changed lib test integration_test
       - name: Flutter analysis
         run: flutter analyze
       - name: Flutter API, state and compact layout tests

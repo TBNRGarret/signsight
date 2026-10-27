@@ -162,20 +162,23 @@ class SignSightApi {
     return (j['items'] as List).map((v) => Place.fromJson(jsonMap(v))).toList();
   }
 
-  Future<DrivingRoute> route(GeoPoint origin, GeoPoint destination) async =>
-      DrivingRoute.fromJson(
-        jsonMap(
-          await _json(
-            'POST',
-            '/navigation/route',
-            body: {
-              'origin': origin.toJson(),
-              'destination': destination.toJson(),
-              'buffer_meters': 50,
-            },
-          ),
-        ),
-      );
+  Future<DrivingRoute> route(
+    GeoPoint origin,
+    GeoPoint destination, {
+    int buffer = 50,
+  }) async => DrivingRoute.fromJson(
+    jsonMap(
+      await _json(
+        'POST',
+        '/navigation/route',
+        body: {
+          'origin': origin.toJson(),
+          'destination': destination.toJson(),
+          'buffer_meters': buffer,
+        },
+      ),
+    ),
+  );
   Future<UploadedPhoto> upload(Uint8List bytes, String name) async {
     final mime =
         lookupMimeType(name, headerBytes: bytes) ?? 'application/octet-stream';
@@ -247,6 +250,66 @@ class SignSightApi {
       j['total'] as int,
     );
   }
+
+  Future<PageData<Sign>> confirmations({int offset = 0}) async {
+    final j = jsonMap(
+      await _json(
+        'GET',
+        '/me/confirmation-requests',
+        query: {'offset': '$offset', 'limit': '20'},
+      ),
+    );
+    return PageData(
+      (j['items'] as List).map((v) => Sign.fromJson(jsonMap(v))).toList(),
+      j['total'] as int,
+    );
+  }
+
+  Future<PageData<SignReport>> reports({int offset = 0}) async {
+    final j = jsonMap(
+      await _json(
+        'GET',
+        '/me/reports',
+        query: {'offset': '$offset', 'limit': '20'},
+      ),
+    );
+    return PageData(
+      (j['items'] as List).map((v) => SignReport.fromJson(jsonMap(v))).toList(),
+      j['total'] as int,
+    );
+  }
+
+  Future<List<SignType>> taxonomy() async {
+    final j = jsonMap(await _json('GET', '/taxonomy'));
+    return (j['items'] as List)
+        .map((v) => SignType.fromJson(jsonMap(v)))
+        .toList();
+  }
+
+  Future<SignReport> report(
+    String signId,
+    ReportAction action,
+    String imageId,
+    String comment, {
+    GeoPoint? point,
+    int? proposedClass,
+  }) async => SignReport.fromJson(
+    jsonMap(
+      await _json(
+        'POST',
+        '/signs/${Uri.encodeComponent(signId)}/reports',
+        body: {
+          'action': action.value,
+          'image_id': imageId,
+          'comment': comment.trim(),
+          if (action == ReportAction.correctLocation && point != null)
+            ...point.toJson(),
+          if (action == ReportAction.correctClass)
+            'proposed_class': proposedClass,
+        },
+      ),
+    ),
+  );
 
   void close() => _client.close();
 }

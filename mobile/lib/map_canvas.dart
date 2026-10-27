@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
 import 'models.dart';
+import 'sign_icons.dart';
 
 class MapScene {
   const MapScene({
@@ -28,8 +29,13 @@ Widget buildSignMap(BuildContext context, MapScene scene) =>
     SignMap(scene: scene);
 
 class SignMap extends StatefulWidget {
-  const SignMap({super.key, required this.scene});
+  const SignMap({
+    super.key,
+    required this.scene,
+    this.styleString = 'https://tiles.openfreemap.org/styles/liberty',
+  });
   final MapScene scene;
+  final String styleString;
   @override
   State<SignMap> createState() => _SignMapState();
 }
@@ -41,6 +47,7 @@ class _SignMapState extends State<SignMap> {
   int _generation = 0, _instance = 0;
   Timer? _timeout;
   Future<void> _pending = Future.value();
+  final _icons = <String>{};
   LatLng point(GeoPoint p) => LatLng(p.latitude, p.longitude);
   @override
   void initState() {
@@ -85,6 +92,7 @@ class _SignMapState extends State<SignMap> {
       }
       try {
         await controller.clearCircles();
+        await controller.clearSymbols();
         await controller.clearLines();
         if (scene.route.length > 1) {
           await controller.addLine(
@@ -100,10 +108,23 @@ class _SignMapState extends State<SignMap> {
           await controller.addCircle(
             CircleOptions(
               geometry: point(sign.point),
-              circleRadius: 9,
+              circleRadius: 20,
               circleColor: sign.needsConfirmation ? '#d97706' : '#2563eb',
               circleStrokeColor: '#ffffff',
               circleStrokeWidth: 2,
+            ),
+            {'id': sign.id},
+          );
+          final key = 'sign:${sign.code}';
+          if (!_icons.contains(key)) {
+            await controller.addImage(key, await renderSignIcon(sign.code));
+            _icons.add(key);
+          }
+          await controller.addSymbol(
+            SymbolOptions(
+              geometry: point(sign.point),
+              iconImage: key,
+              iconSize: .38,
             ),
             {'id': sign.id},
           );
@@ -140,7 +161,7 @@ class _SignMapState extends State<SignMap> {
     children: [
       MapLibreMap(
         key: ValueKey(_instance),
-        styleString: 'https://tiles.openfreemap.org/styles/liberty',
+        styleString: widget.styleString,
         initialCameraPosition: CameraPosition(
           target: point(widget.scene.center),
           zoom: 15,
@@ -155,9 +176,17 @@ class _SignMapState extends State<SignMap> {
                 .firstOrNull;
             if (sign != null) widget.scene.onSign?.call(sign);
           });
+          controller.onSymbolTapped.add((symbol) {
+            final sign = widget.scene.signs
+                .where((s) => s.id == symbol.data?['id'])
+                .firstOrNull;
+            if (sign != null) widget.scene.onSign?.call(sign);
+          });
         },
         onStyleLoadedCallback: () {
           _loaded = true;
+          _icons.clear();
+          unawaited(_controller!.setSymbolIconAllowOverlap(true));
           _timeout?.cancel();
           if (mounted) setState(() => _error = null);
           _sync();

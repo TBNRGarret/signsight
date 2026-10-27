@@ -13,6 +13,13 @@ from backend.app.services.evidence_service import sign_evidence
 router=APIRouter()
 
 
+@router.get('/taxonomy')
+def taxonomy(user=Depends(get_current_user)):
+    from ai_engine.config import TAXONOMY
+    return {'items': [{key: item[key] for key in ('new_id', 'qcvn_code', 'name_vi')}
+                      for item in TAXONOMY]}
+
+
 def page(query,offset,limit):
     return {'items':[SignRecordResponse.model_validate(row) for row in query.order_by(SignRecord.id).offset(offset).limit(limit)],
             'total':query.count(),'offset':offset,'limit':limit}

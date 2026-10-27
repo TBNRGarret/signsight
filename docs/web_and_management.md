@@ -1,6 +1,6 @@
 # Web quản trị SignSight
 
-Cập nhật 23/10/2026. Web dành cho admin/manager; hướng sản phẩm user là app Flutter (chưa triển khai). Web user được giữ để kiểm tra backend trong giai đoạn chuyển tiếp.
+Cập nhật 27/10/2026. Web dành cho admin/manager; user đã có MVP Flutter với bản đồ, đóng góp, lịch sử và báo cáo. Android có bản debug; nghiệm thu trên điện thoại thật và iOS còn chờ. Web user được giữ để kiểm tra backend trong giai đoạn chuyển tiếp.
 
 ## Điểm vào
 

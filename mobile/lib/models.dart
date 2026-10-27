@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:convert';
 
 Map<String, dynamic> jsonMap(Object? value) =>
     Map<String, dynamic>.from(value as Map);
@@ -154,8 +155,10 @@ class CaptureDraft {
     required this.bytes,
     this.detections = const [],
     this.selectedId,
+    this.name = 'capture.jpg',
   });
-  final UploadedPhoto photo;
+  UploadedPhoto? photo;
+  final String name;
   Uint8List bytes;
   List<Detection> detections;
   String? selectedId;
@@ -164,6 +167,61 @@ class CaptureDraft {
   GeoPoint? suggestion, confirmedLocation;
   Detection? get selected =>
       detections.where((d) => d.id == selectedId).firstOrNull;
+
+  Map<String, dynamic> toJson() => {
+    'version': 1,
+    'name': name,
+    'bytes': base64Encode(bytes),
+    if (photo != null)
+      'photo': {
+        'id': photo!.id,
+        'width': photo!.width,
+        'height': photo!.height,
+      },
+    'detections': detections
+        .map(
+          (d) => {
+            'id': d.id,
+            'qcvn_code': d.code,
+            'name_vi': d.name,
+            'confidence': d.confidence,
+            if (d.bbox != null)
+              'bbox': Map.fromIterables(['x1', 'y1', 'x2', 'y2'], d.bbox!),
+          },
+        )
+        .toList(),
+    'selected_id': selectedId,
+    'preview_ready': previewReady,
+    'label_confirmed': labelConfirmed,
+    'suggestion': suggestion?.toJson(),
+    'confirmed_location': confirmedLocation?.toJson(),
+  };
+  factory CaptureDraft.fromJson(Map<String, dynamic> j) {
+    if (j['version'] != 1) throw const FormatException('Unknown draft version');
+    final bytes = base64Decode(j['bytes'] as String);
+    if (bytes.isEmpty || bytes.length > 10 * 1024 * 1024) {
+      throw const FormatException('Invalid draft photo');
+    }
+    return CaptureDraft(
+        photo: j['photo'] == null
+            ? null
+            : UploadedPhoto.fromJson(jsonMap(j['photo'])),
+        bytes: bytes,
+        name: j['name'] as String,
+        detections: (j['detections'] as List)
+            .map((d) => Detection.fromJson(jsonMap(d)))
+            .toList(),
+        selectedId: j['selected_id'] as String?,
+      )
+      ..previewReady = j['preview_ready'] == true
+      ..labelConfirmed = j['label_confirmed'] == true
+      ..suggestion = j['suggestion'] == null
+          ? null
+          : GeoPoint.fromJson(jsonMap(j['suggestion']))
+      ..confirmedLocation = j['confirmed_location'] == null
+          ? null
+          : GeoPoint.fromJson(jsonMap(j['confirmed_location']));
+  }
 }
 
 class Contribution {
@@ -195,4 +253,58 @@ class Contribution {
     'rejected' => 'Cần chỉnh sửa',
     _ => 'Chờ duyệt',
   };
+}
+
+enum ReportAction {
+  confirmExisting('confirm_existing', 'Biển vẫn còn'),
+  reportRemoved('report_removed', 'Biển đã bị gỡ'),
+  reportDamaged('report_damaged', 'Biển hư hỏng'),
+  correctLocation('correct_location', 'Sai vị trí'),
+  correctClass('correct_class', 'Sai loại biển'),
+  updateEvidence('update_evidence', 'Cập nhật ảnh');
+
+  const ReportAction(this.value, this.label);
+  final String value, label;
+}
+
+class SignReport {
+  const SignReport(
+    this.id,
+    this.signId,
+    this.imageId,
+    this.action,
+    this.status,
+    this.comment,
+    this.reviewComment,
+  );
+  final String id, signId, imageId, action, status, comment;
+  final String? reviewComment;
+  factory SignReport.fromJson(Map<String, dynamic> j) => SignReport(
+    j['id'] as String,
+    j['record_id'] as String,
+    j['image_id'] as String,
+    j['action'] as String,
+    j['status'] as String,
+    j['comment'] as String,
+    j['review_comment'] as String?,
+  );
+  String get actionLabel =>
+      ReportAction.values.where((a) => a.value == action).firstOrNull?.label ??
+      action;
+  String get statusLabel => switch (status) {
+    'accepted' => 'Đã duyệt',
+    'rejected' => 'Từ chối',
+    _ => 'Chờ duyệt',
+  };
+}
+
+class SignType {
+  const SignType(this.id, this.code, this.name);
+  final int id;
+  final String code, name;
+  factory SignType.fromJson(Map<String, dynamic> j) => SignType(
+    j['new_id'] as int,
+    j['qcvn_code'] as String,
+    j['name_vi'] as String,
+  );
 }

@@ -68,6 +68,43 @@ test('upload, verify label and pin, approval and exact map record',async({page,b
  await expect(page.getByText('Cấm đi ngược chiều',{exact:true})).toBeVisible();
  history=await (await page.request.get('/api/v1/me/observations')).json();
  expect(history.items[0].sign_record_id).toBeTruthy();
+ const signId=history.items[0].sign_record_id;
+ const before=(await (await page.request.get('/api/v1/signs/'+signId)).json()).sign;
+ await page.getByRole('button',{name:'Báo cáo / xác nhận',exact:true}).click();
+ const reportSubmit=page.getByRole('button',{name:'Gửi báo cáo',exact:true});
+ await expect(reportSubmit).toBeDisabled();
+ await page.getByRole('textbox',{name:'Mô tả quan sát'}).click();
+ await page.getByRole('textbox',{name:'Mô tả quan sát'}).pressSequentially('Biển vẫn còn tại vị trí này');
+ const proofChooser=page.waitForEvent('filechooser');
+ await page.getByRole('button',{name:'Chọn ảnh',exact:true}).click();
+ await (await proofChooser).setFiles(photo);
+ await expect(page.getByText('Đã tải ảnh bằng chứng')).toBeVisible();
+ await expect(reportSubmit).toBeEnabled();await reportSubmit.click();
+ await expect(page.getByText('Đã gửi báo cáo, đang chờ duyệt.',{exact:true})).toBeVisible();
+ const reports=(await (await page.request.get('/api/v1/me/reports')).json()).items;
+ expect(reports).toHaveLength(1);expect(reports[0].status).toBe('pending');
+ const pendingSign=(await (await page.request.get('/api/v1/signs/'+signId)).json()).sign;
+ expect(pendingSign.revision).toBe(before.revision);
+ expect(pendingSign.expires_at).toBe(before.expires_at);
+ const reportStaff=await browser.newContext({baseURL:'http://127.0.0.1:8765',extraHTTPHeaders:{'X-SignSight-Web':'1'}});
+ try{
+  expect((await reportStaff.request.post('/api/v1/auth/login',{data:{username:'browser_manager',password}})).ok()).toBeTruthy();
+  expect((await reportStaff.request.post('/api/v1/manager/reports/'+reports[0].id+'/review',{data:{action:'accept'}})).ok()).toBeTruthy();
+  // A damaged sign enters the same revalidation queue used by TTL expiry.
+  const damage=await page.request.post('/api/v1/signs/'+signId+'/reports',{headers:{'X-SignSight-Web':'1'},data:{action:'report_damaged',image_id:reports[0].image_id,comment:'Synthetic damaged sign evidence'}});
+  expect(damage.status()).toBe(201);
+  expect((await reportStaff.request.post('/api/v1/manager/reports/'+(await damage.json()).id+'/review',{data:{action:'accept'}})).ok()).toBeTruthy();
+ }finally{await reportStaff.close()}
+ await page.getByRole('tab',{name:'Của tôi',exact:true}).click();
+ await page.getByRole('button',{name:'Báo cáo & xác nhận lại',exact:true}).click();
+ await expect(page.getByText('Biển vẫn còn tại vị trí này')).toBeVisible();
+ await page.getByRole('button',{name:'Cần xác nhận',exact:true}).click();
+ const confirmations=(await (await page.request.get('/api/v1/me/confirmation-requests?limit=20')).json()).items;
+ const targetIndex=confirmations.findIndex(s=>s.id===signId);expect(targetIndex).toBeGreaterThanOrEqual(0);
+ const confirmationRows=page.getByRole('button',{name:'P.102 Cấm đi ngược chiều',exact:true});
+ await expect(confirmationRows.nth(targetIndex)).toBeVisible();
+ await confirmationRows.nth(targetIndex).click();
+ await expect(page.getByText('Cần xác nhận lại',{exact:true})).toBeVisible();
  expect(errors).toEqual([]);
  if(process.env.SIGNSIGHT_SCREENSHOT_DIR) {
   const fs=require('node:fs');fs.mkdirSync(process.env.SIGNSIGHT_SCREENSHOT_DIR,{recursive:true});

@@ -8,15 +8,17 @@
 | --- | --- |
 | Bản đồ | Kéo/zoom MapLibre + OpenFreeMap, tìm điểm đến, xem tuyến ô tô và biển gần tuyến hoặc điểm đang xem. Danh sách mở khi cần, có lọc và tải thêm. |
 | Đóng góp | Chụp/chọn ảnh → tự upload và detect → chọn biển trong ảnh → xác nhận nhãn → đặt/xác nhận ghim → gửi chờ duyệt. |
-| Của tôi | Danh sách đóng góp và lọc trạng thái. Chạm một dòng để xem ảnh/nhận xét; biển được duyệt có nút mở đúng record trên bản đồ. |
+| Của tôi | Đóng góp có lọc trạng thái; xem ảnh/nhận xét và mở đúng biển được duyệt. Nút **Báo cáo & xác nhận lại** mở lịch sử báo cáo và danh sách biển cần kiểm tra. |
 
 Một thanh tìm kiếm và một bảng tóm tắt trên bản đồ; không đưa các bảng công việc của staff vào app. Tài khoản và giao diện thiết bị/sáng/tối nằm trong menu góc trên. Lựa chọn theme hiện chỉ áp dụng trong lần mở app.
 
-Tuyến bắt đầu từ **điểm đang xem trên bản đồ**. Dùng nút GPS trước khi tìm tuyến nếu muốn xuất phát từ vị trí hiện tại. Hành lang tuyến hiện cố định 50 m; app chưa có dẫn đường từng chặng, theo dõi nền hay cảnh báo giọng nói. Đây là bản xem tuyến và biển, chưa thay thế ứng dụng dẫn đường.
+Tuyến bắt đầu từ **điểm đang xem trên bản đồ**. Dùng nút GPS trước khi tìm tuyến nếu muốn xuất phát từ vị trí hiện tại. Nút **Phạm vi tìm biển** chọn bán kính gần điểm 100–1.000 m và hành lang tuyến 20/50/100 m. Sau khi đổi phạm vi, chọn lại điểm đến để dựng tuyến mới. App chưa có dẫn đường từng chặng, theo dõi nền hay cảnh báo giọng nói.
 
 User phải xác nhận nhãn và vị trí; tọa độ GPS/EXIF chỉ gợi ý. Ảnh thiếu GPS vẫn đặt ghim được. Khi detect lỗi, thử lại dùng ảnh đã lưu, không upload trùng. Sau khi gửi thành công, user xem trạng thái trong **Của tôi**; bản đồ chỉ hiện biển sau khi staff duyệt.
 
-Các chức năng báo cáo thay đổi, đề xuất sửa class, xác nhận lại biển và lưu nháp offline của web chưa được chuyển hết sang Flutter. Chụp ảnh và gửi đóng góp là phần đầu đã triển khai; web quản trị tiếp tục sử dụng như hiện tại.
+Chạm biển → **Báo cáo / xác nhận** để gửi ảnh hiện trạng và mô tả: còn tồn tại, bị gỡ, hư hỏng, sai vị trí, sai loại hoặc bổ sung bằng chứng. Loại biển lấy từ catalog backend. Báo cáo chờ staff duyệt; gửi báo cáo không tự sửa bản đồ. Thời hạn xác nhận là độ mới của dữ liệu, không kết luận hiệu lực pháp lý của biển.
+
+Native lưu một bản nháp đóng góp trong thư mục riêng của app, tách theo API origin và tài khoản. Ảnh chưa upload do mất mạng được giữ để thử lại; ảnh đã upload dùng lại ID. Mở lại sau đăng nhập để khôi phục, kiểm tra nhãn/ghim rồi gửi. Logout/phiên hết hạn, bỏ nháp hoặc gửi thành công sẽ yêu cầu xóa nháp. Web preview dùng nháp RAM; form báo cáo cũng chỉ giữ ảnh/nhận xét khi trang còn mở. Đây chưa phải đồng bộ offline, hàng đợi nhiều ảnh hay tự gửi nền.
 
 ## Xem ngay trên laptop
 
@@ -100,7 +102,9 @@ flutter build apk --debug --dart-define=SIGNSIGHT_API_URL=http://YOUR_LAN_IP:800
 
 CI tạo artifact **signsight-android-emulator-debug** (x86_64, API mặc định `10.0.2.2:8000`), dành cho emulator, không phải APK phát hành cho mọi điện thoại. Đăng nhập và ảnh được gửi về backend đã cấu hình, không có tài khoản mẫu trong app.
 
-iOS có khai báo quyền camera/thư viện/GPS nhưng cần macOS + Xcode, cấu hình signing và chạy thiết bị thật để nghiệm thu. Chưa xác minh build iOS. Android camera/GPS, từ chối quyền, khôi phục sau OS đóng activity khi chọn ảnh vẫn cần thử thật; nháp hiện ở RAM và có thể mất khi app bị đóng.
+iOS có khai báo quyền camera/thư viện/GPS nhưng cần macOS + Xcode, cấu hình signing và chạy thiết bị thật để nghiệm thu. Chưa xác minh build iOS. Android camera/GPS, từ chối quyền và khôi phục ảnh sau OS đóng activity vẫn cần thử thật. App đã gọi `retrieveLostData` cho luồng đóng góp, có marker tài khoản để không lấy ảnh của phiên khác.
+
+Release không dùng debug key. Cấu hình bốn biến `SIGNSIGHT_KEYSTORE_PATH`, `SIGNSIGHT_STORE_PASSWORD`, `SIGNSIGHT_KEY_ALIAS`, `SIGNSIGHT_KEY_PASSWORD` trong môi trường build, cùng `--dart-define=SIGNSIGHT_API_URL=https://YOUR_API_HOST`. Không commit khóa/mật khẩu; xem [Android signing](https://docs.flutter.dev/deployment/android). Chưa tạo khóa phát hành hoặc đưa app lên store.
 
 ## Xác nhận native local ngày 24/10/2026
 
@@ -110,7 +114,7 @@ iOS có khai báo quyền camera/thư viện/GPS nhưng cần macOS + Xcode, c�
 
 ```powershell
 # mobile/
-dart format --output=none --set-exit-if-changed lib test
+dart format --output=none --set-exit-if-changed lib test integration_test
 flutter analyze
 flutter test
 
@@ -120,5 +124,7 @@ npx playwright test -c playwright.flutter.config.cjs
 ```
 
 Browser test tạo API/SQLite/ảnh tạm, detector tổng hợp và bản đồ fixture. Kiểm tra guest, đăng nhập, upload/detect, xác nhận nhãn và ghim, gửi, duyệt và mở đúng biển. Các test này không đo chất lượng checkpoint thật, không đọc credentials/database cá nhân. Flutter test còn kiểm tra phiên hết hạn, logout trong lúc upload, retry và bố cục 360/430/1000 px.
+
+Native integration có bài `integration_test/user_flow_test.dart`. Chạy `python tests/browser_server.py` trong terminal riêng, rồi từ `mobile/` chạy `flutter test integration_test/user_flow_test.dart -d emulator-5554 --dart-define=SIGNSIGHT_TEST_API=http://10.0.2.2:8765`. Bài này dùng MapLibre native với style fixture, ảnh/GPS tổng hợp và tài khoản tạm; không được trỏ vào runtime cá nhân. Kết quả và giới hạn nghiệm thu được ghi trong [trạng thái core](core_completion.md).
 
 Nếu Playwright chưa có Chromium, chạy `npx playwright install chromium`. Windows có thể dùng Chrome đã cài bằng `$env:PLAYWRIGHT_CHANNEL = 'chrome'` và chỉ định Python venv qua `SIGNSIGHT_TEST_PYTHON`.

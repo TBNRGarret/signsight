@@ -154,7 +154,7 @@ void main() {
     await c.login('driver', 'password');
     await c.choosePhoto(image, 'photo.jpg');
     expect(uploads, 1);
-    expect(c.draft?.photo.id, 'p');
+    expect(c.draft?.photo?.id, 'p');
     expect(c.captureError, isNotNull);
     await c.retryDetection();
     expect(uploads, 1);
@@ -210,7 +210,7 @@ void main() {
           Detection('b', 'P.127', 'B', .8),
         ],
         selectedId: 'a',
-      );
+      )..previewReady = true;
       c.confirmLabel(true);
       c.confirmLocation(const GeoPoint(10.7, 106.7));
       expect(c.canSubmit, true);

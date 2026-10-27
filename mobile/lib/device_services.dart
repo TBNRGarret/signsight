@@ -1,6 +1,5 @@
-import 'dart:typed_data';
-
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'models.dart';
@@ -20,6 +19,16 @@ class DeviceServices {
       maxWidth: 2048,
       maxHeight: 2048,
     );
+    return file == null
+        ? null
+        : PickedPhoto(await file.readAsBytes(), file.name);
+  }
+
+  Future<PickedPhoto?> recoverPhoto() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return null;
+    final result = await _picker.retrieveLostData();
+    if (result.exception != null) throw result.exception!;
+    final file = result.files?.firstOrNull;
     return file == null
         ? null
         : PickedPhoto(await file.readAsBytes(), file.name);

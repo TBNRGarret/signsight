@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'controller.dart';
 import 'device_services.dart';
+import 'feedback.dart';
 import 'map_canvas.dart';
 import 'models.dart';
 
@@ -93,6 +94,7 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             unawaited(c.refreshNearby());
+            unawaited(_recoverPhoto());
             if (_tab == 2) unawaited(c.loadHistory());
           }
         });
@@ -192,16 +194,21 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
     if (_picking || c.captureBusy) return;
     setState(() => _picking = true);
     try {
-      final photo = await widget.devices.pickPhoto(camera);
-      if (photo != null && mounted) {
-        await c.choosePhoto(photo.bytes, photo.name);
-      }
+      await c.pickPhoto(() => widget.devices.pickPhoto(camera));
     } catch (_) {
       _message(
         'Không mở được ảnh/camera. Kiểm tra quyền hoặc chọn ảnh từ thư viện.',
       );
     } finally {
       if (mounted) setState(() => _picking = false);
+    }
+  }
+
+  Future<void> _recoverPhoto() async {
+    try {
+      await c.recoverPhoto(widget.devices.recoverPhoto);
+    } catch (_) {
+      _message('Chưa khôi phục được ảnh từ camera. Chọn lại từ thư viện.');
     }
   }
 
@@ -255,6 +262,107 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _report(Sign sign) async {
+    final success = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ReportPage(
+          controller: c,
+          sign: sign,
+          devices: widget.devices,
+          pickLocation: () => Navigator.of(context).push<GeoPoint>(
+            MaterialPageRoute(
+              builder: (_) => PinPicker(
+                fallback: sign.point,
+                mapBuilder: widget.mapBuilder,
+                devices: widget.devices,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    if (success == true) _message('Đã gửi báo cáo, đang chờ duyệt.');
+  }
+
+  Future<void> _activity() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => FractionallySizedBox(
+        heightFactor: .85,
+        child: ActivityPanel(
+          controller: c,
+          onSign: (id) {
+            Navigator.pop(context);
+            _changeTab(0);
+            c.clearRoute();
+            unawaited(c.openSign(id));
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _mapOptions() async {
+    var radius = c.radius, corridor = c.corridor;
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, update) => Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Phạm vi tìm biển',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              DropdownButtonFormField<int>(
+                initialValue: radius,
+                decoration: const InputDecoration(
+                  labelText: 'Bán kính quanh điểm chọn',
+                ),
+                items: [100, 300, 500, 1000]
+                    .map((v) => DropdownMenuItem(value: v, child: Text('$v m')))
+                    .toList(),
+                onChanged: (v) => update(() => radius = v!),
+              ),
+              DropdownButtonFormField<int>(
+                initialValue: corridor,
+                decoration: const InputDecoration(
+                  labelText: 'Hành lang mỗi bên tuyến',
+                ),
+                items: [20, 50, 100]
+                    .map((v) => DropdownMenuItem(value: v, child: Text('$v m')))
+                    .toList(),
+                onChanged: (v) => update(() => corridor = v!),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Biển gần tuyến có thể thuộc chiều đường khác. Chọn lại điểm đến để áp dụng hành lang mới.',
+              ),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () {
+                  c.radius = radius;
+                  c.corridor = corridor;
+                  Navigator.pop(context);
+                  c.clearRoute();
+                  unawaited(c.refreshNearby());
+                },
+                child: const Text('Áp dụng'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => ColoredBox(
     color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -265,6 +373,12 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
           appBar: AppBar(
             title: const Text('SignSight'),
             actions: [
+              if (_tab == 0 && c.signedIn)
+                IconButton(
+                  tooltip: 'Phạm vi tìm biển',
+                  onPressed: _mapOptions,
+                  icon: const Icon(Icons.tune),
+                ),
               IconButton(
                 tooltip: 'Tài khoản',
                 onPressed: _account,
@@ -495,6 +609,11 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
                               : 'Đã được duyệt',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
+                        TextButton.icon(
+                          onPressed: () => _report(c.selectedSign!),
+                          icon: const Icon(Icons.flag_outlined),
+                          label: const Text('Báo cáo / xác nhận'),
+                        ),
                       ],
                     )
                   : c.route != null
@@ -510,7 +629,7 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
                                 style: Theme.of(context).textTheme.titleMedium,
                               ),
                               Text(
-                                '${c.route!.signs.length} biển gần tuyến · hành lang 50 m',
+                                '${c.route!.signs.length} biển gần tuyến · hành lang ${c.corridor} m',
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                             ],
@@ -698,6 +817,17 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
             icon: const Icon(Icons.photo_outlined),
             label: const Text('Chọn ảnh khác'),
           ),
+          if (!busy)
+            TextButton(
+              onPressed: c.discardDraft,
+              child: const Text('Bỏ bản nháp'),
+            ),
+          if (!busy && draft.detections.isEmpty && c.captureError == null)
+            OutlinedButton.icon(
+              onPressed: c.retryDetection,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Tiếp tục nhận diện'),
+            ),
         ],
         if (busy)
           const Padding(
@@ -730,6 +860,14 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: OutlinedButton.icon(
+            onPressed: _activity,
+            icon: const Icon(Icons.fact_check_outlined),
+            label: const Text('Báo cáo & xác nhận lại'),
+          ),
+        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
           child: Row(
@@ -1228,13 +1366,14 @@ class DetectionPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final box = draft.selected?.bbox;
-    if (box == null) return;
+    final photo = draft.photo;
+    if (box == null || photo == null) return;
     final scale = math.min(
-      size.width / draft.photo.width,
-      size.height / draft.photo.height,
+      size.width / photo.width,
+      size.height / photo.height,
     );
-    final dx = (size.width - draft.photo.width * scale) / 2,
-        dy = (size.height - draft.photo.height * scale) / 2;
+    final dx = (size.width - photo.width * scale) / 2,
+        dy = (size.height - photo.height * scale) / 2;
     canvas.drawRect(
       Rect.fromLTRB(
         dx + box[0] * scale,

@@ -4,6 +4,19 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Signing secrets belong to the build environment, never to source control.
+val releaseSigning = listOf(
+    "SIGNSIGHT_KEYSTORE_PATH", "SIGNSIGHT_STORE_PASSWORD",
+    "SIGNSIGHT_KEY_ALIAS", "SIGNSIGHT_KEY_PASSWORD",
+).associateWith { System.getenv(it)?.takeIf(String::isNotBlank) }
+val hasReleaseSigning = releaseSigning.values.all { it != null }
+
+gradle.taskGraph.whenReady {
+    if (allTasks.any { it.project == project && it.name.contains("Release") } && !hasReleaseSigning) {
+        throw GradleException("Release signing requires all SIGNSIGHT_KEYSTORE_PATH, SIGNSIGHT_STORE_PASSWORD, SIGNSIGHT_KEY_ALIAS and SIGNSIGHT_KEY_PASSWORD environment variables.")
+    }
+}
+
 android {
     namespace = "app.signsight.signsight_user"
     compileSdk = flutter.compileSdkVersion
@@ -29,11 +42,20 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            if (hasReleaseSigning) {
+                storeFile = file(releaseSigning.getValue("SIGNSIGHT_KEYSTORE_PATH")!!)
+                storePassword = releaseSigning.getValue("SIGNSIGHT_STORE_PASSWORD")
+                keyAlias = releaseSigning.getValue("SIGNSIGHT_KEY_ALIAS")
+                keyPassword = releaseSigning.getValue("SIGNSIGHT_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

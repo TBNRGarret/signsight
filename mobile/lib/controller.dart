@@ -5,9 +5,12 @@ import 'package:flutter/foundation.dart';
 import 'api.dart';
 import 'models.dart';
 import 'session_store.dart';
+import 'draft_store.dart';
+import 'device_services.dart';
 
 class AppController extends ChangeNotifier {
-  AppController(this.api, this.store) {
+  AppController(this.api, this.store, {DraftStore? drafts})
+    : drafts = drafts ?? MemoryDraftStore() {
     _sessionChanges = store.changes.listen((_) {
       ++_authVersion;
       api.useToken(null);
@@ -19,6 +22,9 @@ class AppController extends ChangeNotifier {
   late final StreamSubscription<void> _sessionChanges;
   final SignSightApi api;
   final SessionStore store;
+  final DraftStore drafts;
+  Future<void> _draftWrites = Future.value();
+  String? _draftOwner;
   UserProfile? user;
   String? authError, mapError, captureError, captureMessage, historyError;
   bool authBusy = false,
@@ -36,6 +42,13 @@ class AppController extends ChangeNotifier {
   List<Contribution> contributions = [];
   int historyTotal = 0;
   String? historyStatus;
+  int corridor = 50;
+  List<SignReport> reports = [];
+  List<Sign> confirmations = [];
+  int reportTotal = 0, confirmationTotal = 0;
+  bool feedbackBusy = false, reportBusy = false;
+  String? feedbackError, reportError;
+  int _feedbackVersion = 0;
   int _authVersion = 0, _mapVersion = 0, _photoVersion = 0, _historyVersion = 0;
   bool _disposed = false;
   Future<void> _writes = Future.value();
@@ -43,6 +56,8 @@ class AppController extends ChangeNotifier {
   bool get canSubmit =>
       signedIn &&
       !captureBusy &&
+      draft?.photo != null &&
+      draft?.previewReady == true &&
       draft?.selected != null &&
       draft!.labelConfirmed &&
       draft!.confirmedLocation?.valid == true;
@@ -51,6 +66,51 @@ class AppController extends ChangeNotifier {
   }
 
   bool _current(int version) => !_disposed && version == _authVersion;
+  Future<void> flushDraft() => _draftWrites;
+  void _saveDraft({String? clearOwner}) {
+    final owner = clearOwner ?? user?.id;
+    if (owner == null) return;
+    final value = clearOwner == null ? draft?.toJson() : null;
+    _draftWrites = _draftWrites
+        .catchError((_) {})
+        .then((_) async {
+          if (value == null) {
+            await drafts.clear(owner);
+          } else {
+            await drafts.save(owner, value);
+          }
+        })
+        .catchError((Object error) {
+          if (user?.id == owner) {
+            captureError =
+                'Chưa lưu được bản nháp trên thiết bị. Kiểm tra dung lượng.';
+            _notify();
+          }
+        });
+  }
+
+  Future<void> _restoreDraft(int version) async {
+    if (user == null || draft != null) return;
+    final operation = _photoVersion, owner = user!.id;
+    _draftOwner = owner;
+    try {
+      await _draftWrites;
+      final raw = await drafts.load(owner);
+      if (!_current(version) || operation != _photoVersion || draft != null) {
+        return;
+      }
+      if (raw != null) {
+        draft = CaptureDraft.fromJson(raw);
+        captureMessage = 'Đã khôi phục bản nháp. Kiểm tra rồi tiếp tục gửi.';
+      }
+    } catch (_) {
+      if (_current(version)) {
+        _saveDraft(clearOwner: owner);
+        captureError = 'Không đọc được bản nháp cũ. Chọn lại ảnh.';
+      }
+    }
+  }
+
   Future<void> _persist(int version, Session? session) {
     _writes = _writes.catchError((_) {}).then((_) async {
       if (!_current(version)) return;
@@ -64,9 +124,17 @@ class AppController extends ChangeNotifier {
   }
 
   void _clearPrivate() {
+    final owner = user?.id ?? _draftOwner;
+    if (owner != null) _saveDraft(clearOwner: owner);
+    _draftOwner = null;
+    _draftWrites = _draftWrites
+        .catchError((_) {})
+        .then((_) => drafts.clear('picker'))
+        .catchError((_) {});
     _photoVersion++;
     _mapVersion++;
     _historyVersion++;
+    _feedbackVersion++;
     user = null;
     draft = null;
     nearbySigns = [];
@@ -76,6 +144,11 @@ class AppController extends ChangeNotifier {
     selectedSign = null;
     contributions = [];
     historyTotal = 0;
+    reports = [];
+    confirmations = [];
+    reportTotal = confirmationTotal = 0;
+    feedbackBusy = reportBusy = false;
+    feedbackError = reportError = null;
     authBusy = false;
     center = const GeoPoint(10.7769, 106.7009);
     captureBusy = false;
@@ -126,6 +199,7 @@ class AppController extends ChangeNotifier {
       }
       final saved = await store.load();
       if (!_current(version)) return;
+      _draftOwner = saved?.user.id;
       if (!api.browser &&
           (saved == null || saved.expiresAt.isBefore(DateTime.now().toUtc()))) {
         final next = ++_authVersion;
@@ -154,6 +228,7 @@ class AppController extends ChangeNotifier {
         _clearPrivate();
       }
       user = profile;
+      await _restoreDraft(_authVersion);
       _notify();
     } catch (error) {
       await _failure(error, version, (message) => authError = message);
@@ -195,6 +270,7 @@ class AppController extends ChangeNotifier {
       await _persist(version, session);
       if (!_current(version)) return;
       user = session.user;
+      await _restoreDraft(version);
     } catch (error) {
       await _failure(error, version, (message) => authError = message);
     } finally {
@@ -299,7 +375,7 @@ class AppController extends ChangeNotifier {
     route = null;
     _notify();
     try {
-      final result = await api.route(center, place.point);
+      final result = await api.route(center, place.point, buffer: corridor);
       if (_current(version) && operation == _mapVersion) route = result;
     } catch (error) {
       if (operation == _mapVersion) {
@@ -351,21 +427,26 @@ class AppController extends ChangeNotifier {
     captureBusy = true;
     captureError = null;
     captureMessage = null;
-    draft = null;
+    draft = CaptureDraft(photo: null, bytes: bytes, name: name);
+    _saveDraft();
     _notify();
     try {
       final photo = await api.upload(bytes, name);
       if (!_current(version) || operation != _photoVersion) return;
-      draft = CaptureDraft(photo: photo, bytes: bytes)..suggestion = photo.exif;
+      draft!.photo = photo;
+      draft!.suggestion = photo.exif;
+      _saveDraft();
       _notify();
       final sanitized = await api.photoContent(photo.id);
       if (!_current(version) || operation != _photoVersion) return;
       draft!.bytes = sanitized;
       draft!.previewReady = true;
+      _saveDraft();
       final result = await api.detect(photo.id);
       if (!_current(version) || operation != _photoVersion) return;
       draft!.detections = result;
       draft!.selectedId = result.firstOrNull?.id;
+      _saveDraft();
       if (result.isEmpty) {
         captureMessage = 'Chưa tìm thấy biển. Thử ảnh gần và rõ hơn.';
       }
@@ -381,6 +462,52 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<void> pickPhoto(Future<PickedPhoto?> Function() pick) async {
+    if (!signedIn || captureBusy) return;
+    final version = _authVersion, owner = user!.id;
+    var saved = false;
+    _draftWrites = _draftWrites
+        .catchError((_) {})
+        .then((_) async {
+          if (_current(version)) {
+            await drafts.save('picker', {'owner': owner});
+            saved = true;
+          }
+        })
+        .catchError((_) {
+          if (_current(version)) {
+            captureError =
+                'Chưa lưu được bản nháp trên thiết bị. Kiểm tra dung lượng.';
+            _notify();
+          }
+        });
+    await _draftWrites;
+    if (!_current(version) || !saved) return;
+    try {
+      final photo = await pick();
+      if (photo != null && _current(version)) {
+        await choosePhoto(photo.bytes, photo.name);
+      }
+    } finally {
+      if (_current(version)) {
+        _draftWrites = _draftWrites
+            .catchError((_) {})
+            .then((_) => drafts.clear('picker'))
+            .catchError((_) {});
+        await _draftWrites;
+      }
+    }
+  }
+
+  Future<void> recoverPhoto(Future<PickedPhoto?> Function() recover) async {
+    if (!signedIn || captureBusy) return;
+    final version = _authVersion;
+    await _draftWrites;
+    final marker = await drafts.load('picker');
+    if (!_current(version) || marker?['owner'] != user?.id) return;
+    await pickPhoto(recover);
+  }
+
   Future<void> retryDetection() async {
     if (draft == null || captureBusy || !signedIn) return;
     final version = _authVersion, operation = ++_photoVersion;
@@ -389,18 +516,27 @@ class AppController extends ChangeNotifier {
     captureMessage = null;
     _notify();
     try {
+      if (draft!.photo == null) {
+        final photo = await api.upload(draft!.bytes, draft!.name);
+        if (!_current(version) || operation != _photoVersion) return;
+        draft!.photo = photo;
+        draft!.suggestion = photo.exif;
+        _saveDraft();
+      }
       if (!draft!.previewReady) {
-        final sanitized = await api.photoContent(draft!.photo.id);
+        final sanitized = await api.photoContent(draft!.photo!.id);
         if (!_current(version) || operation != _photoVersion) return;
         draft!.bytes = sanitized;
         draft!.previewReady = true;
+        _saveDraft();
       }
-      final result = await api.detect(draft!.photo.id);
+      final result = await api.detect(draft!.photo!.id);
       if (!_current(version) || operation != _photoVersion) return;
       draft!.detections = result;
       draft!.selectedId = result.firstOrNull?.id;
       draft!.labelConfirmed = false;
       draft!.confirmedLocation = null;
+      _saveDraft();
       if (result.isEmpty) {
         captureMessage = 'Chưa tìm thấy biển. Thử ảnh gần và rõ hơn.';
       }
@@ -422,17 +558,20 @@ class AppController extends ChangeNotifier {
     draft!.selectedId = id;
     draft!.labelConfirmed = false;
     draft!.confirmedLocation = null;
+    _saveDraft();
     _notify();
   }
 
   void confirmLabel(bool value) {
     draft?.labelConfirmed = value;
+    _saveDraft();
     _notify();
   }
 
   void suggestLocation(GeoPoint point) {
     if (point.valid && draft?.confirmedLocation == null) {
       draft?.suggestion = point;
+      _saveDraft();
       _notify();
     }
   }
@@ -441,6 +580,7 @@ class AppController extends ChangeNotifier {
     if (point.valid && draft != null) {
       draft!.suggestion = point;
       draft!.confirmedLocation = point;
+      _saveDraft();
       _notify();
     }
   }
@@ -454,12 +594,13 @@ class AppController extends ChangeNotifier {
     _notify();
     try {
       await api.contribute(
-        current.photo.id,
+        current.photo!.id,
         current.selected!.id,
         current.confirmedLocation!,
       );
       if (!_current(version) || operation != _photoVersion) return;
       draft = null;
+      _saveDraft();
       captureMessage = 'Đã gửi đóng góp, đang chờ duyệt.';
     } catch (error) {
       if (operation == _photoVersion) {
@@ -471,6 +612,15 @@ class AppController extends ChangeNotifier {
         _notify();
       }
     }
+  }
+
+  void discardDraft() {
+    if (captureBusy) return;
+    _photoVersion++;
+    draft = null;
+    captureError = captureMessage = null;
+    _saveDraft();
+    _notify();
   }
 
   Future<void> loadHistory({String? status, bool more = false}) async {
@@ -498,6 +648,109 @@ class AppController extends ChangeNotifier {
     } finally {
       if (_current(version) && operation == _historyVersion) {
         historyBusy = false;
+        _notify();
+      }
+    }
+  }
+
+  Future<void> loadReports({bool more = false}) => _loadFeedback(false, more);
+  Future<void> loadConfirmations({bool more = false}) =>
+      _loadFeedback(true, more);
+
+  Future<void> _loadFeedback(bool confirm, bool more) async {
+    if (!signedIn) return;
+    final version = _authVersion, operation = ++_feedbackVersion;
+    feedbackBusy = true;
+    feedbackError = null;
+    _notify();
+    try {
+      if (confirm) {
+        final page = await api.confirmations(
+          offset: more ? confirmations.length : 0,
+        );
+        if (!_current(version) || operation != _feedbackVersion) return;
+        confirmations = more ? [...confirmations, ...page.items] : page.items;
+        confirmationTotal = page.total;
+      } else {
+        final page = await api.reports(offset: more ? reports.length : 0);
+        if (!_current(version) || operation != _feedbackVersion) return;
+        reports = more ? [...reports, ...page.items] : page.items;
+        reportTotal = page.total;
+      }
+    } catch (error) {
+      if (operation == _feedbackVersion) {
+        await _failure(error, version, (m) => feedbackError = m);
+      }
+    } finally {
+      if (_current(version) && operation == _feedbackVersion) {
+        feedbackBusy = false;
+        _notify();
+      }
+    }
+  }
+
+  Future<UploadedPhoto?> uploadEvidence(Uint8List bytes, String name) async {
+    if (!signedIn || reportBusy) return null;
+    final version = _authVersion;
+    reportBusy = true;
+    reportError = null;
+    _notify();
+    try {
+      if (bytes.length > 10 * 1024 * 1024) {
+        throw const ApiFailure(422, 'Ảnh tối đa 10 MB.');
+      }
+      final photo = await api.upload(bytes, name);
+      return _current(version) ? photo : null;
+    } catch (error) {
+      await _failure(error, version, (m) => reportError = m);
+      return null;
+    } finally {
+      if (_current(version)) {
+        reportBusy = false;
+        _notify();
+      }
+    }
+  }
+
+  Future<bool> submitReport(
+    String signId,
+    ReportAction action,
+    String imageId,
+    String comment, {
+    GeoPoint? point,
+    int? proposedClass,
+  }) async {
+    if (!signedIn || reportBusy) return false;
+    reportError = null;
+    if (comment.trim().length < 3 ||
+        action == ReportAction.correctLocation && point?.valid != true ||
+        action == ReportAction.correctClass && proposedClass == null) {
+      reportError = 'Thêm mô tả, ảnh và thông tin sửa đổi trước khi gửi.';
+      _notify();
+      return false;
+    }
+    final version = _authVersion;
+    reportBusy = true;
+    _notify();
+    try {
+      final report = await api.report(
+        signId,
+        action,
+        imageId,
+        comment,
+        point: point,
+        proposedClass: proposedClass,
+      );
+      if (!_current(version)) return false;
+      reports = [report, ...reports.where((r) => r.id != report.id)];
+      reportTotal++;
+      return true;
+    } catch (error) {
+      await _failure(error, version, (m) => reportError = m);
+      return false;
+    } finally {
+      if (_current(version)) {
+        reportBusy = false;
         _notify();
       }
     }
