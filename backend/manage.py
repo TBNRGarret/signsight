@@ -26,12 +26,28 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("migrate", help="Apply versioned database migrations")
     commands.add_parser("backup", help="Back up an existing SQLite database consistently")
+    snapshot = commands.add_parser('backup-runtime', help='Back up database and verified managed images')
+    snapshot.add_argument('--output', required=True)
+    restore = commands.add_parser('restore-runtime', help='Verify and restore into a NEW directory')
+    restore.add_argument('--archive', required=True)
+    restore.add_argument('--destination', required=True)
     commands.add_parser('expire-signs',help='Run the idempotent expiry job once (for an external scheduler)')
     bootstrap = commands.add_parser("bootstrap-admin", help="Create the first administrator (password prompted securely)")
     bootstrap.add_argument("--username", required=True)
     bootstrap.add_argument("--email", required=True)
     args = parser.parse_args()
     try:
+        if args.command == 'backup-runtime':
+            from backend.app.core.settings import Settings
+            from backend.app.services.runtime_backup import create_runtime_backup
+            path = create_runtime_backup(engine, Settings.from_env().storage_root, args.output)
+            print(f'Runtime backup saved: {path}')
+            return
+        if args.command == 'restore-runtime':
+            from backend.app.services.runtime_backup import restore_runtime_backup
+            path = restore_runtime_backup(args.archive, args.destination)
+            print(f'Restored into new runtime: {path}; configure DATABASE_URL and SIGNSIGHT_STORAGE_ROOT before starting.')
+            return
         if args.command == "backup":
             print(f"Database backup saved: {backup_sqlite_database(engine)}")
             return
@@ -50,7 +66,7 @@ def main():
         print(f"Administrator created: {user.username}")
     except ValidationError:
         parser.exit(1, "Invalid account details: check username, email and password length.\n")
-    except (HTTPException, ValueError) as exc:
+    except (HTTPException, ValueError, OSError) as exc:
         parser.exit(1, f"Setup failed: {exc.detail if isinstance(exc, HTTPException) else str(exc)}\n")
 
 

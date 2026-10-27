@@ -23,6 +23,9 @@ pytestmark = pytest.mark.skipif(
 
 
 def ready_detector(client, application):
+    # Optional external checkpoint keeps local weights out of the public checkout.
+    weights = Path(os.environ.get('SIGNSIGHT_TEST_CHECKPOINT', application.state.settings.yolo_weights))
+    application.state.detector.weights = weights
     register(client)
     auth = headers(login(client)["access_token"])
     application.state.detector.device = "cpu"
@@ -31,7 +34,7 @@ def ready_detector(client, application):
     status = response.json()["yolo"]
     assert status["ready"], status
     assert status["confidence_threshold"] == application.state.settings.yolo_confidence
-    report = application.state.settings.yolo_weights.with_name("detection_report.json")
+    report = weights.with_name("detection_report.json")
     assert report.is_file(), "Keep the training report with the installed checkpoint"
     expected = json.loads(report.read_text(encoding="utf-8"))["model_version"]
     assert status["model_version"] == expected
@@ -48,7 +51,7 @@ def uploaded(client, auth, content):
 
 
 def test_real_yolo_upload_review_publishes_map_record_and_evidence(client, application):
-    sample = ROOT / "archive/Test/11052.png"
+    sample = Path(os.environ.get('SIGNSIGHT_TEST_IMAGE', ROOT / "archive/Test/11052.png"))
     if not sample.is_file():
         pytest.skip("Local GTSRB test image is not present")
     auth, expected_version = ready_detector(client, application)

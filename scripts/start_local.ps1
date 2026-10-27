@@ -1,10 +1,24 @@
+[CmdletBinding()]
 param(
     [string]$DataRoot,
     [string]$PythonPath,
     [string]$BindAddress = '127.0.0.1',
-    [ValidateRange(1, 65535)][int]$Port = 8000
+    [ValidateRange(1, 65535)][int]$Port = 8000,
+    [string]$CertificatePath,
+    [string]$PrivateKeyPath
 )
 $ErrorActionPreference = 'Stop'
+if ([bool]$CertificatePath -ne [bool]$PrivateKeyPath) {
+    throw 'Provide both -CertificatePath and -PrivateKeyPath for HTTPS.'
+}
+$tlsArguments = @()
+if ($CertificatePath) {
+    foreach ($path in @($CertificatePath, $PrivateKeyPath)) {
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'TLS certificate/key file not found.' }
+    }
+    $tlsArguments = @('--ssl-certfile', (Resolve-Path -LiteralPath $CertificatePath).Path,
+                      '--ssl-keyfile', (Resolve-Path -LiteralPath $PrivateKeyPath).Path)
+}
 $sourceRoot = Split-Path -Parent $PSScriptRoot
 if (-not $DataRoot) { $DataRoot = $sourceRoot }
 $DataRoot = [System.IO.Path]::GetFullPath($DataRoot)
@@ -26,7 +40,7 @@ foreach ($name in $variables.Keys) {
 }
 Push-Location $sourceRoot
 try {
-    & $PythonPath -m uvicorn backend.app.main:app --host $BindAddress --port $Port
+    & $PythonPath -m uvicorn backend.app.main:app --host $BindAddress --port $Port @tlsArguments
     if ($LASTEXITCODE -ne 0) { throw "Server exited with code $LASTEXITCODE" }
 } finally {
     Pop-Location

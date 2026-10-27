@@ -1,0 +1,6 @@
+# Set SIGNSIGHT_HOST to your real DNS name on the target server.
+# Uvicorn stays bound to loopback; Caddy terminates HTTPS.
+{$SIGNSIGHT_HOST} {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:8000
+}
