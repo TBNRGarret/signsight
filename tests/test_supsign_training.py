@@ -47,6 +47,23 @@ def prepare(tmp_path, **kwargs):
     return source, output, manifest
 
 
+def test_prepared_eda_counts_boxes_negatives_and_sizes_without_modifying_dataset(tmp_path):
+    from scripts.supsign_training import summarize_prepared_dataset
+    _, root, _ = prepare(tmp_path)
+    before = {p.relative_to(root): digest for p in root.rglob('*') if p.is_file()
+              for digest in [hashlib.sha256(p.read_bytes()).hexdigest()]}
+    report = summarize_prepared_dataset(root, imgsz=640)
+    assert report['summary']['images'] == 18
+    assert report['summary']['boxes'] == 36
+    assert report['summary']['duplicates_removed'] == 1
+    assert report['summary']['negative_images'] == 0
+    assert report['summary']['independent_field_test'] is False
+    assert {r['name'] for r in report['class_counts']} == {'No_entry', 'No_parking'}
+    assert all(r['short_side_at_input'] > 0 for r in report['boxes'])
+    assert before == {p.relative_to(root): hashlib.sha256(p.read_bytes()).hexdigest()
+                      for p in root.rglob('*') if p.is_file()}
+
+
 def test_subset_remaps_by_name_deduplicates_and_never_changes_source(tmp_path):
     source = archive_fixture(tmp_path)
     before = hashlib.sha256(source.read_bytes()).hexdigest()
@@ -231,6 +248,7 @@ def test_notebook_runs_prepare_train_evaluate_export_then_restores_cache(tmp_pat
                  FRAME_BLOCK_SIZE=1,NEAR_HASH_DISTANCE=None,CACHE_ZIP=persist/'dataset.zip',
                  DATASET_ROOT=work/'prepared',RUN_DIR=persist/'runs/first',RUN_NAME='first',
                  EPOCHS=2,IMAGE_SIZE=640,BATCH=4,RESUME=False,SMOKE=False,RUN_HELDOUT_TEST=False,
+                 DATASET_VERSION='fixture-v1',LABEL_REVIEWED=True,
                  sys=sys,shutil=shutil,json=json,Path=Path)
     monkeypatch.syspath_prepend(str(work/'pipeline'))
     for name in ('scripts.supsign_training','scripts.dataset_eda','scripts'):
@@ -241,13 +259,14 @@ def test_notebook_runs_prepare_train_evaluate_export_then_restores_cache(tmp_pat
     context['RECIPE']=context['recipe'](context['CAR35'],42,1,None,None)
     # The small fixture needs little disk; test the notebook's preflight without allocating GBs.
     monkeypatch.setattr(shutil,'disk_usage',lambda _:types.SimpleNamespace(free=100*1024**3))
-    exec(cells['prepare'],context);exec(cells['preview'],context)
+    exec(cells['prepare'],context);exec(cells['eda'],context);exec(cells['preview'],context)
     exec(cells['train'],context);exec(cells['evaluate'],context);exec(cells['export'],context)
     assert context['BEST'].is_file() and len(downloaded)==1
     assert [kind for kind,_ in calls].count('train')==1
     assert [options['split'] for kind,options in calls if kind=='val']==['val']
     with zipfile.ZipFile(downloaded[0]) as archive:
         assert 'run/weights/best.pt' in archive.namelist() and 'dataset/manifest.json' in archive.namelist()
+        assert 'eda/boxes.csv' in archive.namelist() and 'eda/eda_overview.png' in archive.namelist()
         assert not any(name.startswith('dataset/images/') for name in archive.namelist())
     # A fresh runtime only needs the persisted prepared ZIP, not the raw archive.
     source.unlink();context['DATASET_ROOT']=work/'restored'

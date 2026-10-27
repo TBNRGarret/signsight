@@ -230,6 +230,46 @@ def verify_dataset(root):
                 independent_field_test=manifest['independent_field_test'],split_provenance=manifest['split_provenance'])
 
 
+def summarize_prepared_dataset(root, *, imgsz=640):
+    """EDA of the exact prepared training set, without changing images/labels/splits."""
+    root = Path(root).resolve()
+    if type(imgsz) is not int or imgsz < 32:
+        raise ValueError('Invalid EDA input image size')
+    manifest = read_json(root / 'manifest.json')
+    names = manifest['names']
+    images, boxes = [], []
+    counts = {split: Counter() for split in SPLITS}
+    negatives = 0
+    for row in manifest['images']:
+        # Preparation/cache verification already checked hashes and decoded images.
+        with Image.open(root / row['image']) as image:
+            width, height = image.size
+        entries = [line.split() for line in (root / row['label']).read_text().splitlines() if line.strip()]
+        if not entries:
+            negatives += 1
+        images.append(dict(image=row['image'], split=row['split'], group=row['group'],
+                           width=width, height=height, boxes=len(entries)))
+        for entry in entries:
+            cls = int(entry[0]); _, _, w, h = map(float, entry[1:])
+            counts[row['split']][cls] += 1
+            scale = imgsz / max(width, height)
+            boxes.append(dict(image=row['image'], split=row['split'], class_id=cls, name=names[cls],
+                              width_px=w*width, height_px=h*height, area_fraction=w*h,
+                              aspect_ratio=w*width/(h*height),
+                              short_side_at_input=min(w*width,h*height)*scale))
+    catalogue = [dict(class_id=i, name=name, **{s: counts[s][i] for s in SPLITS})
+                 for i, name in enumerate(names)]
+    exclusions = Counter(row['reason'] for row in manifest['excluded'])
+    summary = dict(images=len(images), boxes=len(boxes), negative_images=negatives,
+                   groups=len({r['group'] for r in images}), input_size=imgsz,
+                   boxes_under_16px=sum(b['short_side_at_input'] < 16 for b in boxes),
+                   duplicates_removed=manifest['duplicates_removed'], excluded_images=len(manifest['excluded']),
+                   exclusion_reasons=dict(exclusions), missing_classes=manifest['missing_classes'],
+                   split_provenance=manifest['split_provenance'], independent_field_test=False,
+                   source_summary=manifest['source_summary'], limitations=manifest['limitations'])
+    return dict(summary=summary, class_counts=catalogue, images=images, boxes=boxes)
+
+
 def pack_dataset(root,target):
     root,target=Path(root).resolve(),Path(target).resolve()
     if target.is_relative_to(root):raise ValueError('Dataset cache must be outside the dataset')

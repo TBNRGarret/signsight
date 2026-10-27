@@ -4,6 +4,8 @@ Web quản trị cho admin/manager và backend FastAPI quản lý dữ liệu bi
 
 Hướng dẫn [chạy app Flutter và preview trên laptop](docs/flutter_user_app.md).
 
+[Trạng thái core và các bước nghiệm thu còn lại](docs/core_completion.md) · [Laptop, HTTPS và backup/restore](docs/deployment.md).
+
 Hướng dẫn [đóng góp ảnh và xem biển được duyệt](docs/contribution_flow.md).
 
 Luồng chính: **chụp/upload ảnh → YOLO phát hiện → người dùng xác nhận nhãn và tọa độ → gửi đóng góp → manager duyệt → biển xuất hiện trên bản đồ**.

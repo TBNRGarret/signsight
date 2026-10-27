@@ -14,12 +14,12 @@ def build_notebook():
         cells.append(cell)
     def md(source,identifier):add('markdown',source,identifier)
     def code(source,identifier):add('code',source,identifier)
-    md("""# SignSight — SupSign 35 lớp, YOLO11s
+    md("""# SignSight — EDA + train SupSign 35 lớp, YOLO11s
 
 Fine-tune **YOLO11s pretrained** trên SupSign 107 lớp, xuất taxonomy 35 lớp dành cho ô tô.
 Chọn **Runtime → Change runtime type → GPU**, rồi chạy các cell theo thứ tự.
 
-**Chỉ sửa đường dẫn SOURCE_ZIP và tên RUN_NAME ở cell Cấu hình.** Đặt ZIP SupSign lên Drive một lần.
+**Sửa SOURCE_ZIP và RUN_NAME ở cell Cấu hình; xem EDA rồi bật LABEL_REVIEWED để train.** Đặt ZIP SupSign lên Drive một lần.
 Notebook chứa sẵn toàn bộ code chuẩn bị/train; không cần clone repo hay đăng nhập dịch vụ dataset.
 Ảnh train được đọc từ SSD local Colab; dataset đã chuẩn bị và checkpoint giữ trên Drive qua các phiên.
 
@@ -58,14 +58,15 @@ drive.mount('/content/drive')
 SOURCE_ZIP = Path('/content/drive/MyDrive/SignSight/datasets/archive (1).zip')
 PERSIST = Path('/content/drive/MyDrive/SignSight/supsign_training')
 WORK = Path('/content/signsight_supsign')
-DATASET_VERSION = 'supsign107-car35-v1'
-RUN_NAME = 'yolo11s_car35_640_v1'
+DATASET_VERSION = 'supsign107-car35-v2'
+RUN_NAME = 'yolo11s_car35_640_v2'
 GROUPS_CSV = None  # hoặc Path('/content/drive/MyDrive/SignSight/capture_groups.csv')
 EPOCHS = 80
 IMAGE_SIZE = 640
 BATCH = 8
 RESUME = False  # True để tiếp tục RUN_NAME cũ từ last.pt, với cùng cấu hình
 SMOKE = False   # True chỉ thử 1 epoch; không dùng run smoke để kết luận chất lượng
+LABEL_REVIEWED = False  # Sau khi xem EDA/ảnh bbox bên dưới, đổi True để bắt đầu train
 RUN_HELDOUT_TEST = False  # chỉ bật sau khi chốt model/settings bằng validation
 SEED = 42
 FRAME_BLOCK_SIZE = 100
@@ -96,7 +97,8 @@ for relative, source in TRAINING_FILES.items():
 (CODE_ROOT / 'scripts/__init__.py').touch()
 if str(CODE_ROOT) not in sys.path: sys.path.insert(0, str(CODE_ROOT))
 from scripts.supsign_training import (CAR35, recipe, prepare_supsign, verify_dataset,
-    digest_file, pack_dataset, restore_dataset, train_experiment, evaluate_checkpoint)
+    digest_file, pack_dataset, restore_dataset, train_experiment, evaluate_checkpoint,
+    summarize_prepared_dataset)
 GROUPS = None
 if GROUPS_CSV is not None:
     with Path(GROUPS_CSV).open(newline='', encoding='utf-8-sig') as stream:
@@ -149,6 +151,46 @@ print('Split:', manifest['split_provenance'], '| Test thực địa độc lập
 for split, missing in manifest['missing_classes'].items():
     if missing: print('Lớp thiếu ở', split, ':', ', '.join(missing))
 """,'prepare')
+    md("""## EDA trước khi train — lưu báo cáo trên Drive
+
+Thống kê **đúng dataset 35 lớp sau khi lọc**, kèm audit nguồn trong `source_summary`/manifest.
+Xuất JSON + CSV (ảnh, bbox, số mẫu từng lớp), biểu đồ phân bố lớp/split, kích thước ảnh,
+diện tích và cạnh ngắn bbox ở kích thước train. `boxes_under_16px` giúp nhận ra biển nhỏ khó học.
+Không audit lại ZIP thô nếu đã có cache. Chỉ in tóm tắt; chi tiết lỗi/cách ly nằm trong manifest.
+Nhóm filename/dHash vẫn là heuristic; EDA không thay tập kiểm tra qua kính ô tô độc lập.
+""", 'eda-guide')
+    code("""import matplotlib.pyplot as plt
+from collections import Counter
+eda = summarize_prepared_dataset(DATASET_ROOT, imgsz=IMAGE_SIZE)
+EDA_ROOT = PERSIST / 'eda' / DATASET_VERSION
+EDA_ROOT.mkdir(parents=True, exist_ok=True)
+(EDA_ROOT / 'dataset_eda.json').write_text(json.dumps(eda['summary'], ensure_ascii=False, indent=2), encoding='utf-8')
+for key in ('class_counts', 'images', 'boxes'):
+    rows = eda[key]
+    with (EDA_ROOT / (key + '.csv')).open('w', newline='', encoding='utf-8-sig') as stream:
+        if rows:
+            writer = csv.DictWriter(stream, fieldnames=list(rows[0])); writer.writeheader(); writer.writerows(rows)
+fig, axes = plt.subplots(2, 2, figsize=(18, 14))
+y = list(range(len(eda['class_counts']))); starts = [0] * len(y)
+for split in ('train', 'val', 'test'):
+    values = [r[split] for r in eda['class_counts']]
+    axes[0,0].barh(y, values, left=starts, label=split)
+    starts = [a+b for a,b in zip(starts, values)]
+axes[0,0].set_yticks(y, [r['name'] for r in eda['class_counts']], fontsize=8)
+axes[0,0].set_title('Boxes per class / split'); axes[0,0].legend()
+axes[0,1].hist([r['short_side_at_input'] for r in eda['boxes']], bins=40)
+axes[0,1].axvline(16, color='red', linestyle='--'); axes[0,1].set_title(f'BBox short side at input {IMAGE_SIZE} (px)')
+axes[1,0].scatter([r['width'] for r in eda['images']], [r['height'] for r in eda['images']], s=3, alpha=.15)
+axes[1,0].set(xlabel='Image width', ylabel='Image height', title='Image dimensions')
+axes[1,1].hist([r['area_fraction'] for r in eda['boxes']], bins=40)
+axes[1,1].set_title('BBox area / image area')
+fig.tight_layout(); fig.savefig(EDA_ROOT / 'eda_overview.png', dpi=150); plt.show(); plt.close(fig)
+summary = eda['summary']
+print(f"EDA: {summary['images']:,} images | {summary['boxes']:,} boxes | {summary['negative_images']:,} negatives")
+print(f"Small boxes (<16 px at {IMAGE_SIZE}): {summary['boxes_under_16px']:,}")
+print('Duplicate copies removed:', summary['duplicates_removed'], '| Quarantined:', summary['excluded_images'])
+print('Saved:', EDA_ROOT)
+""", 'eda')
     md("""## 3. Kiểm tra nhãn và phân bố lớp
 
 Xem ảnh đầy đủ, bbox và tên lớp trước khi train. Phân biệt cấm ô tô/cấm chung, cấm đỗ/cấm dừng,
@@ -189,7 +231,8 @@ Nếu runtime ngắt giữa chừng: mở lại notebook, giữ RUN_NAME/EPOCHS/
 đổi RESUME=True rồi chạy lại các cell. Checkpoint last.pt giữ trạng thái optimizer để resume;
 run đã hoàn tất có thể không còn resume được. Run mới phải có tên mới.
 """,'train-guide')
-    code("""BEST = train_experiment(DATASET_ROOT, RUN_DIR,
+    code("""assert LABEL_REVIEWED, 'Xem EDA và ảnh bbox, rồi đổi LABEL_REVIEWED=True ở cell Cấu hình.'
+BEST = train_experiment(DATASET_ROOT, RUN_DIR,
     epochs=1 if SMOKE else EPOCHS, imgsz=IMAGE_SIZE, batch=BATCH, device='0', resume=RESUME)
 print('Best checkpoint:', BEST)
 """,'train')
@@ -247,6 +290,7 @@ export_name = RUN_NAME + '_' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%
 export_root = WORK / 'exports' / export_name
 export_root.mkdir(parents=True, exist_ok=False)
 shutil.copytree(RUN_DIR, export_root / 'run')
+if 'EDA_ROOT' in globals() and EDA_ROOT.is_dir(): shutil.copytree(EDA_ROOT, export_root / 'eda')
 metadata = export_root / 'dataset'; metadata.mkdir()
 for name in ('data.yaml', 'manifest.json'): shutil.copy2(DATASET_ROOT / name, metadata / name)
 (metadata / 'classes.json').write_text(json.dumps(CAR35, indent=2), encoding='utf-8')
