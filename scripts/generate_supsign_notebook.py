@@ -58,8 +58,8 @@ drive.mount('/content/drive')
 SOURCE_ZIP = Path('/content/drive/MyDrive/SignSight/datasets/archive (1).zip')
 PERSIST = Path('/content/drive/MyDrive/SignSight/supsign_training')
 WORK = Path('/content/signsight_supsign')
-DATASET_VERSION = 'supsign107-car35-v2'
-RUN_NAME = 'yolo11s_car35_640_v2'
+DATASET_VERSION = 'supsign107-car35-v3'
+RUN_NAME = 'yolo11s_car35_640_v3'
 GROUPS_CSV = None  # hoặc Path('/content/drive/MyDrive/SignSight/capture_groups.csv')
 EPOCHS = 80
 IMAGE_SIZE = 640
@@ -116,6 +116,8 @@ Lần đầu đọc/hash toàn bộ ZIP có thể mất thời gian. Cần đủ
 và đủ Drive để giữ cache + các run. Không giải nén ZIP nguồn tùy ý; chỉ ghi ảnh/nhãn đã kiểm tra.
 Sau khi có cache trên Drive, runtime mới không cần copy hoặc audit lại ZIP thô.
 Cache có checksum; thay code/classes/grouping thì phải dùng một DATASET_VERSION mới.
+V3 giữ đủ lớp trong train nếu có thể tạo ba split không rỗng mà không tách nhóm.
+Lớp chỉ có trong một nhóm được giữ ở train; val/test có thể thiếu lớp đó và được ghi rõ.
 
 Nhãn lỗi bị cách ly cả ảnh, không lặng lẽ sửa annotation nguồn. Ảnh trùng byte nhưng nhãn khác
 cũng bị cách ly để xem lại. Ảnh chỉ chứa lớp ngoài scope được giữ làm nền đối với 35 lớp mục tiêu.
@@ -140,6 +142,7 @@ else:
     manifest = prepare_supsign(local_zip, DATASET_ROOT, classes=CAR35, groups=GROUPS,
         seed=SEED, block_size=FRAME_BLOCK_SIZE, near_threshold=NEAR_HASH_DISTANCE,
         progress=lambda items, desc, unit: tqdm(items, desc=desc, unit=unit))
+    print('Đang kiểm tra và lưu cache dataset lên Drive...', flush=True)
     pack_dataset(DATASET_ROOT, CACHE_ZIP)
     local_zip.unlink()  # chỉ xóa bản sao local do cell này tạo, không xóa ZIP trên Drive
     print('Đã lưu cache Drive:', CACHE_ZIP)

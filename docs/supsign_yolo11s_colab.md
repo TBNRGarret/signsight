@@ -11,7 +11,24 @@ Notebook: [SignSight_SupSign_YOLO11s_Colab.ipynb](../notebooks/SignSight_SupSign
 
 EDA chạy trên dataset đã chuẩn hóa: số ảnh/box và lớp theo split, negative, kích thước ảnh/box, box nhỏ dưới 16 px sau resize, nhóm trùng/cách ly và lớp thiếu. Kết quả lưu trên Drive trong `eda/DATASET_VERSION/`: `dataset_eda.json`, `class_counts.csv`, `images.csv`, `boxes.csv`, `eda_overview.png`; đồng thời được đóng gói vào ZIP kết quả. Preview bbox giúp rà soát nhưng không chứng minh toàn bộ nhãn đúng.
 
-Bản có EDA dùng mặc định `DATASET_VERSION=supsign107-car35-v2`, run `yolo11s_car35_640_v2`; giữ nguyên cache/run cũ để tránh trộn recipe hoặc resume khác cấu hình. Notebook kiểm tra fingerprint, không ghi đè run cũ để tiếp tục tùy tiện.
+Bản sửa chia nhóm dùng mặc định `DATASET_VERSION=supsign107-car35-v3`, run `yolo11s_car35_640_v3`; giữ nguyên cache/run cũ để tránh trộn recipe hoặc resume khác cấu hình. Notebook kiểm tra fingerprint, không ghi đè run cũ để tiếp tục tùy tiện.
+
+## Nếu gặp `Missing train classes after grouping`
+
+V2 có thể đặt toàn bộ nhóm chứa một lớp hiếm vào val/test. V3 giữ đủ lớp train trước khi cân bằng tỷ lệ, giữ nguyên nhóm và không nhân bản ảnh qua split. Nếu chỉ có một nhóm cho lớp đó, val/test sẽ thiếu lớp và báo rõ; không được kết luận chất lượng lớp đó bằng mAP tổng. Nếu không tồn tại ba split không rỗng mà vẫn đủ lớp train, pipeline dừng với thông báo ràng buộc nhóm không khả thi.
+
+Nếu runtime cũ còn giữ traceback của lỗi, chạy cell này **ngay dưới cell lỗi**, trước khi restart hoặc chạy lại cell nhúng pipeline cũ:
+
+```python
+import sys
+from urllib.request import urlopen
+_SIGNSIGHT_PREP_TRACEBACK = getattr(sys, 'last_traceback', None) or getattr(getattr(sys, 'last_exc', None), '__traceback__', None)
+exec(urlopen('https://raw.githubusercontent.com/TBNRGarret/signsight/main/scripts/recover_supsign_colab.py', timeout=30).read().decode('utf-8'))
+```
+
+Cell tải helper đã sửa, lấy lại các hàng đã audit và gom nhóm từ traceback trong RAM, kiểm tra inventory ZIP, chia lại rồi ghi dataset/cache. Không chạy lại audit/dHash; vẫn phải đọc/ghi ảnh và lưu cache nên chưa hoàn tất ngay. ZIP nguồn được giữ nguyên. Sau `Recovery complete`, tiếp tục EDA, xem lại nhãn rồi train. Biến `RECIPE` và các helper trong notebook được cập nhật để các cell sau dùng đúng bản sửa; tên/path của run đang mở được giữ lại.
+
+Nếu traceback đã mất hoặc runtime đã restart, mở lại notebook V3 và chạy từ đầu. Có thể cần chuẩn bị lại dữ liệu vì lần bị lỗi trước đó chưa ghi cache hoàn chỉnh; không cần upload lại ZIP đã nằm trên Drive. Cell phục hồi là tùy chọn khi gặp lỗi, không phải bước chạy trong luồng bình thường.
 
 ## Chuẩn hóa và giới hạn đánh giá
 

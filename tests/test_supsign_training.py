@@ -16,6 +16,103 @@ from scripts.supsign_training import (
 )
 
 
+def split_fixture(groups):
+    return [dict(group=group, lines=[f'{c} .5 .5 .2 .2' for c in classes])
+            for group, size, classes in groups for _ in range(size)]
+
+
+def test_split_keeps_a_class_confined_to_second_largest_group_in_train():
+    from scripts.supsign_training import choose_splits
+    rows = split_fixture([('a', 12, [0]), ('b', 8, [0, 1]), ('c', 4, [0]), ('d', 2, [0])])
+    counts, missing = choose_splits(rows, ['common', 'rare'], 42)
+    assert counts['train'][1] == 8
+    assert not missing['train']
+    assert missing['val'] == missing['test'] == ['rare']
+    assert {r['split'] for r in rows} == {'train', 'val', 'test'}
+    for group in {r['group'] for r in rows}:
+        assert len({r['split'] for r in rows if r['group'] == group}) == 1
+
+
+def test_split_reserves_compatible_holdouts_when_two_groups_are_required_for_a_class():
+    from scripts.supsign_training import choose_splits
+    rows = split_fixture([('a', 10, [0]), ('b', 8, [1]), ('c', 6, [1]), ('d', 4, [0])])
+    original = json.loads(json.dumps(rows))
+    counts, missing = choose_splits(rows, ['A', 'B'], 42)
+    assert not missing['train'] and counts['train'][0] and counts['train'][1]
+    assert {r['split'] for r in rows} == {'train', 'val', 'test'}
+    choose_splits(original, ['A', 'B'], 42)
+    assert rows == original
+
+
+def test_impossible_group_coverage_is_reported_without_breaking_groups():
+    from scripts.supsign_training import choose_splits
+    rows = split_fixture([('a', 3, [0]), ('b', 2, [1]), ('c', 1, [2])])
+    with pytest.raises(ValueError, match='train.*coverage'):
+        choose_splits(rows, ['A', 'B', 'C'], 42)
+    assert all('split' not in row for row in rows)
+
+
+@pytest.mark.parametrize('tamper', [False, True])
+def test_recover_failed_group_split_reuses_audit_and_grouping(tmp_path, monkeypatch, tamper):
+    import scripts.supsign_training as training
+    source = archive_fixture(tmp_path)
+    output = tmp_path/'recovered'
+    splitter = training.choose_splits
+    def old_split(*args): raise ValueError('Missing train classes after grouping')
+    monkeypatch.setattr(training, 'choose_splits', old_split)
+    with pytest.raises(ValueError) as caught:
+        training.prepare_supsign(source, output, classes=['No_entry', 'No_parking'],
+                                 block_size=1, near_threshold=None)
+    monkeypatch.setattr(training, 'choose_splits', splitter)
+    def forbidden(*args, **kwargs): raise AssertionError('Must reuse the completed audit/grouping')
+    monkeypatch.setattr(training, 'audit_dataset', forbidden)
+    monkeypatch.setattr(training, 'cluster_records', forbidden)
+    if tamper:
+        with zipfile.ZipFile(source) as archive:
+            entries = {name: archive.read(name) for name in archive.namelist()}
+        entries['train/labels/photo_0.txt'] = b'1 .5 .5 .2 .2\n'
+        with zipfile.ZipFile(source, 'w') as archive:
+            for name, value in entries.items(): archive.writestr(name, value)
+        with pytest.raises(ValueError, match='Source ZIP changed'):
+            training.recover_failed_preparation(caught.value.__traceback__)
+        assert not output.exists()
+        return
+    manifest = training.recover_failed_preparation(caught.value.__traceback__)
+    assert not manifest['missing_classes']['train']
+    assert training.verify_dataset(output)['images'] == 18
+    assert source.is_file()
+    with pytest.raises(FileExistsError):
+        training.recover_failed_preparation(caught.value.__traceback__)
+
+
+def test_recovery_requires_a_completed_prepare_frame():
+    from scripts.supsign_training import recover_failed_preparation
+    with pytest.raises(ValueError, match='traceback'):
+        recover_failed_preparation(None)
+
+
+def test_split_feasibility_matches_independent_small_group_search():
+    import random
+    from itertools import combinations
+    from scripts.supsign_training import choose_splits
+    for seed in range(40):
+        rng = random.Random(seed)
+        groups = [(str(i), rng.randint(1, 9), [c for c in range(4) if rng.random() < .5])
+                  for i in range(rng.randint(3, 9))]
+        for c in range(4):
+            if not any(c in labels for _, _, labels in groups): groups[c % len(groups)][2].append(c)
+        feasible = any(set().union(*(set(labels) for key, _, labels in groups if key not in pair)) == set(range(4))
+                       for pair in combinations([key for key,_,_ in groups], 2))
+        rows = split_fixture(groups)
+        if not feasible:
+            with pytest.raises(ValueError, match='coverage'): choose_splits(rows, list('ABCD'), seed)
+        else:
+            counts, missing = choose_splits(rows, list('ABCD'), seed)
+            assert not missing['train']
+            assert {row['split'] for row in rows} == set(('train','val','test'))
+            assert all(counts['train'][c] > 0 for c in range(4))
+
+
 def image_bytes(index):
     # Visually distinct deterministic texture, not a live dataset photo.
     import random
@@ -259,6 +356,24 @@ def test_notebook_runs_prepare_train_evaluate_export_then_restores_cache(tmp_pat
     context['RECIPE']=context['recipe'](context['CAR35'],42,1,None,None)
     # The small fixture needs little disk; test the notebook's preflight without allocating GBs.
     monkeypatch.setattr(shutil,'disk_usage',lambda _:types.SimpleNamespace(free=100*1024**3))
+    # Reproduce the old split failure, then exercise the actual recovery cell.
+    training = sys.modules['scripts.supsign_training']
+    splitter = training.choose_splits
+    def failed_split(*args): raise ValueError('Missing train classes after grouping')
+    monkeypatch.setattr(training, 'choose_splits', failed_split)
+    try:
+        exec(cells['prepare'],context)
+    except ValueError as error:
+        context['_SIGNSIGHT_PREP_TRACEBACK'] = error.__traceback__
+    else:
+        raise AssertionError('Expected the previous split failure')
+    root = Path(__file__).resolve().parents[1]
+    import urllib.request
+    monkeypatch.setattr(urllib.request, 'urlopen', lambda *a, **k:
+                        io.BytesIO((root/'scripts/supsign_training.py').read_bytes()))
+    def no_audit(*args, **kwargs): raise AssertionError('Recovery must not re-audit images')
+    monkeypatch.setattr(sys.modules['scripts.dataset_eda'], 'audit_dataset', no_audit)
+    exec((root/'scripts/recover_supsign_colab.py').read_text(),context)
     exec(cells['prepare'],context);exec(cells['eda'],context);exec(cells['preview'],context)
     exec(cells['train'],context);exec(cells['evaluate'],context);exec(cells['export'],context)
     assert context['BEST'].is_file() and len(downloaded)==1
