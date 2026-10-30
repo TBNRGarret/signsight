@@ -17,3 +17,19 @@ test('text entry survives delayed adoption of a focused Flutter semantics input'
  await expect(input).toHaveAttribute('autocomplete','current-password');
  await expect(input).toHaveValue('Synthetic-password-123');
 });
+
+test('plain textarea entry survives delayed editing-host configuration',async({page})=>{
+ await page.setContent('<textarea aria-label="Mô tả quan sát" data-semantics-role="text-field"></textarea>');
+ await page.evaluate(()=>{
+  const semantic=document.querySelector('textarea');
+  semantic.addEventListener('focus',()=>setTimeout(()=>{
+   const editing=semantic.cloneNode();editing.value='';
+   editing.setAttribute('autocapitalize','off');editing.setAttribute('autocomplete','on');
+   semantic.replaceWith(editing);editing.focus();
+  },500),{once:true});
+ });
+ await enterText(page,'Mô tả quan sát','Synthetic report description');
+ const input=page.getByRole('textbox',{name:'Mô tả quan sát',exact:true});
+ await expect(input).toHaveAttribute('autocomplete','on');
+ await expect(input).toHaveValue('Synthetic report description');
+});
