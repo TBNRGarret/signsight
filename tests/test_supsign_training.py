@@ -307,6 +307,34 @@ def test_notebook_is_reproducible_self_contained_small_and_does_not_auto_run_tes
     assert 'files.download' in code and 'drive.mount' in code and 'RUN_HELDOUT_TEST = False' in code
     assert 'KAGGLE' not in code and 'kagglehub' not in code
     assert 'SOURCE_ZIP' in code and 'restore_dataset' in code and 'RESUME = False' in code
+    assert 'gdown==5.2.0' in code and 'SOURCE_URL' in code and 'SAVE_TO_DRIVE' in code
+
+
+@pytest.mark.parametrize('save_to_drive', [False, True])
+def test_notebook_can_use_local_outputs_or_mount_the_current_account(tmp_path, monkeypatch, save_to_drive):
+    import os, sys, types
+    from scripts.generate_supsign_notebook import build_notebook
+    source = next(''.join(c['source']) for c in build_notebook()['cells'] if c['id']=='config')
+    assert 'SAVE_TO_DRIVE' in source
+    work, persist = tmp_path/'runtime', tmp_path/'current-account'
+    source = source.replace("WORK = Path('/content/signsight_supsign')", f'WORK = Path({str(work)!r})')
+    source = source.replace("DRIVE_OUTPUT_ROOT = Path('/content/drive/MyDrive/SignSight/supsign_training')",
+                            f'DRIVE_OUTPUT_ROOT = Path({str(persist)!r})')
+    source = source.replace('SAVE_TO_DRIVE = True', f'SAVE_TO_DRIVE = {save_to_drive}')
+    mounts=[]
+    monkeypatch.setitem(sys.modules, 'google.colab', types.SimpleNamespace(
+        drive=types.SimpleNamespace(mount=lambda path: mounts.append(path))))
+    monkeypatch.setenv('YOLO_CONFIG_DIR', str(tmp_path/'settings'))
+    context={'os':os}
+    exec(source,context)
+    assert len(mounts) == int(save_to_drive)
+    assert context['PERSIST'] == (persist if save_to_drive else work/'outputs')
+    assert context['SOURCE_ZIP'].is_relative_to(work)
+    first = context['SOURCE_ZIP'];first.parent.mkdir(parents=True, exist_ok=True);first.write_bytes(b'old source')
+    second={"os":os}
+    exec(source.replace("DATASET_VERSION = 'supsign107-car35-v3'", "DATASET_VERSION = 'different-source-v4'"),second)
+    assert second['SOURCE_ZIP'] != first
+    assert first.read_bytes() == b'old source'
 
 
 def test_cache_does_not_delete_an_existing_partial_file(tmp_path):
@@ -316,7 +344,8 @@ def test_cache_does_not_delete_an_existing_partial_file(tmp_path):
     assert partial.read_bytes()==b'keep-my-partial'
 
 
-def test_notebook_runs_prepare_train_evaluate_export_then_restores_cache(tmp_path, monkeypatch):
+@pytest.mark.parametrize('use_gdown', [False, True])
+def test_notebook_runs_prepare_train_evaluate_export_then_restores_cache(tmp_path, monkeypatch, use_gdown):
     from scripts.generate_supsign_notebook import build_notebook
     import shutil
     import sys
@@ -327,6 +356,13 @@ def test_notebook_runs_prepare_train_evaluate_export_then_restores_cache(tmp_pat
     cells={cell['id']:''.join(cell['source']) for cell in notebook['cells'] if cell['cell_type']=='code'}
     source=archive_fixture(tmp_path);work=tmp_path/'work';work.mkdir();persist=tmp_path/'drive';persist.mkdir()
     downloaded=[];calls=[]
+    downloads=[]
+    def download(**options):
+        downloads.append(options)
+        payload = source if options['id']=='fixture_source_12345' else persist/'dataset.zip'
+        Path(options['output']).write_bytes(payload.read_bytes())
+        return options['output']
+    monkeypatch.setitem(sys.modules,'gdown',types.SimpleNamespace(download=download))
     files=types.ModuleType('google.colab.files');files.download=lambda path:downloaded.append(Path(path))
     colab=types.ModuleType('google.colab');colab.files=files
     monkeypatch.setitem(sys.modules,'google.colab',colab);monkeypatch.setitem(sys.modules,'google.colab.files',files)
@@ -341,14 +377,18 @@ def test_notebook_runs_prepare_train_evaluate_export_then_restores_cache(tmp_pat
             calls.append(('val',options))
             return type('Metrics',(),{'results_dict':{'metrics/mAP50(B)':.6}})()
     monkeypatch.setitem(sys.modules,'ultralytics',types.SimpleNamespace(YOLO=FakeYOLO))
-    context=dict(WORK=work,PERSIST=persist,SOURCE_ZIP=source,GROUPS_CSV=None,SEED=42,
+    context=dict(WORK=work,PERSIST=persist,SOURCE_ZIP=source,SOURCE_URL='',SOURCE_SHA256='',
+                 PREPARED_CACHE_URL='',PREPARED_CACHE_SHA256='',SAVE_TO_DRIVE=True,GROUPS_CSV=None,SEED=42,
                  FRAME_BLOCK_SIZE=1,NEAR_HASH_DISTANCE=None,CACHE_ZIP=persist/'dataset.zip',
                  DATASET_ROOT=work/'prepared',RUN_DIR=persist/'runs/first',RUN_NAME='first',
                  EPOCHS=2,IMAGE_SIZE=640,BATCH=4,RESUME=False,SMOKE=False,RUN_HELDOUT_TEST=False,
                  DATASET_VERSION='fixture-v1',LABEL_REVIEWED=True,
                  sys=sys,shutil=shutil,json=json,Path=Path)
+    if use_gdown:
+        context.update(SOURCE_URL='https://drive.google.com/file/d/fixture_source_12345/view',
+                       SOURCE_ZIP=work/'source_supsign.zip')
     monkeypatch.syspath_prepend(str(work/'pipeline'))
-    for name in ('scripts.supsign_training','scripts.dataset_eda','scripts'):
+    for name in ('scripts.supsign_training','scripts.dataset_eda','scripts.colab_downloads','scripts'):
         monkeypatch.delitem(sys.modules,name,raising=False)
     exec(cells['pipeline'],context)
     # A two-class fixture exercises the real notebook flow without live images/weights/GPU.
@@ -385,8 +425,16 @@ def test_notebook_runs_prepare_train_evaluate_export_then_restores_cache(tmp_pat
         assert not any(name.startswith('dataset/images/') for name in archive.namelist())
     # A fresh runtime only needs the persisted prepared ZIP, not the raw archive.
     source.unlink();context['DATASET_ROOT']=work/'restored'
+    if use_gdown:
+        assert len(downloads)==1 and downloads[0]['use_cookies'] is False
+        context['SOURCE_ZIP'].unlink()
+        context.update(CACHE_ZIP=tmp_path/'new-account'/'dataset.zip',
+                       PREPARED_CACHE_URL='fixture_cache_12345',
+                       PREPARED_CACHE_SHA256=hashlib.sha256((persist/'dataset.zip').read_bytes()).hexdigest())
     exec(cells['prepare'],context)
     assert context['DATASET_ROOT'].is_dir() and len(context['manifest']['images'])==18
+    if use_gdown:
+        assert [d['id'] for d in downloads] == ['fixture_source_12345','fixture_cache_12345']
 
 
 def test_cache_cannot_archive_itself_inside_the_dataset(tmp_path,monkeypatch):

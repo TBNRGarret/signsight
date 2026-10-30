@@ -19,9 +19,11 @@ def build_notebook():
 Fine-tune **YOLO11s pretrained** trên SupSign 107 lớp, xuất taxonomy 35 lớp dành cho ô tô.
 Chọn **Runtime → Change runtime type → GPU**, rồi chạy các cell theo thứ tự.
 
-**Sửa SOURCE_ZIP và RUN_NAME ở cell Cấu hình; xem EDA rồi bật LABEL_REVIEWED để train.** Đặt ZIP SupSign lên Drive một lần.
+**Dán link Drive của ZIP SupSign vào SOURCE_URL**, sửa RUN_NAME; xem EDA rồi bật LABEL_REVIEWED để train.
 Notebook chứa sẵn toàn bộ code chuẩn bị/train; không cần clone repo hay đăng nhập dịch vụ dataset.
-Ảnh train được đọc từ SSD local Colab; dataset đã chuẩn bị và checkpoint giữ trên Drive qua các phiên.
+gdown tải ZIP về SSD local Colab, không phụ thuộc thư mục My Drive của tài khoản cũ.
+Bạn có thể upload notebook lên Colab và lưu một bản riêng. Notebook được lưu không có nghĩa weights đã được lưu:
+SAVE_TO_DRIVE=True giữ checkpoint/cache trên Drive của tài khoản đang mount; False chỉ giữ trong runtime.
 
 Cả hai ZIP từng khảo sát có ảnh trùng giữa split. Notebook bỏ split nguồn, kiểm tra toàn bộ ảnh/nhãn,
 loại trùng SHA-256, cách ly nhãn lỗi hoặc bản sao khác nhãn rồi chia theo nhóm.
@@ -34,15 +36,24 @@ Nguồn API: [YOLO11](https://docs.ultralytics.com/models/yolo11/), [Train/resum
 os.environ['YOLO_AUTOINSTALL'] = 'false'
 os.environ['WANDB_MODE'] = 'disabled'
 subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-q',
-                       'ultralytics==8.4.173', 'PyYAML>=6,<7', 'tqdm>=4.66,<5'])
+                       'ultralytics==8.4.173', 'PyYAML>=6,<7', 'tqdm>=4.66,<5', 'gdown==5.2.0'])
 import torch
 assert torch.cuda.is_available(), 'Bật GPU runtime trước khi train.'
 print('GPU:', torch.cuda.get_device_name(0), '| Torch:', torch.__version__)
 """,'install')
-    md("""## 1. Cấu hình và Google Drive
+    md("""## 1. Link dataset và nơi lưu kết quả
 
-Đường dẫn mặc định tương ứng: **My Drive / SignSight / datasets / archive (1).zip**.
-Tên ZIP có thể khác; sửa SOURCE_ZIP cho đúng. Không dùng archive.zip 100 lớp thay vào mà giữ nhầm tên nguồn.
+Dán **link file ZIP SupSign 107 lớp** hoặc file ID vào SOURCE_URL. Nguồn cần cho phép tải qua link
+(Anyone with the link → Viewer); gdown không dùng đăng nhập Colab/cookies để mở file bị giới hạn quyền.
+Không dùng link folder. Không dùng ZIP 100 lớp thay vào mà giữ nhầm tên nguồn.
+
+SAVE_TO_DRIVE=True: mount Drive của tài khoản Colab hiện tại để giữ checkpoint, EDA và cache.
+False: không mount Drive; phải tải kết quả trước khi runtime mất. File notebook không chứa dataset/weights.
+Muốn tiếp tục run từ tài khoản khác phải mang theo cả thư mục run (last.pt + training_request.json) và đúng dataset/config.
+
+Nếu đã có prepared cache ở tài khoản trước, có thể chia sẻ **file cache ZIP** rồi điền PREPARED_CACHE_URL
+và SHA-256 từ file .zip.sha256. Nhánh này bỏ qua tải/audit ZIP gốc nhưng vẫn xác minh cache/recipe.
+Hai trường cache là tùy chọn. Không công khai link dataset/checkpoint trong notebook đưa lên GitHub.
 
 Mặc định: 80 epochs, ảnh 640, batch 8. Nếu hết VRAM, bắt đầu một run mới với batch 4.
 Giữ 640 làm mốc trước; thử 960 trong run khác để so sánh trên cùng split.
@@ -52,13 +63,21 @@ GROUPS_CSV tùy chọn có cột `path,group`; path là đường dẫn ảnh b�
 Nhóm cần dựa trên thông tin thu thập thật. Không tự coi tên file là metadata chuyến xe.
 """,'config-guide')
     code("""from pathlib import Path
-from google.colab import drive
-drive.mount('/content/drive')
-
-SOURCE_ZIP = Path('/content/drive/MyDrive/SignSight/datasets/archive (1).zip')
-PERSIST = Path('/content/drive/MyDrive/SignSight/supsign_training')
 WORK = Path('/content/signsight_supsign')
+SOURCE_URL = ''  # Dán link file ZIP SupSign hoặc file ID, không phải link folder
+SOURCE_SHA256 = ''  # Tùy chọn: SHA-256 ZIP gốc để xác minh đúng nguồn
+SAVE_TO_DRIVE = True  # False: chỉ lưu local; lưu notebook không lưu weights
+DRIVE_OUTPUT_ROOT = Path('/content/drive/MyDrive/SignSight/supsign_training')
+if SAVE_TO_DRIVE:
+    from google.colab import drive
+    drive.mount('/content/drive')
+    PERSIST = DRIVE_OUTPUT_ROOT
+else:
+    PERSIST = WORK / 'outputs'
+PREPARED_CACHE_URL = ''  # Tùy chọn: link cache đã chuẩn bị từ tài khoản trước
+PREPARED_CACHE_SHA256 = ''  # Bắt buộc khi dùng PREPARED_CACHE_URL
 DATASET_VERSION = 'supsign107-car35-v3'
+SOURCE_ZIP = WORK / 'downloads' / DATASET_VERSION / 'source_supsign.zip'
 RUN_NAME = 'yolo11s_car35_640_v3'
 GROUPS_CSV = None  # hoặc Path('/content/drive/MyDrive/SignSight/capture_groups.csv')
 EPOCHS = 80
@@ -80,12 +99,13 @@ os.environ['YOLO_CONFIG_DIR'] = str(WORK / '.ultralytics')
 CACHE_ZIP = PERSIST / 'datasets' / (DATASET_VERSION + '.zip')
 DATASET_ROOT = WORK / DATASET_VERSION
 RUN_DIR = PERSIST / 'runs' / (RUN_NAME + ('_smoke' if SMOKE else ''))
-print('Input:', SOURCE_ZIP)
+print('Source: gdown →', SOURCE_ZIP)
+print('Output:', 'current-account Drive' if SAVE_TO_DRIVE else 'local runtime only', PERSIST)
 print('Cache:', CACHE_ZIP)
 print('Run:', RUN_DIR)
 """,'config')
     embedded={name:(ROOT/name).read_text(encoding='utf-8') for name in
-              ('scripts/dataset_eda.py','scripts/supsign_training.py')}
+              ('scripts/dataset_eda.py','scripts/supsign_training.py','scripts/colab_downloads.py')}
     code("""# Code đã kiểm thử, nhúng trong notebook để chạy độc lập.
 import json, shutil, csv, zipfile
 TRAINING_FILES = """+repr(embedded)+"""
@@ -99,6 +119,7 @@ if str(CODE_ROOT) not in sys.path: sys.path.insert(0, str(CODE_ROOT))
 from scripts.supsign_training import (CAR35, recipe, prepare_supsign, verify_dataset,
     digest_file, pack_dataset, restore_dataset, train_experiment, evaluate_checkpoint,
     summarize_prepared_dataset)
+from scripts.colab_downloads import download_drive_zip
 GROUPS = None
 if GROUPS_CSV is not None:
     with Path(GROUPS_CSV).open(newline='', encoding='utf-8-sig') as stream:
@@ -112,9 +133,10 @@ print('Taxonomy:', len(CAR35), 'lớp. Cache sẽ kiểm tra cùng recipe/code v
     cells[-1]['metadata']={'cellView':'form','jupyter':{'source_hidden':True}}
     md("""## 2. Chuẩn bị dataset hoặc khôi phục cache
 
-Lần đầu đọc/hash toàn bộ ZIP có thể mất thời gian. Cần đủ ổ local cho ZIP và dataset đã lọc,
-và đủ Drive để giữ cache + các run. Không giải nén ZIP nguồn tùy ý; chỉ ghi ảnh/nhãn đã kiểm tra.
-Sau khi có cache trên Drive, runtime mới không cần copy hoặc audit lại ZIP thô.
+Lần đầu gdown tải ZIP về local, sau đó đọc/hash toàn bộ ZIP. Cần đủ ổ local cho ZIP và dataset/cache,
+và đủ Drive nếu bật lưu Drive. Không giải nén ZIP nguồn tùy ý; chỉ ghi ảnh/nhãn đã kiểm tra.
+Dataset local/cache sẵn có được ưu tiên; khi đổi tài khoản, PREPARED_CACHE_URL có thể dùng lại cache cũ.
+Link Drive bị chặn/quota không được thay bằng dữ liệu giả. Tải gián đoạn có thể retry trong cùng runtime.
 Cache có checksum; thay code/classes/grouping thì phải dùng một DATASET_VERSION mới.
 V3 giữ đủ lớp trong train nếu có thể tạo ba split không rỗng mà không tách nhóm.
 Lớp chỉ có trong một nhóm được giữ ở train; val/test có thể thiếu lớp đó và được ghi rõ.
@@ -130,22 +152,29 @@ if DATASET_ROOT.exists():
     print('Dùng dataset local đã kiểm tra:', info['images'], 'ảnh')
 elif CACHE_ZIP.is_file():
     manifest = restore_dataset(CACHE_ZIP, DATASET_ROOT, expected_recipe=RECIPE)
-    print('Đã khôi phục cache Drive, không đọc lại ZIP thô.')
+    print('Đã khôi phục cache, không đọc lại ZIP thô.')
+elif PREPARED_CACHE_URL.strip():
+    assert PREPARED_CACHE_SHA256.strip(), 'Điền SHA-256 từ file cache .zip.sha256.'
+    shared_cache = download_drive_zip(PREPARED_CACHE_URL,
+        WORK / 'downloads' / (DATASET_VERSION + '.zip'), expected_sha256=PREPARED_CACHE_SHA256)
+    shared_cache.with_suffix(shared_cache.suffix + '.sha256').write_text(PREPARED_CACHE_SHA256.strip().lower())
+    manifest = restore_dataset(shared_cache, DATASET_ROOT, expected_recipe=RECIPE)
+    print('Đã khôi phục cache chia sẻ từ tài khoản khác; không audit ZIP gốc.')
 else:
-    assert SOURCE_ZIP.is_file(), f'Không thấy ZIP: {SOURCE_ZIP}. Sửa đường dẫn ở cell Cấu hình.'
-    required = SOURCE_ZIP.stat().st_size * 2.3 + 2*1024**3
+    if SOURCE_URL.strip():
+        SOURCE_ZIP = download_drive_zip(SOURCE_URL, SOURCE_ZIP, expected_sha256=SOURCE_SHA256)
+    assert SOURCE_ZIP.is_file(), 'Dán link ZIP/file ID vào SOURCE_URL ở cell Cấu hình.'
+    assert zipfile.is_zipfile(SOURCE_ZIP), 'Nguồn tải về không phải ZIP hợp lệ.'
+    with zipfile.ZipFile(SOURCE_ZIP) as source_archive:
+        required = sum(member.file_size for member in source_archive.infolist()) * 2 + 2*1024**3
     free = shutil.disk_usage(WORK).free
     assert free >= required, f'Ổ local cần khoảng {required/1024**3:.1f} GiB trống; còn {free/1024**3:.1f}.'
-    local_zip = WORK / 'source_supsign.zip'
-    # Copy thẳng từ Drive, không dùng upload lại qua trình duyệt.
-    shutil.copy2(SOURCE_ZIP, local_zip)
-    manifest = prepare_supsign(local_zip, DATASET_ROOT, classes=CAR35, groups=GROUPS,
+    manifest = prepare_supsign(SOURCE_ZIP, DATASET_ROOT, classes=CAR35, groups=GROUPS,
         seed=SEED, block_size=FRAME_BLOCK_SIZE, near_threshold=NEAR_HASH_DISTANCE,
         progress=lambda items, desc, unit: tqdm(items, desc=desc, unit=unit))
-    print('Đang kiểm tra và lưu cache dataset lên Drive...', flush=True)
+    print('Đang kiểm tra và lưu cache dataset...', flush=True)
     pack_dataset(DATASET_ROOT, CACHE_ZIP)
-    local_zip.unlink()  # chỉ xóa bản sao local do cell này tạo, không xóa ZIP trên Drive
-    print('Đã lưu cache Drive:', CACHE_ZIP)
+    print('Đã lưu cache:', CACHE_ZIP)
 from collections import Counter
 split_counts = Counter(row['split'] for row in manifest['images'])
 print(' | '.join(f'{s}: {split_counts[s]:,} ảnh' for s in ('train', 'val', 'test')))
@@ -227,7 +256,8 @@ for i, name in enumerate(CAR35):
     md("""## 4. Train YOLO11s
 
 Tải pretrained **yolo11s.pt**, không tiếp tục model GTSRB cũ. Tắt lật ngang/dọc và xoay ảnh để giữ nghĩa biển.
-Checkpoint, results.csv, cấu hình và plots được ghi vào RUN_DIR trên Drive, còn ảnh train ở local Colab.
+Checkpoint, results.csv, cấu hình và plots được ghi vào RUN_DIR (Drive hoặc local theo SAVE_TO_DRIVE).
+Ảnh train luôn ở local Colab. Nếu đổi tài khoản, thư mục run ở Drive cũ không tự xuất hiện trong Drive mới.
 Best được chọn theo validation. Cell này **không đánh giá test**.
 
 Nếu runtime ngắt giữa chừng: mở lại notebook, giữ RUN_NAME/EPOCHS/IMAGE_SIZE/BATCH,
@@ -282,7 +312,8 @@ if TRY_OWN_PHOTOS:
     md("""## 7. Tải ZIP kết quả
 
 ZIP gồm best.pt, last.pt, cấu hình train, metric, plots và manifest dataset; **không kèm toàn bộ ảnh dataset**.
-Đã có bản trên Drive nếu trình duyệt tải chậm. Dùng files.download để tránh link localhost không tải được.
+ZIP được lưu tại PERSIST/exports (Drive hoặc local). Dùng files.download để tải về máy;
+nếu SAVE_TO_DRIVE=False, phải tải trước khi ngắt runtime. Lưu notebook không lưu ZIP/weights.
 
 Model 35 lớp là artifact thử nghiệm. Backend SignSight hiện nhận taxonomy 10 lớp: cần nâng mapping,
 validation và kiểm thử tương thích dữ liệu cũ trước khi thay checkpoint phục vụ app.
@@ -301,7 +332,7 @@ archive = Path(shutil.make_archive(str(export_root), 'zip', export_root))
 exports_drive = PERSIST / 'exports'; exports_drive.mkdir(exist_ok=True)
 drive_export = exports_drive / archive.name
 shutil.copy2(archive, drive_export)
-print('Drive:', drive_export)
+print('Saved results:', drive_export)
 files.download(str(archive))
 """,'export')
     return dict(cells=cells,metadata=dict(accelerator='GPU',colab=dict(name=TARGET.name),

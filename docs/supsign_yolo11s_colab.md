@@ -2,12 +2,20 @@
 
 Notebook: [SignSight_SupSign_YOLO11s_Colab.ipynb](../notebooks/SignSight_SupSign_YOLO11s_Colab.ipynb).
 
-1. Upload ZIP SupSign 107 lớp một lần lên **My Drive/SignSight/datasets/archive (1).zip**. Nếu tên/vị trí khác, sửa `SOURCE_ZIP` trong notebook.
+1. Upload notebook `.ipynb` lên Colab và lưu bản riêng của bạn. Dán **link file ZIP SupSign 107 lớp** hoặc file ID vào `SOURCE_URL`; file cần cho phép tải qua link, không dùng link folder. `gdown` tải về thư mục local `WORK/downloads/DATASET_VERSION/`, không cần dataset nằm trong My Drive của tài khoản Colab mới. Không có link dataset cá nhân được nhúng sẵn trong notebook public.
 2. Mở notebook bằng Colab, chọn GPU runtime, mount Drive rồi chạy đến EDA và xem ảnh/bbox trước. Sau khi kiểm tra nhãn, đổi `LABEL_REVIEWED=True` rồi chạy cell train. Mặc định **YOLO11s pretrained, 35 lớp, 80 epochs, imgsz 640, batch 8**. Hết VRAM thì dùng run mới với batch 4. `SMOKE=True` chỉ chạy 1 epoch để thử luồng.
-3. Notebook chuẩn bị ảnh ở `/content`, lưu cache ZIP + SHA-256 và checkpoint trên Drive. Runtime mới khôi phục cache, không cần upload lại hoặc xử lý ZIP nguồn. Đổi `DATASET_VERSION` khi thay nguồn/code/lớp/grouping; cache cố ý có phiên bản, không tự đoán rằng ZIP nguồn đã thay.
+3. `SAVE_TO_DRIVE=True` mặc định mount Drive của **tài khoản hiện tại** để giữ cache/checkpoint/EDA. `False` không mount Drive và ghi vào `/content/signsight_supsign/outputs`; phải tải kết quả trước khi mất runtime. **Lưu notebook không lưu dataset hoặc weights.** Runtime mới có cache thì khôi phục, không xử lý ZIP gốc lại. Đổi `DATASET_VERSION` khi thay nguồn/code/lớp/grouping; cache không tự đoán nội dung ZIP nguồn đã thay.
 4. Run mới dùng `RUN_NAME` mới. Khi runtime ngắt, giữ tên/cấu hình và đặt `RESUME=True` để dùng `last.pt`. Resume kiểm tra fingerprint dataset và cấu hình. Run đã hoàn tất có thể không resume được do optimizer đã được strip.
 5. Chọn model/settings theo validation. Test chỉ chạy khi bật `RUN_HELDOUT_TEST=True`; metrics ghi rõ loại split. Cell ảnh riêng nhận upload ảnh đường phố để xem bbox.
-6. Cell cuối tải ZIP bằng `google.colab.files.download`, đồng thời lưu bản Drive trong `supsign_training/exports/`. ZIP kết quả chứa weights, plots, metrics, cấu hình và manifest, không chứa toàn bộ dataset.
+6. Cell cuối tải ZIP bằng `google.colab.files.download`, đồng thời lưu tại `PERSIST/exports/` (Drive hoặc local). ZIP kết quả chứa weights, plots, metrics, cấu hình và manifest, không chứa toàn bộ dataset.
+
+## Đổi tài khoản Colab
+
+- Dataset gốc: giữ nguyên `SOURCE_URL` để tải từ cùng file chia sẻ. Helper không dùng cookies/đăng nhập của tài khoản cũ. Quyền truy cập và quota tải Drive vẫn áp dụng; xem [gdown 5.2](https://github.com/wkentaro/gdown/tree/v5.2.0).
+- Tránh audit lại: ở tài khoản cũ đã chuẩn bị thành công, chia sẻ file `datasets/DATASET_VERSION.zip` và lấy SHA-256 trong file `.zip.sha256`. Điền `PREPARED_CACHE_URL` và `PREPARED_CACHE_SHA256` ở tài khoản mới. Notebook tải cache bằng gdown, kiểm tra SHA-256/recipe/hash ảnh-nhãn rồi khôi phục. Hai trường này có thể để trống khi chạy lần đầu.
+- Checkpoint không tự chuyển tài khoản: nếu resume, mang theo toàn bộ thư mục run gồm `weights/last.pt`, `training_request.json` và cấu hình sang `PERSIST/runs/RUN_NAME` của tài khoản mới; giữ đúng dataset và settings. Chỉ tải `best.pt` về không đủ để resume run.
+- `SOURCE_SHA256` tùy chọn xác nhận đúng ZIP gốc. Một ZIP local đã có từ phiên bản cũ mà chưa có receipt nguồn chỉ được nhận lại khi SHA-256 khớp; helper không tự ghi đè file chưa xác định nguồn. Tải gián đoạn có thể chạy lại cell trong cùng runtime để tiếp tục phần tải của gdown.
+- Notebook đã chứa helper tải và chuẩn bị dữ liệu. Upload bản `.ipynb` là đủ, không phải clone repo. Lưu bản cấu hình có link riêng trên Drive của bạn; giữ link dataset/checkpoint và credentials ra khỏi GitHub public.
 
 EDA chạy trên dataset đã chuẩn hóa: số ảnh/box và lớp theo split, negative, kích thước ảnh/box, box nhỏ dưới 16 px sau resize, nhóm trùng/cách ly và lớp thiếu. Kết quả lưu trên Drive trong `eda/DATASET_VERSION/`: `dataset_eda.json`, `class_counts.csv`, `images.csv`, `boxes.csv`, `eda_overview.png`; đồng thời được đóng gói vào ZIP kết quả. Preview bbox giúp rà soát nhưng không chứng minh toàn bộ nhãn đúng.
 
