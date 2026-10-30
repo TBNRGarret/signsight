@@ -39,6 +39,9 @@ class AppController extends ChangeNotifier {
   DrivingRoute? route;
   Sign? selectedSign;
   CaptureDraft? draft;
+  List<SignType> captureTypes = [];
+  bool captureTypesBusy = false;
+  String? captureTypesError;
   List<Contribution> contributions = [];
   int historyTotal = 0;
   String? historyStatus;
@@ -60,6 +63,10 @@ class AppController extends ChangeNotifier {
       draft?.previewReady == true &&
       draft?.selected != null &&
       draft!.labelConfirmed &&
+      (draft!.proposedClass == null ||
+          (captureTypes.any((type) => type.id == draft!.proposedClass) &&
+              draft!.correctionReason.trim().length >= 3 &&
+              draft!.correctionReason.length <= 1000)) &&
       draft!.confirmedLocation?.valid == true;
   void _notify() {
     if (!_disposed) notifyListeners();
@@ -101,6 +108,7 @@ class AppController extends ChangeNotifier {
       }
       if (raw != null) {
         draft = CaptureDraft.fromJson(raw);
+        if (draft!.proposedClass != null) await loadCaptureTypes();
         captureMessage = 'Đã khôi phục bản nháp. Kiểm tra rồi tiếp tục gửi.';
       }
     } catch (_) {
@@ -137,6 +145,9 @@ class AppController extends ChangeNotifier {
     _feedbackVersion++;
     user = null;
     draft = null;
+    captureTypes = [];
+    captureTypesBusy = false;
+    captureTypesError = null;
     nearbySigns = [];
     nearbyTotal = 0;
     places = [];
@@ -535,6 +546,8 @@ class AppController extends ChangeNotifier {
       draft!.detections = result;
       draft!.selectedId = result.firstOrNull?.id;
       draft!.labelConfirmed = false;
+      draft!.proposedClass = null;
+      draft!.correctionReason = '';
       draft!.confirmedLocation = null;
       _saveDraft();
       if (result.isEmpty) {
@@ -557,7 +570,57 @@ class AppController extends ChangeNotifier {
     if (draft?.detections.any((d) => d.id == id) != true) return;
     draft!.selectedId = id;
     draft!.labelConfirmed = false;
+    draft!.proposedClass = null;
+    draft!.correctionReason = '';
     draft!.confirmedLocation = null;
+    _saveDraft();
+    _notify();
+  }
+
+  Future<void> loadCaptureTypes() async {
+    if (!signedIn || captureTypesBusy || captureTypes.isNotEmpty) return;
+    final version = _authVersion;
+    captureTypesBusy = true;
+    captureTypesError = null;
+    _notify();
+    try {
+      final types = await api.taxonomy();
+      if (!_current(version)) return;
+      if (types.isEmpty ||
+          types.any((type) => type.id < 0) ||
+          types.map((type) => type.id).toSet().length != types.length) {
+        throw const FormatException('Invalid catalog');
+      }
+      captureTypes = types;
+    } catch (error) {
+      await _failure(
+        error,
+        version,
+        (message) =>
+            captureTypesError = 'Chưa tải được danh mục biển. Thử lại.',
+      );
+    } finally {
+      if (_current(version)) {
+        captureTypesBusy = false;
+        _notify();
+      }
+    }
+  }
+
+  void proposeClass(int? id) {
+    if (draft?.selected == null || captureBusy) return;
+    if (id != null && !captureTypes.any((type) => type.id == id)) return;
+    draft!.proposedClass = id == draft!.selected!.classId ? null : id;
+    draft!.correctionReason = '';
+    draft!.labelConfirmed = false;
+    _saveDraft();
+    _notify();
+  }
+
+  void setCorrectionReason(String reason) {
+    if (draft == null || captureBusy) return;
+    draft!.correctionReason = reason;
+    draft!.labelConfirmed = false;
     _saveDraft();
     _notify();
   }
@@ -597,6 +660,8 @@ class AppController extends ChangeNotifier {
         current.photo!.id,
         current.selected!.id,
         current.confirmedLocation!,
+        proposedClass: current.proposedClass,
+        correctionReason: current.correctionReason.trim(),
       );
       if (!_current(version) || operation != _photoVersion) return;
       draft = null;

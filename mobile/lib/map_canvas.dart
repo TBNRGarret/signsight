@@ -15,6 +15,7 @@ class MapScene {
     this.onTap,
     this.onIdle,
     this.onSign,
+    this.pinOnly = false,
   });
   final GeoPoint center;
   final List<Sign> signs;
@@ -22,6 +23,7 @@ class MapScene {
   final GeoPoint? pin;
   final ValueChanged<GeoPoint>? onTap, onIdle;
   final ValueChanged<Sign>? onSign;
+  final bool pinOnly;
 }
 
 typedef MapBuilder = Widget Function(BuildContext context, MapScene scene);
@@ -48,6 +50,7 @@ class _SignMapState extends State<SignMap> {
   Timer? _timeout;
   Future<void> _pending = Future.value();
   final _icons = <String>{};
+  bool _pinSourceAdded = false;
   LatLng point(GeoPoint p) => LatLng(p.latitude, p.longitude);
   @override
   void initState() {
@@ -75,7 +78,16 @@ class _SignMapState extends State<SignMap> {
         ((current.latitude - wanted.latitude).abs() > 0.00001 ||
             (current.longitude - wanted.longitude).abs() > 0.00001)) {
       unawaited(
-        _controller!.animateCamera(CameraUpdate.newLatLng(point(wanted))),
+        _controller!
+            .animateCamera(CameraUpdate.newLatLng(point(wanted)))
+            .catchError((_) {
+              if (mounted) {
+                setState(
+                  () => _error = 'Không thể cập nhật bản đồ. Thử tải lại.',
+                );
+              }
+              return false;
+            }),
       );
     }
     _sync();
@@ -91,6 +103,40 @@ class _SignMapState extends State<SignMap> {
         return;
       }
       try {
+        if (scene.pinOnly) {
+          final data = <String, dynamic>{
+            'type': 'FeatureCollection',
+            'features': [
+              if (scene.pin != null)
+                {
+                  'type': 'Feature',
+                  'geometry': {
+                    'type': 'Point',
+                    'coordinates': [scene.pin!.longitude, scene.pin!.latitude],
+                  },
+                  'properties': <String, dynamic>{},
+                },
+            ],
+          };
+          if (!_pinSourceAdded) {
+            await controller.addGeoJsonSource('sign-pin', data);
+            if (!mounted || controller != _controller) return;
+            await controller.addCircleLayer(
+              'sign-pin',
+              'sign-pin-dot',
+              const CircleLayerProperties(
+                circleRadius: 10,
+                circleColor: '#ef4444',
+                circleStrokeColor: '#ffffff',
+                circleStrokeWidth: 3,
+              ),
+            );
+            _pinSourceAdded = true;
+          } else {
+            await controller.setGeoJsonSource('sign-pin', data);
+          }
+          return;
+        }
         await controller.clearCircles();
         await controller.clearSymbols();
         await controller.clearLines();
@@ -162,6 +208,15 @@ class _SignMapState extends State<SignMap> {
       MapLibreMap(
         key: ValueKey(_instance),
         styleString: widget.styleString,
+        // The picker needs one dot, not asynchronous annotation-manager setup.
+        annotationOrder: widget.scene.pinOnly
+            ? const []
+            : const [
+                AnnotationType.line,
+                AnnotationType.symbol,
+                AnnotationType.circle,
+                AnnotationType.fill,
+              ],
         initialCameraPosition: CameraPosition(
           target: point(widget.scene.center),
           zoom: 15,
@@ -184,9 +239,21 @@ class _SignMapState extends State<SignMap> {
           });
         },
         onStyleLoadedCallback: () {
+          if (!mounted) return;
           _loaded = true;
+          _pinSourceAdded = false;
           _icons.clear();
-          unawaited(_controller!.setSymbolIconAllowOverlap(true));
+          if (!widget.scene.pinOnly) {
+            unawaited(
+              _controller!.setSymbolIconAllowOverlap(true).catchError((_) {
+                if (mounted) {
+                  setState(
+                    () => _error = 'Không thể cập nhật bản đồ. Thử tải lại.',
+                  );
+                }
+              }),
+            );
+          }
           _timeout?.cancel();
           if (mounted) setState(() => _error = null);
           _sync();

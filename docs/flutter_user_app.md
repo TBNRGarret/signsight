@@ -112,6 +112,8 @@ Release không dùng debug key. Cấu hình bốn biến `SIGNSIGHT_KEYSTORE_PAT
 
 ## Kiểm thử
 
+Cập nhật 30/10: trong tab **Đóng góp**, mở **Sửa loại biển nếu AI nhận sai** để chọn nhãn từ catalog backend và nhập lý do. Cần xác nhận lại nhãn trước khi gửi. Đổi bbox sẽ xóa phần sửa của bbox trước; bản nháp giữ phần sửa cho tài khoản/API hiện tại. Lịch sử hiện nhãn đề xuất, còn nhãn AI gốc giữ ở backend để đối chiếu. Bản đồ chính giữ nguyên khi chuyển giữa ba tab để tránh hủy renderer lúc đang nạp.
+
 ```powershell
 # mobile/
 dart format --output=none --set-exit-if-changed lib test integration_test

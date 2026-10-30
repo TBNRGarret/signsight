@@ -400,11 +400,14 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
                   ],
                 ),
               Expanded(
-                child: switch (_tab) {
-                  0 => _map(context),
-                  1 => _capture(context),
-                  _ => _history(context),
-                },
+                child: IndexedStack(
+                  index: _tab,
+                  children: [
+                    _map(context),
+                    _capture(context),
+                    _history(context),
+                  ],
+                ),
               ),
             ],
           ),
@@ -774,9 +777,92 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
             ),
             const SizedBox(height: 4),
             Text(draft.selected?.name ?? ''),
+            ExpansionTile(
+              key: ValueKey('correction-${draft.selectedId}'),
+              tilePadding: EdgeInsets.zero,
+              title: const Text('Sửa loại biển nếu AI nhận sai'),
+              initiallyExpanded: draft.proposedClass != null,
+              onExpansionChanged: (open) {
+                if (open) c.loadCaptureTypes();
+              },
+              children: [
+                if (c.captureTypesBusy) const LinearProgressIndicator(),
+                if (c.captureTypesError != null) ...[
+                  Text(c.captureTypesError!),
+                  TextButton(
+                    onPressed: c.loadCaptureTypes,
+                    child: const Text('Tải lại danh mục'),
+                  ),
+                ],
+                if (c.captureTypes.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<int>(
+                    key: ValueKey(
+                      'capture-class-${draft.selectedId}-${draft.proposedClass}',
+                    ),
+                    initialValue:
+                        c.captureTypes.any(
+                          (type) =>
+                              type.id ==
+                              (draft.proposedClass ?? draft.selected?.classId),
+                        )
+                        ? draft.proposedClass ?? draft.selected?.classId
+                        : null,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Loại biển đúng',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: c.captureTypes
+                        .map(
+                          (type) => DropdownMenuItem(
+                            value: type.id,
+                            child: Text(
+                              '${type.code} · ${type.name}',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: busy ? null : c.proposeClass,
+                  ),
+                  if (draft.proposedClass != null) ...[
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      key: ValueKey(
+                        'capture-reason-${draft.selectedId}-${draft.proposedClass}',
+                      ),
+                      initialValue: draft.correctionReason,
+                      enabled: !busy,
+                      maxLength: 1000,
+                      minLines: 1,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        labelText: 'Lý do sửa nhãn',
+                        helperText:
+                            'Ít nhất 3 ký tự để người duyệt đối chiếu ảnh.',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: c.setCorrectionReason,
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: busy ? null : () => c.proposeClass(null),
+                        child: const Text('Dùng lại nhãn AI'),
+                      ),
+                    ),
+                  ],
+                ],
+              ],
+            ),
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Đúng biển tôi muốn đóng góp'),
+              title: Text(
+                draft.proposedClass == null
+                    ? 'Đúng biển tôi muốn đóng góp'
+                    : 'Tôi đã kiểm tra nhãn vừa sửa',
+              ),
               value: draft.labelConfirmed,
               onChanged: busy
                   ? null
@@ -1215,6 +1301,7 @@ class _PinPickerState extends State<PinPicker> {
             MapScene(
               center: _center,
               pin: _point,
+              pinOnly: true,
               onTap: (point) => setState(() => _point = point),
             ),
           ),

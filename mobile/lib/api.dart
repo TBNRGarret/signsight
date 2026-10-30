@@ -214,8 +214,10 @@ class SignSightApi {
   Future<void> contribute(
     String imageId,
     String detectionId,
-    GeoPoint point,
-  ) async {
+    GeoPoint point, {
+    int? proposedClass,
+    String? correctionReason,
+  }) async {
     await _json(
       'POST',
       '/observations',
@@ -226,6 +228,8 @@ class SignSightApi {
             'detection_id': detectionId,
             ...point.toJson(),
             'location_source': 'user_confirmed',
+            'proposed_class': ?proposedClass,
+            if (proposedClass != null) 'correction_reason': correctionReason,
           },
         ],
       },

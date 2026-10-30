@@ -6,10 +6,59 @@ import 'package:signsight_user/controller.dart';
 import 'package:signsight_user/session_store.dart';
 import 'package:signsight_user/models.dart';
 import 'package:signsight_user/map_canvas.dart';
+import 'package:signsight_user/device_services.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  testWidgets(
+    'location picker requests only its pin layer, with no sign annotation managers',
+    (tester) async {
+      MapScene? scene;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PinPicker(
+            fallback: const GeoPoint(10.7, 106.7),
+            devices: DeviceServices(),
+            mapBuilder: (_, value) {
+              scene = value;
+              return const SizedBox.expand();
+            },
+          ),
+        ),
+      );
+      expect(scene!.pinOnly, true);
+      expect(scene!.signs, isEmpty);
+      expect(scene!.pin, isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+  testWidgets(
+    'changing user tabs retains the native map host instead of disposing it during style loading',
+    (tester) async {
+      final c = AppController(
+        SignSightApi(Uri.parse('https://example.com')),
+        MemorySessionStore(),
+      );
+      final key = GlobalKey();
+      await tester.pumpWidget(
+        SignSightApp(
+          controller: c,
+          mapBuilder: (_, scene) => SizedBox.expand(key: key),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final original = key.currentContext;
+      await tester.tap(find.text('Đóng góp').last);
+      await tester.pumpAndSettle();
+      expect(key.currentContext, same(original));
+      await tester.tap(find.text('Bản đồ').last);
+      await tester.pumpAndSettle();
+      expect(key.currentContext, same(original));
+      await tester.pumpWidget(const SizedBox.shrink());
+      c.dispose();
+    },
+  );
   testWidgets('selected sign offers evidence report without leaving user app', (
     tester,
   ) async {

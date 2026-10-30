@@ -94,6 +94,35 @@ void main() {
         () => controller.draft?.selected != null && !controller.captureBusy,
       );
       await tester.pump();
+      await tester.ensureVisible(find.text('Sửa loại biển nếu AI nhận sai'));
+      await tester.tap(find.text('Sửa loại biển nếu AI nhận sai'));
+      await waitFor(tester, () => controller.captureTypes.isNotEmpty);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byType(DropdownButtonFormField<int>));
+      await tester.tap(find.byType(DropdownButtonFormField<int>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('P.125 ·').last);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.widgetWithText(TextFormField, 'Lý do sửa nhãn'),
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Lý do sửa nhãn'),
+        'Native synthetic correction',
+      );
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      expect(controller.draft!.proposedClass, 3);
+      expect(controller.draft!.selected!.classId, 5);
+      if (const bool.fromEnvironment('SIGNSIGHT_CAPTURE_VISUALS')) {
+        // Capture via adb screencap: converting the Flutter surface can recreate
+        // MapLibre platform views and interfere with lifecycle acceptance.
+        debugPrint('NATIVE_CORRECTION_PREVIEW_READY');
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(seconds: 8)),
+        );
+      }
+      await tester.ensureVisible(find.byType(CheckboxListTile));
       await tester.tap(find.byType(CheckboxListTile));
       await tester.pump();
       await tester.ensureVisible(find.text('Chọn'));
@@ -112,6 +141,7 @@ void main() {
       );
       await controller.loadHistory();
       final observation = controller.contributions.single;
+      expect(observation.code, 'P.125');
       final staff = SignSightApi(origin);
       final session = await staff.login(
         'browser_manager',
@@ -134,7 +164,7 @@ void main() {
       await controller.loadHistory();
       await tester.tap(find.text('Của tôi').last);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('P.102'));
+      await tester.tap(find.text('P.125'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Xem trên bản đồ'));
       await waitFor(tester, () => controller.selectedSign?.id == signId);

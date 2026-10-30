@@ -131,10 +131,18 @@ class UploadedPhoto {
 }
 
 class Detection {
-  const Detection(this.id, this.code, this.name, this.confidence, {this.bbox});
+  const Detection(
+    this.id,
+    this.code,
+    this.name,
+    this.confidence, {
+    this.bbox,
+    this.classId,
+  });
   final String id, code, name;
   final double confidence;
   final List<double>? bbox;
+  final int? classId;
   factory Detection.fromJson(Map<String, dynamic> j) {
     final b = j['bbox'] == null ? null : jsonMap(j['bbox']);
     return Detection(
@@ -142,6 +150,7 @@ class Detection {
       j['qcvn_code'] as String,
       j['name_vi'] as String,
       number(j['confidence'] ?? 0),
+      classId: j['predicted_class'] as int?,
       bbox: b == null
           ? null
           : ['x1', 'y1', 'x2', 'y2'].map((k) => number(b[k])).toList(),
@@ -164,6 +173,8 @@ class CaptureDraft {
   String? selectedId;
   bool previewReady = false;
   bool labelConfirmed = false;
+  int? proposedClass;
+  String correctionReason = '';
   GeoPoint? suggestion, confirmedLocation;
   Detection? get selected =>
       detections.where((d) => d.id == selectedId).firstOrNull;
@@ -185,6 +196,7 @@ class CaptureDraft {
             'qcvn_code': d.code,
             'name_vi': d.name,
             'confidence': d.confidence,
+            if (d.classId != null) 'predicted_class': d.classId,
             if (d.bbox != null)
               'bbox': Map.fromIterables(['x1', 'y1', 'x2', 'y2'], d.bbox!),
           },
@@ -193,6 +205,8 @@ class CaptureDraft {
     'selected_id': selectedId,
     'preview_ready': previewReady,
     'label_confirmed': labelConfirmed,
+    'proposed_class': proposedClass,
+    'correction_reason': correctionReason,
     'suggestion': suggestion?.toJson(),
     'confirmed_location': confirmedLocation?.toJson(),
   };
@@ -215,6 +229,8 @@ class CaptureDraft {
       )
       ..previewReady = j['preview_ready'] == true
       ..labelConfirmed = j['label_confirmed'] == true
+      ..proposedClass = j['proposed_class'] as int?
+      ..correctionReason = (j['correction_reason'] as String?) ?? ''
       ..suggestion = j['suggestion'] == null
           ? null
           : GeoPoint.fromJson(jsonMap(j['suggestion']))
@@ -241,8 +257,8 @@ class Contribution {
     return Contribution(
       j['id'] as String,
       j['image_id'] as String,
-      d['qcvn_code'] as String,
-      d['name_vi'] as String,
+      (j['proposed_qcvn_code'] ?? d['qcvn_code']) as String,
+      (j['proposed_name_vi'] ?? d['name_vi']) as String,
       j['status'] as String,
       signId: j['sign_record_id'] as String?,
       comment: j['review_comment'] as String?,
