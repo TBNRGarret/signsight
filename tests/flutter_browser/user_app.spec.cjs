@@ -3,12 +3,7 @@ const path=require('node:path'),crypto=require('node:crypto');
 const {stubMaps}=require('../browser/map_fixture.cjs');
 const photo=path.join(__dirname,'../browser/fixtures/sign.png');
 const password='Browser-test-password-123';
-async function enterText(page,name,value){
- const field=page.getByRole('textbox',{name,exact:true});
- // Flutter may replace the semantic input when focus creates its editing host.
- await field.click();await expect(field).toBeFocused();
- await field.fill(value);await expect(field).toHaveValue(value);
-}
+const {enterText}=require('./input_helper.cjs');
 async function open(page){
   await stubMaps(page);
   await page.goto('/app/');
@@ -20,8 +15,8 @@ async function registerAndLogin(page){
  expect((await page.request.post('/api/v1/auth/register',{data:{username,email:username+'@example.com',password}})).status()).toBe(201);
  await open(page);
  await page.getByRole('button',{name:'Tài khoản',exact:true}).click();
- await enterText(page,'Tên đăng nhập',username);
- await enterText(page,'Mật khẩu',password);
+ await enterText(page,'Tên đăng nhập',username,{autofillId:'username'});
+ await enterText(page,'Mật khẩu',password,{autofillId:'current-password'});
  const loginResponse=page.waitForResponse(r=>r.request().method()==='POST'&&r.url().endsWith('/api/v1/auth/login'));
  await page.getByRole('button',{name:'Đăng nhập',exact:true}).click();
  expect((await loginResponse).status()).toBe(200);
