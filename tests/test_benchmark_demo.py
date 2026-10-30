@@ -42,7 +42,8 @@ def test_measure_requires_samples_and_warmup(samples, warmup):
         benchmark_demo.measure_ms(lambda: None, samples=samples, warmup=warmup)
 
 
-def test_benchmark_uses_loopback_http_temporary_db_and_real_upload_storage(tmp_path, monkeypatch):
+@pytest.mark.parametrize('custom_mapping',[False,True])
+def test_benchmark_uses_loopback_http_temporary_db_and_real_upload_storage(tmp_path, monkeypatch,custom_mapping):
     from ai_engine.detection import DetectionResult, checkpoint_hash
     from backend.app import main as app_module
 
@@ -54,10 +55,17 @@ def test_benchmark_uses_loopback_http_temporary_db_and_real_upload_storage(tmp_p
     database_sentinel.write_bytes(b'do not modify existing data')
     monkeypatch.setenv('DATABASE_URL', f'sqlite:///{database_sentinel.as_posix()}')
     actual_version = checkpoint_hash(checkpoint)
+    from ai_engine.catalog import SignCatalog
+    from test_catalog_mapping import extended_items,mapping_data
+    catalog=SignCatalog(extended_items() if custom_mapping else None)
+    catalog_path=tmp_path/'catalog.json';catalog_path.write_text(json.dumps([dict(item) for item in catalog.items]))
+    mapping_path=tmp_path/'mapping.json';mapping_path.write_text(json.dumps(mapping_data(catalog,checkpoint)) if custom_mapping else '{}')
 
     class TestDetector:
-        def __init__(self, weights, device, confidence):
+        def __init__(self, weights, device, confidence,*,catalog,mapping_path):
             assert Path(weights) == checkpoint.resolve()
+            assert len(catalog.items)==(11 if custom_mapping else 10)
+            assert (mapping_path is not None)==custom_mapping
             self.version = checkpoint_hash(weights)
 
         def status(self):
@@ -71,12 +79,15 @@ def test_benchmark_uses_loopback_http_temporary_db_and_real_upload_storage(tmp_p
     monkeypatch.setattr(benchmark_demo, 'runtime_metadata', lambda device: {'device': device, 'test_double': True})
     report = benchmark_demo.run_benchmark(
         [image_path], weights=checkpoint, device='cpu', samples=2, warmup=1, confidence=.65,
+        catalog_path=catalog_path if custom_mapping else None,mapping_path=mapping_path if custom_mapping else None,
     )
     assert report['transport'] == 'loopback_http'
     assert report['scope']['database'] == 'temporary'
     assert report['scope']['map_seed_signs'] == 5
     assert report['scope']['concurrency'] == 1
     assert report['model']['version'] == actual_version
+    assert report['model']['catalog_sha256']==catalog.sha256
+    assert bool(report['model']['mapping_sha256'])==custom_mapping
     assert report['map_http']['count'] == 2
     image = report['images'][0]
     assert image['width'] == 64 and image['height'] == 48

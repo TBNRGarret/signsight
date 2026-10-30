@@ -16,15 +16,24 @@ function app(request) {
   }
   const document = {getElementById(id){if(!elements.has(id))elements.set(id,element(id));return elements.get(id);},createElement:()=>element('')};
   const api = {user:{id:'u',username:'rider',role:'user'}, ready:Promise.resolve(),
-    async request(route, options){calls.push(route);if(route==='/ai/status')return {yolo:{ready:true},cnn:{ready:false}};
+    async request(route, options){calls.push(route);if(route==='/taxonomy')return require('./catalog_fixture.cjs');if(route==='/ai/status')return {yolo:{ready:true},cnn:{ready:false}};
       if(route.startsWith('/me/'))return {items:[],total:0,offset:0,limit:10};return request(route,options);}};
   const context = {window:{signSightAuth:api,addEventListener:(name,fn)=>events.set(name,fn)}, document, URLSearchParams,
     navigator:{}, FormData:class{append(){}}, createImageBitmap:async()=>({width:640,height:360,close(){}})};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../frontend/catalog.js'),'utf8'), context);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../frontend/contribution_history.js'),'utf8'), context);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../frontend/observations.js'),'utf8'), context);
   return {calls, api, get:document.getElementById, events};
 }
 const image = {id:'photo',width:640,height:360,size_bytes:5000,exif_latitude:null,exif_longitude:null};
+test('an extended detector class retains its stable ID in the correction selector',async()=>{
+  const detection={id:'extended',qcvn_code:'FIXTURE.42',name_vi:'Synthetic extension',confidence:.9,predicted_class:42};
+  const a=app(async route=>route==='/images'?image:route.endsWith('/content')?{}:{detections:[detection]});await tick();
+  a.get('file').files=[{}];await a.get('file').onchange();
+  const selector=a.get('detections').children[0].querySelector('.class');
+  assert.equal(selector.value,'42');
+  assert.equal(selector.children.at(-1).value,'42');
+});
 test('camera photo uploads and runs YOLO automatically without publishing observations', async()=>{
   const a=app(async route=>route==='/images'?image:route.endsWith('/content')?{}:{detections:[]});await tick();
   a.get('camera').files=[{name:'photo.jpg'}];await a.get('camera').onchange();

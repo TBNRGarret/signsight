@@ -16,6 +16,7 @@ from ai_engine.inference import classifier
 from backend.app.services.duplicate_service import check_and_create_duplicate_candidates
 from backend.app.services.lifecycle_service import calculate_expiration_date, check_and_update_lifecycle_status
 from backend.app.services.image_store import sanitize_image
+from backend.app.core.catalog import require_catalog_id
 
 router = APIRouter()
 
@@ -42,6 +43,7 @@ async def classify_sign_image(request: Request, file: UploadFile = File(...), us
 @router.post("/register", response_model=SignRecordResponse, deprecated=True)
 def register_sign_record(
     payload: SignRecordCreate,
+    request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(require_roles("manager", "admin")),
 ):
@@ -49,12 +51,9 @@ def register_sign_record(
     Registers a new georeferenced traffic sign observation.
     Automatically calculates expiration date, checks for duplicates, and creates DB record.
     """
-    from ai_engine.config import CLASS_MAPPING, CONFIDENCE_THRESHOLD
+    from ai_engine.config import CONFIDENCE_THRESHOLD
 
-    class_info = CLASS_MAPPING.get(payload.predicted_class, {
-        "qcvn_code": "UNKNOWN",
-        "name_vi": "Không xác định"
-    })
+    class_info = require_catalog_id(request.app.state.catalog,payload.predicted_class)
 
     qcvn_code = class_info["qcvn_code"]
     name_vi = class_info["name_vi"]

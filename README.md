@@ -77,7 +77,7 @@ Weights, dataset gốc, database và ảnh upload không nằm trong Git. App v�
 
 Baseline dùng GTSRB ROI để kiểm tra pipeline, chưa chứng minh chất lượng ảnh đường phố Việt Nam. Taxonomy là mapping thử nghiệm của dự án, cần rà soát trước khi áp dụng thực tế. Notebook Drive trong bản public dùng `YOUR_DRIVE_FILE_ID`: tự điền ID nguồn bạn có quyền truy cập. Dataset và weights có điều kiện sử dụng riêng, không được phân phối kèm repo này.
 
-Train dữ liệu Việt Nam: [notebook SupSign 35 lớp với YOLO11s trên Colab](docs/supsign_yolo11s_colab.md). Dataset và checkpoint cache trên Drive; đây là model thử nghiệm, cần nâng taxonomy trước khi tích hợp vào app.
+Train dữ liệu Việt Nam: [notebook SupSign 35 lớp với YOLO11s trên Colab](docs/supsign_yolo11s_colab.md). Dataset và checkpoint cache trên Drive; sau khi train, [rà mapping và tích hợp model trên runtime thử](docs/model_activation.md). Danh mục lớp trên API/web/Flutter lấy từ catalog đã cấu hình; model mới cần mapping được rà và đánh giá thực địa.
 
 ## Cấu hình và lưu trữ
 

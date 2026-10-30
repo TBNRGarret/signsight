@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from backend.app.core.web_files import WebFiles
 from sqlalchemy.orm import sessionmaker
 
-from ai_engine.config import TAXONOMY
+from ai_engine.catalog import SignCatalog
 from backend.app.api.v1.api import api_router
 from backend.app.core.security import AuthRateLimiter
 from backend.app.core.settings import Settings
@@ -25,6 +25,7 @@ from backend.app.core.upload_limit import UploadLimitMiddleware
 from backend.app.services.policy_service import initialize_policy
 from backend.app.services.routing_service import RoutingProvider,make_place_provider
 from backend.app.services.lifecycle_service import expire_due_records
+from backend.app.services.catalog_service import require_database_catalog
 
 
 def create_app(database_engine=None, settings: Settings | None = None, *, user_app_directory: Path | None = None) -> FastAPI:
@@ -37,6 +38,7 @@ def create_app(database_engine=None, settings: Settings | None = None, *, user_a
             init_db(db_engine)
         else:
             require_current_database(db_engine)
+        require_database_catalog(application.state.session_factory, application.state.catalog)
         initialize_policy(application.state.session_factory,settings.confirmation_days)
         def expire():
             with application.state.session_factory() as db: return expire_due_records(db)
@@ -59,11 +61,13 @@ def create_app(database_engine=None, settings: Settings | None = None, *, user_a
         lifespan=lifespan,
     )
     application.state.settings = settings
+    application.state.catalog = SignCatalog.from_file(settings.catalog_path)
     application.state.session_factory = sessionmaker(autocommit=False, autoflush=False, bind=db_engine)
     application.state.auth_limiter = AuthRateLimiter()
     application.state.image_store = ImageStore(settings.storage_root)
     application.state.detector = YoloDetector(settings.yolo_weights, settings.yolo_device,
-                                            confidence=settings.yolo_confidence)
+                                            confidence=settings.yolo_confidence,
+                                            catalog=application.state.catalog,mapping_path=settings.yolo_mapping_path)
     application.state.routing_provider=RoutingProvider(settings.routing_base_url,settings.provider_user_agent)
     application.state.place_provider=make_place_provider(settings)
 
@@ -89,8 +93,8 @@ def create_app(database_engine=None, settings: Settings | None = None, *, user_a
             "description": "AI-Powered Traffic Sign Mapping and Navigation Platform",
             "docs_url": "/docs",
             "web_url": "/web/index.html",
-            "supported_classes_count": len(TAXONOMY),
-            "supported_classes": [f"{item['qcvn_code']}: {item['name_vi']}" for item in TAXONOMY],
+            "supported_classes_count": len(application.state.catalog.items),
+            "supported_classes": [f"{item['qcvn_code']}: {item['name_vi']}" for item in application.state.catalog.items],
         }
 
     frontend = Path(__file__).resolve().parents[2] / "frontend"

@@ -7,13 +7,22 @@ from pathlib import Path
 
 
 def inspect_candidate(checkpoint, evaluation, *, runtime_names=None,
-                      minimum_precision=.85, minimum_recall=.80, verify_model=False):
+                      minimum_precision=.85, minimum_recall=.80, verify_model=False,
+                      catalog=None, mapping_path=None):
     if not all(math.isfinite(v) and 0 <= v <= 1 for v in (minimum_precision, minimum_recall)):
         raise ValueError('Metric targets must be finite values in [0, 1]')
     checkpoint, evaluation = Path(checkpoint), Path(evaluation)
     with checkpoint.open('rb') as stream:
         checksum = hashlib.file_digest(stream, 'sha256').hexdigest()
     report = json.loads(evaluation.read_text(encoding='utf-8-sig'))
+    from ai_engine.catalog import SignCatalog,ModelClassMapping
+    catalog=catalog if catalog is not None else SignCatalog()
+    mapping=None
+    if mapping_path is not None:
+        mapping=ModelClassMapping(json.loads(Path(mapping_path).read_text(encoding='utf-8-sig')),catalog,checkpoint)
+        if runtime_names is not None and runtime_names!=mapping.names:
+            raise ValueError('Explicit runtime names conflict with the reviewed mapping')
+        runtime_names=mapping.names
     if runtime_names is None:
         from ai_engine.config import TAXONOMY
         runtime_names = [item['qcvn_code'] for item in TAXONOMY]
@@ -60,7 +69,8 @@ def inspect_candidate(checkpoint, evaluation, *, runtime_names=None,
         'independent_field_test_available': 'independent_field_test_missing',
         'checkpoint_model_verified': 'checkpoint_model_not_verified',
     }
-    return {'checkpoint_sha256': checksum, 'names': names, 'checks': checks,
+    return {'checkpoint_sha256': checksum,'catalog_sha256':catalog.sha256,
+            'mapping_sha256':mapping.sha256 if mapping else None, 'names': names, 'checks': checks,
             'blockers': [reasons[key] for key, passed in checks.items() if not passed],
             'targets': {'per_class_precision':minimum_precision,'per_class_recall':minimum_recall},
             'ready_for_runtime': all(checks.values()),
@@ -74,10 +84,14 @@ def main():
     parser.add_argument('--evaluation',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--verify-model',action='store_true')
+    parser.add_argument('--catalog',type=Path)
+    parser.add_argument('--mapping',type=Path)
     parser.add_argument('--minimum-precision',type=float,default=.85)
     parser.add_argument('--minimum-recall',type=float,default=.80)
     args=parser.parse_args()
+    from ai_engine.catalog import SignCatalog
     report=inspect_candidate(args.checkpoint,args.evaluation,verify_model=args.verify_model,
+                             catalog=SignCatalog.from_file(args.catalog),mapping_path=args.mapping,
                              minimum_precision=args.minimum_precision,minimum_recall=args.minimum_recall)
     args.output.parent.mkdir(parents=True,exist_ok=True)
     with args.output.open('x',encoding='utf-8') as stream:

@@ -19,7 +19,7 @@ class InferenceResponse(BaseModel):
 
 class SignRecordCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    predicted_class: int = Field(ge=0, le=9)
+    predicted_class: int = Field(ge=0)
     confidence: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
     latitude: float = Field(..., ge=-90.0, le=90.0)
     longitude: float = Field(..., ge=-180.0, le=180.0)

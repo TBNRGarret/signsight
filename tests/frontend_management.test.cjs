@@ -10,15 +10,24 @@ class Element{
 const tick=()=>new Promise(r=>setImmediate(r)),page=(items=[],offset=0,total=items.length,limit=10)=>({items,total,offset,limit});
 function setup(handler,ready){
  const elements=new Map(),events=new Map(),calls=[],redirects=[];
- const api={user:{username:'mod',role:'manager'},ready,async request(route,options){calls.push(route);return handler(route,options);}};
+ const api={user:{username:'mod',role:'manager'},ready,async request(route,options){calls.push(route);if(route==='/taxonomy')return require('./catalog_fixture.cjs');return handler(route,options);}};
  const document={getElementById(id){if(!elements.has(id))elements.set(id,new Element());return elements.get(id);},createElement:tag=>new Element(tag)};
  const window={signSightAuth:api,location:{replace:url=>redirects.push(url)},addEventListener:(n,f)=>events.set(n,f)};
+ window.signSightCatalog=require('../frontend/catalog.js');
  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../frontend/management.js'),'utf8'),{window,document,URLSearchParams,
   createImageBitmap:async()=>({width:100,height:100,close(){}}),URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}}});
  return {api,elements,calls,redirects,get:document.getElementById,changed:events.get('signsight-auth-changed')};
 }
 const summary={contributions:2,reports:1,duplicates:0,signs:1000};
 const empty=async route=>route==='/manager/summary'?summary:page();
+test('review shows the proposed extended catalog label rather than the original AI label',async()=>{
+ const row={id:'extended',image_id:'photo',status:'pending',proposed_class:42,
+  detection:{qcvn_code:'P.102',predicted_class:5,name_vi:'Original',confidence:.9},latitude:10,longitude:106};
+ const a=setup(async route=>route==='/manager/summary'?summary:route.startsWith('/manager/observations')?page([row]):new Blob());
+ a.changed();await tick();await tick();
+ assert.equal(a.get('detail-title').textContent,'FIXTURE.42');
+ assert.ok(a.get('contributions').textContent.includes('FIXTURE.42'));
+});
 test('restored staff session lands on contributions and loads other sections only when selected',async()=>{
  let finish;const a=setup(empty,new Promise(r=>finish=r));finish();await tick();
  assert.ok(a.calls.includes('/manager/summary'));

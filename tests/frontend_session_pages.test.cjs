@@ -14,13 +14,14 @@ class Element {
 function app(request) {
   const elements=new Map(), events=new Map(), calls=[];
   let finish;
-  const api={user:null,ready:new Promise(resolve=>finish=resolve),request:async(...args)=>{calls.push(args[0]);return request(...args);}};
+  const api={user:null,ready:new Promise(resolve=>finish=resolve),request:async(...args)=>{calls.push(args[0]);if(args[0]==='/taxonomy')return require('./catalog_fixture.cjs');return request(...args);}};
   const document={getElementById(id){if(!elements.has(id))elements.set(id,new Element());return elements.get(id);},
     createElement:()=>new Element(),querySelectorAll:()=>[]};
   const window={signSightAuth:api,addEventListener(name,fn){if(!events.has(name))events.set(name,[]);events.get(name).push(fn);},
     dispatchEvent(event){for(const fn of events.get(event.type)||[])fn(event);}};
   const context=vm.createContext({window,document,URLSearchParams,clearTimeout,setTimeout,navigator:{},
     CustomEvent:class{constructor(type){this.type=type;}}});
+  vm.runInContext(read('catalog.js'),context);
   return {api,window,document,elements,context,calls,finish,
     get:id=>document.getElementById(id), run:name=>{if(name==='observations.js')vm.runInContext(read('contribution_history.js'),context);return vm.runInContext(read(name),context);}};
 }
@@ -100,7 +101,7 @@ test('contribution status filter resets pagination and renders a localized empty
   a.get('history-next').onclick();await tick();
   a.get('history-status').value='rejected';
   await a.get('history-status').onchange();
-  assert.match(a.calls.at(-1),/offset=0&limit=10&status=rejected/);
+  assert.match(a.calls.filter(route=>route.startsWith('/me/observations?')).at(-1),/offset=0&limit=10&status=rejected/);
   assert.match(a.get('history').children[0].textContent,/Chưa có đóng góp bị từ chối/);
   assert.equal(a.get('history-prev').disabled,true);
   assert.equal(a.get('history-next').disabled,true);

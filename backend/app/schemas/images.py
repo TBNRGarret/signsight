@@ -32,6 +32,7 @@ class BoundingBox(BaseModel):
 class DetectionResponse(BaseModel):
     id: str
     predicted_class: int
+    model_class_id: int | None = None
     qcvn_code: str
     name_vi: str
     confidence: float
@@ -45,6 +46,8 @@ class RunResponse(BaseModel):
     engine: Literal["cnn", "yolo"]
     task: Literal["classification", "detection"]
     model_version: str
+    mapping_sha256: str | None = None
+    catalog_sha256: str | None = None
     created_at: datetime
     detections: list[DetectionResponse]
 
@@ -55,7 +58,7 @@ class ObservationItem(BaseModel):
     latitude: float = Field(ge=-90, le=90, allow_inf_nan=False)
     longitude: float = Field(ge=-180, le=180, allow_inf_nan=False)
     location_source: Literal["manual_pin", "device", "exif", "user_confirmed"] = "user_confirmed"
-    proposed_class: int | None = Field(default=None, ge=0, le=9, strict=True)
+    proposed_class: int | None = Field(default=None, ge=0, strict=True)
     correction_reason: str | None = Field(default=None, max_length=1000)
 
 
@@ -88,6 +91,8 @@ class ObservationResponse(BaseModel):
     longitude: float
     location_source: str
     proposed_class: int | None
+    proposed_qcvn_code: str | None = None
+    proposed_name_vi: str | None = None
     correction_reason: str | None
     status: Literal["pending", "accepted", "rejected"]
     created_at: datetime

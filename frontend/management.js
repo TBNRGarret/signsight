@@ -9,7 +9,7 @@
  const admin=()=>api.user?.role==='admin';
  const actions={confirm_existing:'Xác nhận còn',report_removed:'Đã tháo',report_damaged:'Hư hỏng',correct_class:'Sửa loại biển',correct_location:'Sửa vị trí',update_evidence:'Bổ sung ảnh'};
  const statuses={active:'Đang hiệu lực',expired:'Quá hạn xác nhận',pending_revalidation:'Chờ kiểm tra lại',removed:'Đã tháo',current:'Đã xác minh',unverified:'Chưa xác minh',needs_confirmation:'Cần xác nhận lại'};
- const codes=['P.127 (50)','P.127 (60)','P.127 (80)','P.125','P.122','P.102','W.245a','W.227','R.301a','R.301e'];
+ let codes=null;
  let epoch=0,active='contributions',selected=null,detailVersion=0,summaryVersion=0,reviewBusy=false,initialized=false;
  const node=(tag,text)=>{const element=document.createElement(tag);if(text!==undefined)element.textContent=text;return element;};
  const message=text=>{$('message').textContent=text;};
@@ -153,6 +153,10 @@
   loadingCell.setAttribute('colspan',String(name==='signs'||name==='accounts'?5:3));loadingRow.append(loadingCell);$(name).replaceChildren(loadingRow);
   $(name).setAttribute('aria-busy','true');$(name+'-prev').disabled=$(name+'-next').disabled=true;
   try{
+   if(!codes&&['contributions','reports'].includes(name)){
+    const items=await window.signSightCatalog.load(api);if(!valid())return;
+    codes=window.signSightCatalog.codes(items);
+   }
    const page=await api.request(path);if(!valid())return;
    if(state.offset>0&&page.total<=state.offset){state.offset=Math.max(0,Math.floor((page.total-1)/state.limit)*state.limit);return loaders[name]();}
    render(page);
@@ -232,7 +236,7 @@
   }catch(error){if(auth===epoch)message(error.message);}
  }
  function changed(){
-  initialized=true;epoch++;clearDetail();reviewBusy=false;
+  initialized=true;epoch++;codes=null;clearDetail();reviewBusy=false;
   $('contribution-status').value='pending';
   $('sign-query').value=$('sign-status').value=$('sign-verification').value='';
   $('sign-limit').value='25';states.signs.limit=25;

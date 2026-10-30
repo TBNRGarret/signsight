@@ -148,17 +148,20 @@ def require_response(response, expected):
     return response.json()
 
 
-def run_benchmark(image_paths, *, weights, device, samples, warmup, confidence):
+def run_benchmark(image_paths, *, weights, device, samples, warmup, confidence,catalog_path=None,mapping_path=None):
     import httpx
     from PIL import Image
     from ai_engine.detection import checkpoint_hash
     from backend.app.core.settings import Settings
+    from ai_engine.catalog import SignCatalog,ModelClassMapping
 
     if samples < 1 or warmup < 1:
         raise ValueError('At least one sample and one warmup are required')
     device_argument(device)
     weights = Path(weights).resolve()
     expected_version = checkpoint_hash(weights)
+    catalog=SignCatalog.from_file(catalog_path)
+    mapping=ModelClassMapping(json.loads(Path(mapping_path).read_text(encoding='utf-8-sig')),catalog,weights) if mapping_path else None
     if not image_paths:
         raise ValueError('Provide at least one image')
     inputs = []
@@ -182,13 +185,14 @@ def run_benchmark(image_paths, *, weights, device, samples, warmup, confidence):
                   'excluded': ['Wi-Fi/WAN', 'HTTPS', 'browser rendering', 'camera/GPS',
                                'OSM tiles', 'Nominatim/OSRM network', 'detection quality']},
         'model': {'weights_file': weights.name, 'version': expected_version, 'confidence': confidence,
+                  'catalog_sha256':catalog.sha256,'mapping_sha256':mapping.sha256 if mapping else None,
                   'nms_iou': .45, 'max_detections': 25, 'image_size_source': 'YoloDetector defaults'},
         'images': [],
     }
     with tempfile.TemporaryDirectory(prefix='signsight-benchmark-') as temporary:
         directory = Path(temporary)
         settings = Settings(storage_root=directory / 'images', yolo_weights=weights,
-                            yolo_device=device, yolo_confidence=confidence)
+                            yolo_device=device, yolo_confidence=confidence,catalog_path=catalog_path,yolo_mapping_path=mapping_path)
         with isolated_server(settings, directory) as (app, address):
             seed_map(app)
             with httpx.Client(base_url=address, timeout=120, trust_env=False) as client:
@@ -285,13 +289,15 @@ def main(argv=None):
     parser.add_argument('--samples', type=int, default=20)
     parser.add_argument('--warmup', type=int, default=3)
     parser.add_argument('--confidence', type=float, default=.65)
+    parser.add_argument('--catalog',type=Path)
+    parser.add_argument('--mapping',type=Path)
     parser.add_argument('--output', type=Path, required=True, help='New JSON report; existing files are never overwritten')
     args = parser.parse_args(argv)
     if args.output.exists():
         parser.error('Output already exists; choose a new report filename')
     try:
         report = run_benchmark(args.image, weights=args.weights, device=args.device, samples=args.samples,
-                               warmup=args.warmup, confidence=args.confidence)
+                               warmup=args.warmup, confidence=args.confidence,catalog_path=args.catalog,mapping_path=args.mapping)
         document = json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         with args.output.open('x', encoding='utf-8') as output:

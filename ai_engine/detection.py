@@ -3,11 +3,13 @@
 import hashlib
 import math
 import os
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
 
 from ai_engine.config import CLASS_MAPPING, PROJECT_ROOT
+from ai_engine.catalog import DEFAULT_CATALOG, ModelClassMapping
 
 
 class DetectorUnavailable(RuntimeError):
@@ -19,12 +21,15 @@ class Prediction:
     predicted_class: int
     confidence: float
     bbox: tuple[float, float, float, float] | None
+    model_class_id: int | None = None
 
 
 @dataclass
 class DetectionResult:
     model_version: str
     predictions: list[Prediction]
+    mapping_sha256: str | None = None
+    catalog_sha256: str | None = None
 
 
 def checkpoint_hash(path: Path) -> str:
@@ -43,12 +48,16 @@ def configure_ultralytics():
 
 
 class YoloDetector:
-    def __init__(self, weights: Path, device: str | None = None, confidence: float = 0.25):
+    def __init__(self, weights: Path, device: str | None = None, confidence: float = 0.25,
+                 *, catalog=None, mapping_path=None):
         if not math.isfinite(confidence) or not 0 < confidence <= 1:
             raise ValueError("YOLO confidence must be finite and greater than 0, up to 1")
         self.weights = Path(weights)
         self.device = device
         self.confidence = confidence
+        self.catalog = catalog or DEFAULT_CATALOG
+        self.mapping_path = Path(mapping_path) if mapping_path is not None else None
+        self._mapping = None
         self._lock = Lock()
         self._model = None
         self._signature = None
@@ -59,8 +68,17 @@ class YoloDetector:
         if not self.weights.is_file():
             self._model = None
             self._reason = "weights_missing"
-            raise DetectorUnavailable("YOLO checkpoint is not configured; train a 10-class detector first")
-        signature = (self.weights.stat().st_mtime_ns, self.weights.stat().st_size)
+            raise DetectorUnavailable("YOLO checkpoint is not configured")
+        mapping_bytes = None
+        if self.mapping_path is not None:
+            try:
+                if self.mapping_path.stat().st_size > 1024*1024: raise ValueError('Mapping too large')
+                mapping_bytes = self.mapping_path.read_bytes()
+            except (OSError,ValueError):
+                self._model = None; self._reason = 'mapping_invalid'
+                raise DetectorUnavailable('YOLO model mapping is missing or invalid') from None
+        signature = (self.weights.stat().st_mtime_ns, self.weights.stat().st_size,
+                     hashlib.sha256(mapping_bytes).hexdigest() if mapping_bytes is not None else None)
         if self._model is not None and signature == self._signature:
             return
         configure_ultralytics()
@@ -70,13 +88,19 @@ class YoloDetector:
             self._reason = "dependencies_missing"
             raise DetectorUnavailable("Install ai_engine/requirements-yolo.txt to use YOLO") from None
         try:
+            mapping = None
+            if mapping_bytes is not None:
+                try: mapping = ModelClassMapping(json.loads(mapping_bytes),self.catalog,self.weights)
+                except (ValueError,TypeError,KeyError):
+                    self._reason = 'mapping_invalid'
+                    raise DetectorUnavailable('YOLO mapping must be reviewed and match this checkpoint/catalog') from None
             model = YOLO(str(self.weights), task="detect")
             names = model.names
             names = [names[i] for i in range(len(names))] if isinstance(names, dict) else list(names)
-            expected = [CLASS_MAPPING[i]["qcvn_code"] for i in range(10)]
+            expected = mapping.names if mapping else [CLASS_MAPPING[i]["qcvn_code"] for i in range(10)]
             if model.task != "detect" or names != expected:
                 self._reason = "taxonomy_mismatch"
-                raise DetectorUnavailable("YOLO checkpoint must use the project's exact 10-class taxonomy")
+                raise DetectorUnavailable("YOLO checkpoint taxonomy must match the configured reviewed mapping or legacy taxonomy")
             version = checkpoint_hash(self.weights)
         except DetectorUnavailable:
             self._model = None
@@ -86,6 +110,7 @@ class YoloDetector:
             self._reason = "invalid_checkpoint"
             raise DetectorUnavailable("YOLO checkpoint could not be loaded") from None
         self._model, self._version, self._signature = model, version, signature
+        self._mapping = mapping
         self._reason = None
 
     def status(self):
@@ -96,7 +121,9 @@ class YoloDetector:
                 return {"ready": False, "reason": self._reason, "model_version": None,
                         "confidence_threshold": self.confidence}
             return {"ready": True, "reason": None, "model_version": self._version,
-                    "confidence_threshold": self.confidence}
+                    "confidence_threshold": self.confidence,
+                    'mapping_sha256': self._mapping.sha256 if self._mapping else None,
+                    'catalog_sha256': self.catalog.sha256}
 
     def predict(self, image) -> DetectionResult:
         with self._lock:
@@ -112,7 +139,8 @@ class YoloDetector:
                     continue
                 for coords, score, class_id in zip(result.boxes.xyxy.cpu().tolist(),
                                                    result.boxes.conf.cpu().tolist(), result.boxes.cls.cpu().tolist()):
-                    if not math.isfinite(class_id) or class_id != int(class_id) or int(class_id) not in CLASS_MAPPING:
+                    maximum = len(self._mapping.targets) if self._mapping else len(CLASS_MAPPING)
+                    if not math.isfinite(class_id) or class_id != int(class_id) or not 0 <= int(class_id) < maximum:
                         raise DetectorUnavailable("Detector returned an unsupported class")
                     if not math.isfinite(score) or not 0 <= score <= 1 or not all(math.isfinite(value) for value in coords):
                         raise DetectorUnavailable("Detector returned invalid coordinates or confidence")
@@ -121,5 +149,8 @@ class YoloDetector:
                            max(0.0, min(x2, image.width)), max(0.0, min(y2, image.height)))
                     if box[2] <= box[0] or box[3] <= box[1]:
                         raise DetectorUnavailable("Detector returned an empty bounding box")
-                    predictions.append(Prediction(int(class_id), float(score), box))
-            return DetectionResult(self._version, predictions)
+                    raw_id = int(class_id)
+                    catalog_id = self._mapping.catalog_id(raw_id) if self._mapping else raw_id
+                    predictions.append(Prediction(catalog_id, float(score), box, raw_id))
+            return DetectionResult(self._version, predictions,
+                                   self._mapping.sha256 if self._mapping else None,self.catalog.sha256)

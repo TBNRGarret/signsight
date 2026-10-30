@@ -2,7 +2,8 @@
   'use strict';
   const api = window.signSightAuth;
   const $ = id => document.getElementById(id);
-  const codes = ['P.127 (50)','P.127 (60)','P.127 (80)','P.125','P.122','P.102','W.245a','W.227','R.301a','R.301e'];
+  const catalog = window.signSightCatalog;
+  let codes = {};
   let epoch = 0, image = null, run = null, bitmap = null, historyOffset = 0;
   let historyVersion = 0;
   let imageBusy = false, imageOperation = 0, pendingPhoto = null, captureState = 'idle';
@@ -61,7 +62,7 @@
   let authInitialized = false;
   function authChanged() {
     authInitialized = true;
-    imageOperation++; imageBusy = false; epoch++; clearImage();
+    imageOperation++; imageBusy = false; epoch++; codes = {}; clearImage();
     $('history').replaceChildren(); historyOffset = 0;
     $('history-status').value = ''; $('history-status').disabled = !api.user;
     $('history-prev').disabled = $('history-next').disabled = true; $('history-page').textContent = '';
@@ -186,6 +187,8 @@
     run = null; positionFields.clear(); locationPicker?.clear(); $('detections').replaceChildren(); $('submit').disabled = true;
     setCaptureState('recognizing','Bước 2/3 · Đang nhận diện biển trong ảnh…'); message('Đang nhận diện biển trong ảnh…');
     const result = await api.request(`/images/${image.id}/${engine}`,{method:'POST'}); if (version !== epoch) return;
+    const items=await catalog.load(api);if(version!==epoch)return;
+    codes=catalog.codes(items);
     run = result; draw(run.detections);
     run.detections.forEach((detection,index) => {
       const card = element('article'); card.dataset.detectionId = detection.id;
@@ -216,8 +219,7 @@
         refreshImageControls();
       };
       const label=element('label','Nhãn đề xuất'),select=element('select');select.className='class';
-      codes.forEach((code,id)=>{const option=element('option',code);option.value=id;select.append(option);});
-      select.value=detection.predicted_class;label.append(select);card.append(label);
+      catalog.fill(select,items,document,detection.predicted_class);label.append(select);card.append(label);
       const [reasonLabel,reason]=input('Lý do sửa nhãn (nếu có)','text','',{maxLength:1000});reason.className='reason';card.append(reasonLabel);
       $('detections').append(card);
     });
@@ -233,6 +235,8 @@
       const latitude = card.querySelector('.lat'), longitude = card.querySelector('.lon');
       if (!latitude.value || !longitude.value || !latitude.checkValidity() || !longitude.checkValidity() || !card.querySelector('.confirmed').checked)
         throw new Error('Xác nhận tọa độ hợp lệ cho từng biển đã chọn.');
+      const selectedClass=card.querySelector('.class').value;
+      if(selectedClass===''||!Object.hasOwn(codes,selectedClass))throw new Error('Chọn loại biển hợp lệ trước khi gửi.');
       items.push({detection_id:card.dataset.detectionId,latitude:Number(latitude.value),longitude:Number(longitude.value),location_source:'user_confirmed',
                   proposed_class:Number(card.querySelector('.class').value),correction_reason:card.querySelector('.reason').value || null});
     }
@@ -253,7 +257,8 @@
     $('history-page').textContent = ''; $('history').setAttribute('aria-busy','true');
     $('history').replaceChildren(element('p','Đang tải lịch sử đóng góp...'));
     try {
-      const result = await api.request(`/me/observations?${query}`); if (!current()) return;
+      const [result,items] = await Promise.all([api.request(`/me/observations?${query}`),catalog.load(api)]); if (!current()) return;
+      codes=catalog.codes(items);
       const cards=result.items.map(row=>({...window.signSightHistory.createCard({document,observation:row,codes}),row}));
       $('history').replaceChildren(...cards.map(item=>item.card));
       for(const item of cards){

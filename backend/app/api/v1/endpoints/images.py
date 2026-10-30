@@ -18,6 +18,7 @@ from backend.app.services.image_store import sanitize_image
 from backend.app.services.observation_service import authorized_image, persist_run, run_response, observation_response, review_observation
 from backend.app.services.policy_service import confirmation_days
 from backend.app.services.evidence_service import sign_evidence
+from backend.app.core.catalog import require_catalog_id
 
 router = APIRouter()
 
@@ -101,7 +102,7 @@ def detect(image_id: str, request: Request, user: User = Depends(get_current_use
     try:
         with Image.open(io.BytesIO(data)) as source:
             result = request.app.state.detector.predict(source.convert("RGB"))
-        return run_response(persist_run(db, image, "yolo", result))
+        return run_response(persist_run(db, image, "yolo", result,request.app.state.catalog),request.app.state.catalog)
     except DetectorUnavailable as error:
         raise HTTPException(503, str(error)) from error
 
@@ -116,7 +117,7 @@ def classify(image_id: str, request: Request, user: User = Depends(get_current_u
     db.rollback()
     prediction = classifier.predict(data)
     result = DetectionResult(classifier.model_version, [Prediction(prediction["predicted_class"], prediction["confidence"], None)])
-    return run_response(persist_run(db, image, "cnn", result))
+    return run_response(persist_run(db, image, "cnn", result,request.app.state.catalog),request.app.state.catalog)
 
 
 @router.get("/ai/status")
@@ -126,7 +127,7 @@ def ai_status(request: Request, user: User = Depends(get_current_user)):
 
 
 @router.get("/inference-runs/{run_id}", response_model=RunResponse)
-def get_run(run_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_run(run_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     run = db.get(InferenceRun, run_id)
     if run is None:
         raise HTTPException(404, "Inference run not found")
@@ -136,14 +137,15 @@ def get_run(run_id: str, user: User = Depends(get_current_user), db: Session = D
         submitted = db.query(Observation).join(ImageDetection).filter(ImageDetection.run_id == run_id)
         if user.role not in ("manager", "admin") or submitted.first() is None:
             raise HTTPException(404, "Inference run not found")
-    return run_response(run)
+    return run_response(run,request.app.state.catalog)
 
 
 @router.post("/observations", response_model=list[ObservationResponse], status_code=201)
-def submit(payload: ObservationBatch, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def submit(payload: ObservationBatch, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     image = authorized_image(db, payload.image_id, user, owner_only=True)
     rows = []
     for item in payload.items:
+        if item.proposed_class is not None: require_catalog_id(request.app.state.catalog,item.proposed_class)
         detection = db.get(ImageDetection, item.detection_id)
         if detection is None or detection.run.image_id != image.id:
             raise HTTPException(404, "Detection does not belong to this image")
@@ -157,43 +159,43 @@ def submit(payload: ObservationBatch, user: User = Depends(get_current_user), db
     except IntegrityError as error:
         db.rollback()
         raise HTTPException(409, "A detection has already been submitted") from error
-    return [observation_response(row) for row in rows]
+    return [observation_response(row,request.app.state.catalog) for row in rows]
 
 
-def observation_page(query, offset, limit):
-    return ObservationPage(items=[observation_response(row) for row in query.order_by(Observation.created_at.desc(), Observation.id).offset(offset).limit(limit)],
+def observation_page(query, offset, limit, catalog):
+    return ObservationPage(items=[observation_response(row,catalog) for row in query.order_by(Observation.created_at.desc(), Observation.id).offset(offset).limit(limit)],
                            total=query.count(), offset=offset, limit=limit)
 
 
 @router.get("/me/observations", response_model=ObservationPage)
-def own_observations(offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=100),
+def own_observations(request: Request, offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=100),
                      status: Literal["pending", "accepted", "rejected"] | None = Query(None),
                      user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     query = db.query(Observation).filter(Observation.created_by == user.id)
     if status is not None:
         query = query.filter(Observation.status == status)
-    return observation_page(query, offset, limit)
+    return observation_page(query, offset, limit,request.app.state.catalog)
 
 
 @router.get("/manager/observations", response_model=ObservationPage)
-def pending_observations(status: Literal["pending", "accepted", "rejected"] = "pending", offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=100),
+def pending_observations(request: Request, status: Literal["pending", "accepted", "rejected"] = "pending", offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=100),
                          user: User = Depends(require_roles("manager", "admin")), db: Session = Depends(get_db)):
-    return observation_page(db.query(Observation).filter(Observation.status == status), offset, limit)
+    return observation_page(db.query(Observation).filter(Observation.status == status), offset, limit,request.app.state.catalog)
 
 
 @router.get("/observations/{observation_id}", response_model=ObservationResponse)
-def get_observation(observation_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_observation(observation_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     observation = db.get(Observation, observation_id)
     if observation is None or (observation.created_by != user.id and user.role not in ("manager", "admin")):
         raise HTTPException(404, "Observation not found")
-    return observation_response(observation)
+    return observation_response(observation,request.app.state.catalog)
 
 
 @router.post("/manager/observations/{observation_id}/review", response_model=ObservationResponse)
 def review(observation_id: str, payload: ObservationReview, request: Request,
            user: User = Depends(require_roles("manager", "admin")), db: Session = Depends(get_db)):
     days=confirmation_days(db,request.app.state.settings.confirmation_days)
-    return observation_response(review_observation(db, observation_id, payload, user, days))
+    return observation_response(review_observation(db, observation_id, payload, user, days,request.app.state.catalog),request.app.state.catalog)
 
 
 @router.get("/signs/{record_id}/evidence")

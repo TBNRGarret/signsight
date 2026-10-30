@@ -58,7 +58,7 @@ Manifest lưu provenance, hash ảnh/nhãn, bản sao bị loại, lý do cách 
 
 ## Tích hợp hệ thống
 
-Model mới có 35 tên lớp dataset, chưa phải QCVN mapping đã nghiệm thu. Backend hiện yêu cầu taxonomy 10 lớp: **không chép weights mới vào đường dẫn checkpoint phục vụ app**. Cần mở rộng catalog/mapping/validation và giữ ý nghĩa ID các record cũ bằng migration có test trước khi tích hợp.
+Model mới có 35 tên lớp dataset, chưa phải QCVN mapping đã nghiệm thu. Backend đã hỗ trợ catalog mở rộng và mapping riêng theo checkpoint, giữ nguyên ID cũ; **không chép weights mới đè lên model đang phục vụ**. Làm theo [hướng dẫn mapping, kiểm tra và tích hợp trên bản sao runtime](model_activation.md).
 
 Sau khi tải ZIP, chạy từ repo root để kiểm tra ứng viên (đường dẫn report lấy từ thư mục export):
 
@@ -66,9 +66,9 @@ Sau khi tải ZIP, chạy từ repo root để kiểm tra ứng viên (đường
 python -m scripts.inspect_yolo_candidate --checkpoint 'PATH_TO_BEST_PT' --evaluation 'PATH_TO_VALIDATION_JSON' --output '.cache/candidate-review.json' --verify-model
 ```
 
-Công cụ xác minh hash checkpoint, tên/thứ tự class, metrics validation từng lớp, thiếu ground truth và tương thích runtime. Ngưỡng mặc định precision 0,85/recall 0,80 từng lớp chỉ là mục tiêu rà soát của dự án, không bảo đảm an toàn. Report tự khai có field test vẫn cần xem bằng chứng; công cụ không tự thay weights. Với model 35 lớp, runtime hiện tại sẽ báo chặn taxonomy như dự kiến.
+Công cụ xác minh hash checkpoint, tên/thứ tự class, metrics validation từng lớp, thiếu ground truth và tương thích runtime. Với model mới, thêm `--catalog` và `--mapping` đã rà như hướng dẫn trên; không cung cấp mapping thì chỉ kiểm tra tương thích taxonomy cũ. Ngưỡng mặc định precision 0,85/recall 0,80 từng lớp là mục tiêu rà soát của dự án. Report tự khai có field test vẫn cần xem bằng chứng; công cụ không tự thay weights.
 
-Notebook được tạo từ `scripts/generate_supsign_notebook.py`, nhúng hai module đã kiểm thử. Chạy lại generator sau khi sửa helper:
+Notebook được tạo từ `scripts/generate_supsign_notebook.py`, nhúng ba module đã kiểm thử (EDA, training và gdown). Chạy lại generator sau khi sửa helper:
 
 ```bash
 python -m scripts.generate_supsign_notebook

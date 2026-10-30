@@ -26,7 +26,7 @@ import torch
 assert torch.cuda.is_available(), 'Chọn GPU runtime trước khi train.'
 print(torch.__version__, torch.cuda.get_device_name(0))''')
     embedded = {name:(ROOT/name).read_text(encoding='utf-8') for name in (
-        'ai_engine/config.py', 'ai_engine/detection.py', 'ai_engine/prepare_detection_data.py',
+        'ai_engine/config.py', 'ai_engine/catalog.py', 'ai_engine/detection.py', 'ai_engine/prepare_detection_data.py',
         'ai_engine/train_detection.py', 'ai_engine/notebook_data.py', 'data/taxonomy.json')}
     splits = {name:(ROOT/'data/processed'/name).read_bytes() for name in ('train.csv','val.csv','test.csv')}
     # GzipFile writes OS=255 on every platform. Python 3.11 gzip.compress

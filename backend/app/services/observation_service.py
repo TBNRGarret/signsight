@@ -4,7 +4,8 @@ from datetime import datetime, timedelta
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from ai_engine.config import CLASS_MAPPING, CONFIDENCE_THRESHOLD
+from ai_engine.config import CONFIDENCE_THRESHOLD
+from ai_engine.catalog import DEFAULT_CATALOG
 from backend.app.db.models import (
     UploadedImage, InferenceRun, ImageDetection, Observation, SignRecord, Evidence, ConfirmationEvent, SignReport,
 )
@@ -34,34 +35,39 @@ def authorized_image(db, image_id, user, owner_only=False):
     raise HTTPException(404, "Image not found")
 
 
-def detection_response(detection):
-    info = CLASS_MAPPING[detection.predicted_class]
+def detection_response(detection, catalog=DEFAULT_CATALOG):
+    info = catalog.by_id[detection.predicted_class]
     bbox = None if detection.x1 is None else BoundingBox(
         x1=detection.x1, y1=detection.y1, x2=detection.x2, y2=detection.y2,
     )
     return DetectionResponse(
         id=detection.id, predicted_class=detection.predicted_class,
+        model_class_id=detection.model_class_id,
         qcvn_code=info["qcvn_code"], name_vi=info["name_vi"], confidence=detection.confidence,
         is_uncertain=detection.confidence < CONFIDENCE_THRESHOLD, bbox=bbox,
     )
 
 
-def run_response(run):
+def run_response(run, catalog=DEFAULT_CATALOG):
     return RunResponse(
         id=run.id, image_id=run.image_id, engine=run.engine,
         task="detection" if run.engine == "yolo" else "classification",
         model_version=run.model_version, created_at=run.created_at,
-        detections=[detection_response(item) for item in run.detections],
+        mapping_sha256=run.mapping_sha256,catalog_sha256=run.catalog_sha256,
+        detections=[detection_response(item,catalog) for item in run.detections],
     )
 
 
-def observation_response(observation):
+def observation_response(observation, catalog=DEFAULT_CATALOG):
     run = observation.detection.run
+    proposed=catalog.by_id.get(observation.proposed_class)
     return ObservationResponse(
-        id=observation.id, image_id=run.image_id, detection=detection_response(observation.detection),
+        id=observation.id, image_id=run.image_id, detection=detection_response(observation.detection,catalog),
         engine=run.engine, model_version=run.model_version, created_by=observation.created_by,
         latitude=observation.latitude, longitude=observation.longitude,
         location_source=observation.location_source, proposed_class=observation.proposed_class,
+        proposed_qcvn_code=proposed['qcvn_code'] if proposed else None,
+        proposed_name_vi=proposed['name_vi'] if proposed else None,
         correction_reason=observation.correction_reason, status=observation.status,
         created_at=observation.created_at, reviewed_by=observation.reviewed_by,
         reviewed_at=observation.reviewed_at, review_comment=observation.review_comment,
@@ -69,14 +75,14 @@ def observation_response(observation):
     )
 
 
-def persist_run(db, image, engine, result):
+def persist_run(db, image, engine, result, catalog=DEFAULT_CATALOG):
     # Validate adapter output before writing. Malformed results never become observations.
     import math
     if len(result.predictions) > 25 or not result.model_version or len(result.model_version) > 100:
         raise HTTPException(503, "Invalid inference result")
     rows = []
     for ordinal, prediction in enumerate(result.predictions):
-        if type(prediction.predicted_class) is not int or prediction.predicted_class not in CLASS_MAPPING or not math.isfinite(prediction.confidence) or not 0 <= prediction.confidence <= 1:
+        if type(prediction.predicted_class) is not int or prediction.predicted_class not in catalog.by_id or not math.isfinite(prediction.confidence) or not 0 <= prediction.confidence <= 1:
             raise HTTPException(503, "Invalid inference result")
         coordinates = dict(x1=None, y1=None, x2=None, y2=None)
         if engine == "yolo":
@@ -90,8 +96,18 @@ def persist_run(db, image, engine, result):
                 raise HTTPException(503, "Detector returned an out-of-bounds box")
             coordinates = box.model_dump()
         rows.append(ImageDetection(ordinal=ordinal, predicted_class=prediction.predicted_class,
+                                   model_class_id=getattr(prediction,'model_class_id',None),
                                    confidence=prediction.confidence, **coordinates))
-    run = InferenceRun(image_id=image.id, engine=engine, model_version=result.model_version, detections=rows)
+    import re
+    mapping_hash=getattr(result,'mapping_sha256',None)
+    catalog_hash=getattr(result,'catalog_sha256',None)
+    if (any(value is not None and (not isinstance(value,str) or not re.fullmatch('[a-f0-9]{64}',value))
+            for value in (mapping_hash,catalog_hash)) or
+        catalog_hash is not None and catalog_hash!=catalog.sha256 or
+        any(row.model_class_id is not None and (type(row.model_class_id) is not int or row.model_class_id<0) for row in rows)):
+        raise HTTPException(503,'Invalid inference provenance')
+    run = InferenceRun(image_id=image.id, engine=engine, model_version=result.model_version, detections=rows,
+                       mapping_sha256=mapping_hash,catalog_sha256=catalog_hash)
     db.rollback()  # Release the read snapshot held during inference before starting a write.
     db.add(run)
     db.commit()
@@ -99,7 +115,7 @@ def persist_run(db, image, engine, result):
     return run
 
 
-def review_observation(db: Session, observation_id, payload, reviewer, confirmation_days):
+def review_observation(db: Session, observation_id, payload, reviewer, confirmation_days, catalog=DEFAULT_CATALOG):
     reviewer_id = reviewer.id
     db.rollback()  # SQLite writers must not upgrade a stale auth/read snapshot.
     now = datetime.utcnow()
@@ -118,7 +134,9 @@ def review_observation(db: Session, observation_id, payload, reviewer, confirmat
         image = db.get(UploadedImage, detection.run.image_id)
         class_id = observation.proposed_class if observation.proposed_class is not None else detection.predicted_class
         corrected = class_id != detection.predicted_class
-        info = CLASS_MAPPING[class_id]
+        if class_id not in catalog.by_id:
+            db.rollback(); raise HTTPException(409,'Contribution catalog entry is unavailable; restore the configured catalog')
+        info = catalog.by_id[class_id]
         record = SignRecord(
             predicted_class=class_id, qcvn_code=info["qcvn_code"], name_vi=info["name_vi"],
             confidence=0.0 if corrected else detection.confidence,

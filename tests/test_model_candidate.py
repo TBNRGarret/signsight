@@ -3,6 +3,23 @@ import json
 from scripts.inspect_yolo_candidate import inspect_candidate
 
 
+def test_candidate_uses_reviewed_checkpoint_bound_mapping_without_claiming_field_acceptance(tmp_path):
+    from ai_engine.catalog import SignCatalog
+    from test_catalog_mapping import extended_items,mapping_data
+    catalog=SignCatalog(extended_items())
+    checkpoint=tmp_path/'best.pt';checkpoint.write_bytes(b'fixture')
+    mapping=tmp_path/'mapping.json';mapping.write_text(json.dumps(mapping_data(catalog,checkpoint)))
+    report=tmp_path/'evaluation.json'
+    report.write_text(json.dumps({'names':['No_entry','Fixture_extra'],'split':'val',
+        'checkpoint_sha256':hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
+        'metrics':{'map50':.9},'per_class':[], 'independent_field_test':False}))
+    result=inspect_candidate(checkpoint,report,catalog=catalog,mapping_path=mapping)
+    assert result['checks']['runtime_taxonomy_matches'] is True
+    assert result['catalog_sha256']==catalog.sha256 and len(result['mapping_sha256'])==64
+    assert result['ready_for_runtime'] is False
+    assert 'independent_field_test_missing' in result['blockers']
+
+
 def test_candidate_metrics_cannot_make_a_35_class_model_compatible_with_legacy_runtime(tmp_path):
     checkpoint=tmp_path/'best.pt';checkpoint.write_bytes(b'fixture checkpoint')
     report=tmp_path/'evaluation_report.json'

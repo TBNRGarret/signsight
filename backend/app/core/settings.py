@@ -20,6 +20,8 @@ class Settings:
     yolo_weights: Path = field(default_factory=lambda: PROJECT_ROOT / "ai_engine" / "checkpoints" / "detection" / "best.pt")
     yolo_device: str | None = None
     yolo_confidence: float = 0.65
+    catalog_path: Path | None = None
+    yolo_mapping_path: Path | None = None
     routing_base_url: str = 'https://router.project-osrm.org'
     places_provider: str = 'photon'
     places_base_url: str | None = None
@@ -47,6 +49,8 @@ class Settings:
             raise ValueError('Lifecycle interval must be 1..86400 seconds')
         object.__setattr__(self, "storage_root", Path(self.storage_root).resolve())
         object.__setattr__(self, "yolo_weights", Path(self.yolo_weights).resolve())
+        for name in ('catalog_path','yolo_mapping_path'):
+            if getattr(self,name) is not None: object.__setattr__(self,name,Path(getattr(self,name)).resolve())
         if not 1024 <= self.max_upload_bytes <= 50 * 1024 * 1024:
             raise ValueError("Upload limit must be between 1 KiB and 50 MiB")
         if not 1 <= self.max_image_pixels <= 40_000_000:
@@ -86,6 +90,8 @@ class Settings:
             ("SIGNSIGHT_YOLO_WEIGHTS", "yolo_weights", Path),
             ("SIGNSIGHT_YOLO_DEVICE", "yolo_device", str),
             ("SIGNSIGHT_YOLO_CONFIDENCE", "yolo_confidence", float),
+            ('SIGNSIGHT_CATALOG_PATH','catalog_path',Path),
+            ('SIGNSIGHT_YOLO_MAPPING_PATH','yolo_mapping_path',Path),
             ('SIGNSIGHT_ROUTING_BASE_URL','routing_base_url',str),
             ('SIGNSIGHT_PLACES_BASE_URL','places_base_url',str),
             ('SIGNSIGHT_PROVIDER_USER_AGENT','provider_user_agent',str),

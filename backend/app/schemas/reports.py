@@ -8,7 +8,7 @@ class ReportCreate(BaseModel):
     action:Literal['confirm_existing','report_removed','report_damaged','correct_class','correct_location','update_evidence']
     image_id:str=Field(min_length=1,max_length=36)
     comment:str=Field(min_length=3,max_length=2000)
-    proposed_class:int|None=Field(None,ge=0,le=9,strict=True)
+    proposed_class:int|None=Field(None,ge=0,strict=True)
     latitude:float|None=Field(None,ge=-90,le=90,allow_inf_nan=False)
     longitude:float|None=Field(None,ge=-180,le=180,allow_inf_nan=False)
 

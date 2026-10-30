@@ -9,15 +9,14 @@ from backend.app.services.lifecycle_service import check_and_update_lifecycle_st
 from backend.app.services.map_service import VISIBLE,nearby_signs
 import json
 from backend.app.services.evidence_service import sign_evidence
+from backend.app.core.catalog import require_catalog_id
 
 router=APIRouter()
 
 
 @router.get('/taxonomy')
-def taxonomy(user=Depends(get_current_user)):
-    from ai_engine.config import TAXONOMY
-    return {'items': [{key: item[key] for key in ('new_id', 'qcvn_code', 'name_vi')}
-                      for item in TAXONOMY]}
+def taxonomy(request:Request,user=Depends(get_current_user)):
+    return {'items':request.app.state.catalog.public_items(),'catalog_sha256':request.app.state.catalog.sha256}
 
 
 def page(query,offset,limit):
@@ -26,9 +25,9 @@ def page(query,offset,limit):
 
 
 @router.get('/map/signs')
-def map_signs(min_lat:float|None=Query(None,ge=-90,le=90,allow_inf_nan=False),max_lat:float|None=Query(None,ge=-90,le=90,allow_inf_nan=False),
+def map_signs(request:Request,min_lat:float|None=Query(None,ge=-90,le=90,allow_inf_nan=False),max_lat:float|None=Query(None,ge=-90,le=90,allow_inf_nan=False),
               min_lon:float|None=Query(None,ge=-180,le=180,allow_inf_nan=False),max_lon:float|None=Query(None,ge=-180,le=180,allow_inf_nan=False),
-              class_id:int|None=Query(None,ge=0,le=9),status:Literal['active','expired','pending_revalidation','removed']|None=None,
+              class_id:int|None=Query(None,ge=0),status:Literal['active','expired','pending_revalidation','removed']|None=None,
               offset:int=Query(0,ge=0),limit:int=Query(50,ge=1,le=100),user=Depends(get_current_user),db:Session=Depends(get_db)):
     check_and_update_lifecycle_status(db)
     query=db.query(SignRecord).filter(SignRecord.status==status) if status else db.query(SignRecord).filter(SignRecord.status.in_(VISIBLE))
@@ -36,7 +35,9 @@ def map_signs(min_lat:float|None=Query(None,ge=-90,le=90,allow_inf_nan=False),ma
     if any(value is not None for value in bounds):
         if any(value is None for value in bounds) or min_lat>=max_lat or min_lon>=max_lon: raise HTTPException(422,'Provide four ordered map bounds')
         query=query.filter(SignRecord.latitude.between(min_lat,max_lat),SignRecord.longitude.between(min_lon,max_lon))
-    if class_id is not None: query=query.filter(SignRecord.predicted_class==class_id)
+    if class_id is not None:
+        require_catalog_id(request.app.state.catalog,class_id)
+        query=query.filter(SignRecord.predicted_class==class_id)
     return page(query,offset,limit)
 
 

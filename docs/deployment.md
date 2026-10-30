@@ -35,6 +35,8 @@ Recovery produces `signsight.db` and `images/` directly in the destination. Set 
 
 Backups contain private accounts, password hashes, images and metadata. Keep them outside public Git and copy a verified backup to another private disk/location. They do not include weights, external legacy evidence URLs, environment configuration or certificates; preserve those separately. Stop the service before changing to a recovered directory. Run a recovery drill in a separate runtime before considering deployment accepted.
 
+For a custom model, preserve the exact catalog JSON and reviewed mapping JSON alongside the weights and environment configuration. The DB backup includes the catalog identity registry, but not these external configuration files. Restore with matching `SIGNSIGHT_CATALOG_PATH` and `SIGNSIGHT_YOLO_MAPPING_PATH`; startup rejects missing/reassigned catalog identities. See [model_activation.md](model_activation.md).
+
 ## Prepared server configuration
 
 1. Install the project's Python dependencies plus `ai_engine/requirements-yolo.txt`; build Flutter web if needed. Keep the runtime directory outside the source checkout.

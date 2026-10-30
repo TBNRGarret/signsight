@@ -19,6 +19,7 @@ def test_yolo_notebook_is_self_contained_and_has_training_evaluation_download():
         assert required in code
     assert notebook['metadata']['accelerator'] == 'GPU'
     assert all(not cell.get('outputs') for cell in notebook['cells'])
+    assert 'ai_engine/catalog.py' in code
 
 
 def test_yolo_notebook_uses_kaggle_source_and_preserves_embedded_splits():

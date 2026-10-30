@@ -2,7 +2,7 @@
 import json
 from datetime import datetime
 from fastapi import HTTPException
-from ai_engine.config import CLASS_MAPPING
+from ai_engine.catalog import DEFAULT_CATALOG
 from backend.app.db.models import SignReport,SignRecord,UploadedImage,Evidence,ConfirmationEvent,SignAudit
 
 
@@ -17,7 +17,7 @@ def audit(db,record,actor_id,action,before,report_id=None):
                     before_json=json.dumps(before,ensure_ascii=False),after_json=json.dumps(snapshot(record),ensure_ascii=False)))
 
 
-def review_report(db,report_id,payload,reviewer,store):
+def review_report(db,report_id,payload,reviewer,store,catalog=DEFAULT_CATALOG):
     actor=reviewer.id; db.rollback()
     status='accepted' if payload.action=='accept' else 'rejected'; now=datetime.utcnow()
     claimed=db.query(SignReport).filter(SignReport.id==report_id,SignReport.status=='pending').update(
@@ -44,7 +44,9 @@ def review_report(db,report_id,payload,reviewer,store):
             record.status='active'; record.verification_status='current'
             record.last_confirmed_at=now
             if action=='correct_class':
-                info=CLASS_MAPPING[report.proposed_class]
+                if report.proposed_class not in catalog.by_id:
+                    db.rollback();raise HTTPException(409,'Report catalog entry is unavailable; restore the configured catalog')
+                info=catalog.by_id[report.proposed_class]
                 record.predicted_class=report.proposed_class; record.qcvn_code=info['qcvn_code']; record.name_vi=info['name_vi']
                 record.confidence=0; record.is_uncertain=True
             elif action=='correct_location':

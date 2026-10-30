@@ -283,9 +283,6 @@
             <label for="filter-class">Loại biển</label>
             <select id="filter-class">
               <option value="">Tất cả</option>
-              <option value="0">P.127 (50)</option><option value="1">P.127 (60)</option><option value="2">P.127 (80)</option>
-              <option value="3">P.125</option><option value="4">P.122</option><option value="5">P.102</option>
-              <option value="6">W.245a</option><option value="7">W.227</option><option value="8">R.301a</option><option value="9">R.301e</option>
             </select>
           </div>
           <div class="form-group">
@@ -368,6 +365,7 @@
   <script src="vendor/maplibre/maplibre-gl.js?v=6.15.0" integrity="sha256-GjspOMZ2IS0Mxb/yYPkBu+Lz/g0fPeSeQrWq2t0Ov2U="></script>
   <script src="map.js?v=20261023-ofm"></script>
   <script src="auth.js?v=20261020-remember"></script>
+  <script src="catalog.js?v=20261030"></script>
   <script src="routing.js?v=20261023-ofm"></script>
   <script src="reports.js"></script>
   <script src="sign_link.js?v=20261021"></script>
@@ -441,6 +439,12 @@
       if (canManage() && !staffInspection()) { window.location?.replace('management.html'); return; }
       document.body?.classList?.toggle('staff-inspection', staffInspection());
       authGeneration++;
+      const generation=authGeneration,filter=document.getElementById('filter-class');
+      window.signSightCatalog.fill(filter,[],document,'','Tất cả');filter.disabled=true;
+      if(api.user)window.signSightCatalog.load(api).then(items=>{
+        if(generation!==authGeneration)return;
+        window.signSightCatalog.fill(filter,items,document,'','Tất cả');filter.disabled=false;
+      }).catch(()=>{if(generation===authGeneration)filter.title='Chưa tải được danh mục. Tải lại trang để thử lại.';});
       if (!api.user) {
         markers.forEach(marker => map.removeLayer(marker)); markers = [];
         document.getElementById('sign-list').replaceChildren();

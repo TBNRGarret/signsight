@@ -28,6 +28,40 @@ def test_empty_database_and_repeat_migrations(tmp_path):
         engine.dispose()
 
 
+def test_catalog_provenance_upgrade_keeps_existing_inference_ids_and_labels(tmp_path):
+    from alembic import command
+    from backend.app.db.migrations import migration_config
+    from sqlalchemy import MetaData, Table
+    from backend.app.db.models import InferenceRun, ImageDetection
+    engine=make_engine(f'sqlite:///{tmp_path / "previous.db"}')
+    config=migration_config()
+    with engine.begin() as connection:
+        config.attributes['connection']=connection
+        command.upgrade(config,'0005_duplicate_links')
+    tables=MetaData()
+    with engine.begin() as connection:
+        users=Table('users',tables,autoload_with=connection)
+        images=Table('uploaded_images',tables,autoload_with=connection)
+        runs=Table('inference_runs',tables,autoload_with=connection)
+        detections=Table('image_detections',tables,autoload_with=connection)
+        connection.execute(users.insert(),dict(id='u',username='old',email='old@example.com',role='user',is_active=True,credential_version=0))
+        connection.execute(images.insert(),dict(id='image',uploaded_by='u',storage_key='fixture.jpg',sha256='0'*64,
+                                               size_bytes=1,width=32,height=32,created_at=datetime.utcnow()))
+        connection.execute(runs.insert(),dict(id='run',image_id='image',engine='yolo',model_version='old-checkpoint',created_at=datetime.utcnow()))
+        connection.execute(detections.insert(),dict(id='detection',run_id='run',ordinal=0,predicted_class=5,confidence=.9,
+                                                    x1=1,y1=1,x2=20,y2=20))
+    upgrade_database(engine)
+    try:
+        with sessionmaker(bind=engine)() as db:
+            run=db.get(InferenceRun,'run');detection=db.get(ImageDetection,'detection')
+            assert run.image_id=='image' and run.model_version=='old-checkpoint'
+            assert run.mapping_sha256 is None and run.catalog_sha256 is None
+            assert detection.predicted_class==5 and detection.model_class_id is None
+        assert len(list((tmp_path/'backups').glob('*.sqlite3')))==1
+    finally:
+        engine.dispose()
+
+
 def test_legacy_data_preserved_without_default_passwords(tmp_path):
     url = f"sqlite:///{tmp_path / 'legacy.db'}"
     legacy_engine = create_engine(url)

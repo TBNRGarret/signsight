@@ -5,6 +5,13 @@ from sqlalchemy.orm import relationship, declarative_base
 
 Base = declarative_base()
 
+class SignCatalogEntry(Base):
+    __tablename__ = 'sign_catalog_entries'
+
+    id = Column(Integer,primary_key=True,autoincrement=False)
+    qcvn_code = Column(String(20),unique=True,nullable=False)
+    name_vi = Column(String(255),nullable=False)
+
 class User(Base):
     __tablename__ = "users"
 
@@ -127,6 +134,8 @@ class UploadedImage(Base):
 
 class InferenceRun(Base):
     __tablename__ = "inference_runs"
+    mapping_sha256 = Column(String(64), nullable=True)
+    catalog_sha256 = Column(String(64), nullable=True)
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     image_id = Column(String(36), ForeignKey("uploaded_images.id"), nullable=False, index=True)
@@ -138,6 +147,7 @@ class InferenceRun(Base):
 
 class ImageDetection(Base):
     __tablename__ = "image_detections"
+    model_class_id = Column(Integer, nullable=True)
     __table_args__ = (UniqueConstraint("run_id", "ordinal", name="uq_detection_run_ordinal"),)
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
