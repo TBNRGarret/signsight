@@ -1,6 +1,21 @@
 # SupSign → YOLO11s trên Colab
 
-Notebook: [SignSight_SupSign_YOLO11s_Colab.ipynb](../notebooks/SignSight_SupSign_YOLO11s_Colab.ipynb).
+## Luồng hai notebook: EDA trước, train sau
+
+1. Upload [SignSight_SupSign_EDA_Colab.ipynb](../notebooks/SignSight_SupSign_EDA_Colab.ipynb) lên Colab, dùng **CPU runtime**. Điền `SOURCE_URL` bằng link file ZIP SupSign cho phép tải qua link. Giữ `SAVE_TO_DRIVE=True` để lưu dataset cache qua các phiên.
+2. Chạy hết notebook EDA. Cell cuối tải `DATASET_VERSION_eda_TIMESTAMP.zip`: **gửi ZIP báo cáo này để rà soát trước**, không cần gửi cache dataset lớn. Báo cáo chứa thống kê subset CAR35, audit tổng quan nguồn, CSV, biểu đồ, ảnh bbox preview, manifest và `training_handoff.json`. Đây chưa phải đánh giá model.
+3. Giữ `datasets/DATASET_VERSION.zip` và `.zip.sha256` trên Drive. Cache chứa dataset đã lọc/chia nhóm; ZIP báo cáo chỉ chứa báo cáo và ảnh preview.
+4. Sau khi rà soát, upload [SignSight_SupSign_YOLO11s_Train_Colab.ipynb](../notebooks/SignSight_SupSign_YOLO11s_Train_Colab.ipynb), chọn **GPU**. Cùng tài khoản: giữ nguyên `DATASET_VERSION` và thư mục Drive. Khác tài khoản: chia sẻ cache ZIP rồi điền `PREPARED_CACHE_URL`, `PREPARED_CACHE_SHA256` từ `cache_sha256` trong handoff. Điền `EXPECTED_MANIFEST_SHA256` từ `manifest_sha256` để đối chiếu đúng dataset đã xem.
+5. Train chỉ khôi phục và xác minh cache, không audit ZIP thô/chia split lại. Không cần nhập lại CSV nhóm. Bật `LABEL_REVIEWED=True` sau khi kiểm tra nhãn. Nếu thay lớp/grouping/code chuẩn bị, quay lại EDA và tạo cache phiên bản mới.
+6. Train mặc định YOLO11s pretrained, 80 epochs, 640 px, batch 8; validation trước, held-out test chỉ chạy khi bật riêng. Cell cuối tải ZIP weights/metrics/config/manifest, không kèm toàn bộ dataset.
+
+EDA chạy được bằng CPU nhưng lần đầu vẫn phải tải, decode/hash và gom nhóm toàn bộ nguồn; không có thời gian chạy cố định. Notebook không cần clone repo hoặc Kaggle key. Khi `SAVE_TO_DRIVE=False`, cache và báo cáo chỉ ở runtime; phải tải cache ZIP **cùng checksum** trước khi runtime mất nếu muốn train sau.
+
+Hai notebook dùng nguyên code chuẩn bị/cache đã kiểm thử, không đổi recipe hiện tại. Có thể tái sử dụng cache V3 hợp lệ. Bản gộp cũ vẫn được giữ để tương thích các phiên đang mở.
+
+## Bản gộp cũ
+
+Notebook: [SignSight_SupSign_YOLO11s_Colab.ipynb](../notebooks/SignSight_SupSign_YOLO11s_Colab.ipynb). Các bước bên dưới dành cho bản gộp; nên dùng hai notebook ở trên cho lần chạy mới.
 
 1. Upload notebook `.ipynb` lên Colab và lưu bản riêng của bạn. Dán **link file ZIP SupSign 107 lớp** hoặc file ID vào `SOURCE_URL`; file cần cho phép tải qua link, không dùng link folder. `gdown` tải về thư mục local `WORK/downloads/DATASET_VERSION/`, không cần dataset nằm trong My Drive của tài khoản Colab mới. Không có link dataset cá nhân được nhúng sẵn trong notebook public.
 2. Mở notebook bằng Colab, chọn GPU runtime, mount Drive rồi chạy đến EDA và xem ảnh/bbox trước. Sau khi kiểm tra nhãn, đổi `LABEL_REVIEWED=True` rồi chạy cell train. Mặc định **YOLO11s pretrained, 35 lớp, 80 epochs, imgsz 640, batch 8**. Hết VRAM thì dùng run mới với batch 4. `SMOKE=True` chỉ chạy 1 epoch để thử luồng.

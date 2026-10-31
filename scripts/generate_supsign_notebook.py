@@ -4,6 +4,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = ROOT/'notebooks/SignSight_SupSign_YOLO11s_Colab.ipynb'
+EDA_TARGET = ROOT/'notebooks/SignSight_SupSign_EDA_Colab.ipynb'
+TRAIN_TARGET = ROOT/'notebooks/SignSight_SupSign_YOLO11s_Train_Colab.ipynb'
 
 
 def build_notebook():
@@ -340,6 +342,207 @@ files.download(str(archive))
         language_info=dict(name='python',version='3.11')),nbformat=4,nbformat_minor=5)
 
 
+def _cell(kind, identifier, source):
+    cell = dict(cell_type=kind, id=identifier, metadata={}, source=source.strip().splitlines(keepends=True))
+    if kind == 'code': cell.update(execution_count=None, outputs=[])
+    return cell
+
+
+def _build_separate_notebook(stage):
+    """Reuse tested cells while keeping EDA CPU-only and training cache-only."""
+    from copy import deepcopy
+    notebook = deepcopy(build_notebook())
+    originals = {cell['id']: cell for cell in notebook['cells']}
+    eda = stage == 'eda'
+    target = EDA_TARGET if eda else TRAIN_TARGET
+    def md(identifier, source): return _cell('markdown', identifier, source)
+    def code(identifier, source): return _cell('code', identifier, source)
+    cells = [md('intro', (
+        '# SignSight — 1. EDA SupSign trước khi train\n\n'
+        'Dùng **CPU runtime**; không cần GPU, Torch hay weights. Dán link ZIP SupSign vào SOURCE_URL.\n'
+        'Chạy lần lượt tới cuối để tải **ZIP báo cáo EDA** rồi gửi file đó để rà soát trước khi train.\n'
+        'Báo cáo gồm audit nguồn 107 lớp và thống kê/bbox của subset CAR35 dành cho ô tô.\n'
+        'Lọc 35 lớp là cấu hình hiện tại, có thể điều chỉnh sau khi đọc báo cáo; chưa phải mapping QCVN đã duyệt.\n'
+        'Cache giữ ảnh/nhãn/split đã kiểm tra cho notebook train. Lần đầu phải đọc/hash toàn bộ ZIP nên có thể lâu.\n'
+        'Notebook chạy độc lập, không clone repo; lưu notebook không lưu dataset.\n'
+        'Nhóm filename/dHash chỉ là heuristic; test chưa chứng minh hiệu quả thực địa độc lập.'
+    ) if eda else (
+        '# SignSight — 2. Train YOLO11s từ dataset đã EDA\n\n'
+        'Chỉ chạy **sau khi xem báo cáo EDA và rà nhãn**. Chọn GPU runtime.\n'
+        'Notebook chỉ khôi phục cache; không tải ZIP nguồn, audit lại hay chia split mới.\n'
+        'Cùng Drive: dùng nguyên DATASET_VERSION và CACHE_ZIP. Khác tài khoản: chia sẻ file cache ZIP,\n'
+        'điền PREPARED_CACHE_URL và PREPARED_CACHE_SHA256 từ training_handoff.json trong báo cáo EDA.\n'
+        'Điền EXPECTED_MANIFEST_SHA256 từ cùng file để khóa đúng dataset đã xem.\n'
+        'Đổi LABEL_REVIEWED=True khi đã kiểm tra nhãn. Không tự kích hoạt checkpoint trong backend.'
+    ))]
+    cells.append(code('install', """
+import sys, subprocess, os
+os.environ['YOLO_AUTOINSTALL'] = 'false'
+os.environ['WANDB_MODE'] = 'disabled'
+subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-q',
+    'Pillow>=10,<13', 'matplotlib>=3.8,<4', 'PyYAML>=6,<7', 'tqdm>=4.66,<5', 'gdown==5.2.0'])
+print('EDA dùng CPU; không giữ GPU trong lúc xử lý dữ liệu.')
+""" if eda else ''.join(originals['install']['source'])))
+    cells.append(md('config-guide', """
+## 1. Cấu hình
+
+SAVE_TO_DRIVE=True giữ cache/kết quả trên Drive của tài khoản hiện tại.
+False chỉ lưu trong runtime; tải kết quả trước khi ngắt. Link gdown phải là **file ZIP** cho phép tải qua link,
+không phải folder; quota và quyền Drive vẫn áp dụng. Không đưa link riêng vào GitHub public.
+Giữ DATASET_VERSION giống nhau ở hai notebook. Đổi version khi thay dữ liệu/lớp/grouping.
+""" + ("\nGROUPS_CSV tùy chọn có cột path,group cho mọi ảnh/alias hợp lệ. Không tự coi tên frame là chuyến xe." if eda else
+"\nCache ZIP lớn chứa dataset; ZIP báo cáo EDA nhỏ chỉ để xem, không dùng làm cache train.\n"
+"80 epochs, 640 px, batch 8 là mốc ban đầu. Hết VRAM: run mới với batch 4.\n"
+"Resume cần last.pt + training_request.json cùng dataset và settings; best.pt không đủ để resume.")))
+    common_config = """
+from pathlib import Path
+WORK = Path('/content/signsight_supsign')
+SAVE_TO_DRIVE = True
+DRIVE_OUTPUT_ROOT = Path('/content/drive/MyDrive/SignSight/supsign_training')
+if SAVE_TO_DRIVE:
+    from google.colab import drive
+    drive.mount('/content/drive')
+    PERSIST = DRIVE_OUTPUT_ROOT
+else:
+    PERSIST = WORK / 'outputs'
+DATASET_VERSION = 'supsign107-car35-v3'
+PREPARED_CACHE_URL = ''
+PREPARED_CACHE_SHA256 = ''
+IMAGE_SIZE = 640
+assert DATASET_VERSION and Path(DATASET_VERSION).name == DATASET_VERSION and DATASET_VERSION not in ('.', '..')
+WORK.mkdir(parents=True, exist_ok=True)
+PERSIST.mkdir(parents=True, exist_ok=True)
+CACHE_ZIP = PERSIST / 'datasets' / (DATASET_VERSION + '.zip')
+DATASET_ROOT = WORK / DATASET_VERSION
+os.environ['YOLO_CONFIG_DIR'] = str(WORK / '.ultralytics')
+print('Output:', PERSIST)
+print('Cache:', CACHE_ZIP)
+"""
+    cells.append(code('config', common_config + ("""
+SOURCE_URL = ''  # Link file ZIP SupSign gốc hoặc file ID
+SOURCE_SHA256 = ''  # Tùy chọn checksum ZIP gốc
+SOURCE_ZIP = WORK / 'downloads' / DATASET_VERSION / 'source_supsign.zip'
+GROUPS_CSV = None
+SEED = 42
+FRAME_BLOCK_SIZE = 100
+NEAR_HASH_DISTANCE = 4
+""" if eda else """
+EXPECTED_MANIFEST_SHA256 = ''  # manifest_sha256 trong training_handoff.json của EDA
+RUN_NAME = 'yolo11s_car35_640_v3'
+EPOCHS = 80
+BATCH = 8
+RESUME = False
+SMOKE = False
+LABEL_REVIEWED = False
+RUN_HELDOUT_TEST = False
+assert RUN_NAME and Path(RUN_NAME).name == RUN_NAME and RUN_NAME not in ('.', '..')
+RUN_DIR = PERSIST / 'runs' / (RUN_NAME + ('_smoke' if SMOKE else ''))
+print('Run:', RUN_DIR)
+""")))
+    pipeline = deepcopy(originals['pipeline'])
+    if not eda:
+        pipeline['source'] = (''.join(pipeline['source']).split('GROUPS = None')[0] +
+                              '\nfrom PIL import Image\n').splitlines(keepends=True)
+    cells.append(pipeline)
+    if eda:
+        cells.extend(originals[key] for key in ('prepare-guide', 'prepare', 'eda-guide', 'eda', 'preview-guide'))
+        preview = ''.join(originals['preview']['source']).replace(
+            'plt.tight_layout(); plt.show()',
+            "plt.tight_layout(); fig.savefig(EDA_ROOT / 'bbox_preview.png', dpi=150); plt.show(); plt.close(fig)")
+        cells.append(code('preview', preview))
+        cells.append(md('export-guide', """
+## 4. Tải báo cáo để xem trước
+
+Gửi **EDA_REPORT_ZIP** tải xuống ở cell cuối, không cần gửi cache ZIP lớn.
+Báo cáo gồm JSON/CSV, biểu đồ, ảnh bbox preview, manifest, audit nguồn và training_handoff.json.
+Giữ cache ZIP + .sha256 trên Drive. Nếu dùng tài khoản khác, chia sẻ cache ZIP cho tải qua link;
+copy cache_sha256 và manifest_sha256 trong training_handoff.json sang notebook train.
+Nếu muốn đổi lớp sau khi xem EDA, cần chuẩn bị cache phiên bản mới; chưa train ở notebook này.
+"""))
+        cells.append(code('export', """
+from datetime import datetime, timezone
+from google.colab import files
+# Dataset local đã có nhưng chưa lưu cache (ví dụ runtime trước bị ngắt lúc pack).
+cache_to_share = CACHE_ZIP if CACHE_ZIP.is_file() else globals().get('shared_cache')
+if cache_to_share is None:
+    pack_dataset(DATASET_ROOT, CACHE_ZIP)
+    cache_to_share = CACHE_ZIP
+handoff = dict(schema_version=1, dataset_version=DATASET_VERSION,
+    cache_name=cache_to_share.name, cache_sha256=digest_file(cache_to_share),
+    manifest_sha256=digest_file(DATASET_ROOT / 'manifest.json'),
+    names=manifest['names'], recipe=manifest['recipe'], input_size=IMAGE_SIZE)
+(EDA_ROOT / 'training_handoff.json').write_text(json.dumps(handoff, ensure_ascii=False, indent=2), encoding='utf-8')
+(EDA_ROOT / 'source_summary.json').write_text(json.dumps(manifest['source_summary'], ensure_ascii=False, indent=2), encoding='utf-8')
+for name in ('manifest.json', 'data.yaml'): shutil.copy2(DATASET_ROOT / name, EDA_ROOT / name)
+exports = PERSIST / 'exports'; exports.mkdir(exist_ok=True)
+report_name = DATASET_VERSION + '_eda_' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+EDA_REPORT_ZIP = Path(shutil.make_archive(str(exports / report_name), 'zip', EDA_ROOT))
+print('EDA report:', EDA_REPORT_ZIP)
+print('Cache để train:', cache_to_share)
+print('PREPARED_CACHE_SHA256 =', repr(handoff['cache_sha256']))
+print('EXPECTED_MANIFEST_SHA256 =', repr(handoff['manifest_sha256']))
+files.download(str(EDA_REPORT_ZIP))
+"""))
+    else:
+        cells.append(md('restore-guide', """
+## 2. Khôi phục đúng dataset đã EDA
+
+Ưu tiên dataset local, sau đó CACHE_ZIP trên Drive; nếu không có thì dùng link cache chia sẻ.
+Kiểm tra checksum, inventory ảnh/nhãn, lớp, recipe/code và manifest trước train.
+Không cần GROUPS_CSV ở notebook này: manifest đã lưu nhóm/split từ bước EDA.
+Nếu đổi code chuẩn bị hay scope lớp, quay lại EDA với DATASET_VERSION mới.
+"""))
+        cells.append(code('restore', """
+if DATASET_ROOT.exists():
+    verify_dataset(DATASET_ROOT)
+    manifest = json.loads((DATASET_ROOT / 'manifest.json').read_text(encoding='utf-8'))
+elif CACHE_ZIP.is_file():
+    manifest = restore_dataset(CACHE_ZIP, DATASET_ROOT)
+elif PREPARED_CACHE_URL.strip():
+    assert PREPARED_CACHE_SHA256.strip(), 'Điền cache_sha256 từ training_handoff.json.'
+    shared_cache = download_drive_zip(PREPARED_CACHE_URL,
+        WORK / 'downloads' / (DATASET_VERSION + '.zip'), expected_sha256=PREPARED_CACHE_SHA256)
+    shared_cache.with_suffix(shared_cache.suffix + '.sha256').write_text(PREPARED_CACHE_SHA256.strip().lower())
+    manifest = restore_dataset(shared_cache, DATASET_ROOT)
+else:
+    raise FileNotFoundError('Chạy notebook EDA trước: cần CACHE_ZIP + .sha256 hoặc link cache và checksum.')
+assert manifest['names'] == CAR35, 'Cache khác taxonomy CAR35; xem lại EDA.'
+saved_recipe = manifest['recipe']
+expected_recipe = recipe(CAR35, saved_recipe['seed'], saved_recipe['block_size'], saved_recipe['near_threshold'])
+# Group CSV đã được áp dụng trong EDA; không tạo/chia nhóm lại khi train.
+expected_recipe['groups_sha256'] = saved_recipe['groups_sha256']
+assert saved_recipe == expected_recipe, 'Cache khác recipe/code; dùng đúng notebook EDA/train cùng phiên bản.'
+if EXPECTED_MANIFEST_SHA256.strip():
+    assert digest_file(DATASET_ROOT / 'manifest.json') == EXPECTED_MANIFEST_SHA256.strip().lower(), 'Dataset manifest khác bản đã EDA.'
+print('Restored:', len(manifest['images']), 'images; giữ nguyên split EDA.')
+print('Missing classes:', manifest['missing_classes'])
+"""))
+        cells.extend(originals[key] for key in ('train-guide', 'train', 'evaluation-guide', 'evaluate',
+                                               'photo-guide', 'own-photos'))
+        cells.append(md('export-guide', """
+## 6. Tải kết quả train
+
+ZIP gồm best.pt/last.pt, metrics, cấu hình và manifest; không kèm toàn bộ dataset.
+Giữ cả ZIP báo cáo EDA riêng để đối chiếu. Kết quả lưu tại PERSIST/exports và tải bằng files.download.
+Catalog/mapping 35 lớp cần rà soát theo docs/model_activation.md trước khi tích hợp backend.
+"""))
+        cells.append(originals['export'])
+    notebook['cells'] = cells
+    notebook['metadata']['colab']['name'] = target.name
+    if eda: notebook['metadata'].pop('accelerator', None)
+    return notebook
+
+
+def build_eda_notebook():
+    return _build_separate_notebook('eda')
+
+
+def build_train_notebook():
+    return _build_separate_notebook('train')
+
+
 if __name__=='__main__':
-    TARGET.write_text(json.dumps(build_notebook(),ensure_ascii=False,indent=1),encoding='utf-8')
-    print(TARGET)
+    for target, builder in ((TARGET, build_notebook), (EDA_TARGET, build_eda_notebook),
+                            (TRAIN_TARGET, build_train_notebook)):
+        target.write_text(json.dumps(builder(),ensure_ascii=False,indent=1),encoding='utf-8')
+        print(target)
