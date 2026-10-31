@@ -33,7 +33,7 @@ void main() {
         await tester.tap(find.text('Đóng góp').last);
         await tester.pumpAndSettle();
         final edit = find.text('Sửa loại biển nếu AI nhận sai');
-        await tester.ensureVisible(edit);
+        await tester.scrollUntilVisible(edit, 160);
         await tester.tap(edit);
         await tester.pumpAndSettle();
         final select = find.byType(DropdownButtonFormField<int>);

@@ -31,13 +31,11 @@ Widget buildSignMap(BuildContext context, MapScene scene) =>
     SignMap(scene: scene);
 
 class SignMap extends StatefulWidget {
-  const SignMap({
-    super.key,
-    required this.scene,
-    this.styleString = 'https://tiles.openfreemap.org/styles/liberty',
-  });
+  const SignMap({super.key, required this.scene, this.styleString});
   final MapScene scene;
-  final String styleString;
+
+  /// Optional explicit style for fixtures or callers; otherwise follows theme.
+  final String? styleString;
   @override
   State<SignMap> createState() => _SignMapState();
 }
@@ -51,10 +49,25 @@ class _SignMapState extends State<SignMap> {
   Future<void> _pending = Future.value();
   final _icons = <String>{};
   bool _pinSourceAdded = false;
+  String _style = '';
   LatLng point(GeoPoint p) => LatLng(p.latitude, p.longitude);
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _updateStyle();
+  }
+
+  void _updateStyle() {
+    final next =
+        widget.styleString ??
+        (Theme.of(context).brightness == Brightness.dark
+            ? 'assets/maps/signsight-night.json'
+            : 'assets/maps/signsight-day.json');
+    if (next == _style) return;
+    _style = next;
+    _loaded = false;
+    _error = null;
+    _generation++;
     _startTimer();
   }
 
@@ -72,6 +85,7 @@ class _SignMapState extends State<SignMap> {
   @override
   void didUpdateWidget(covariant SignMap old) {
     super.didUpdateWidget(old);
+    _updateStyle();
     final current = _controller?.cameraPosition?.target;
     final wanted = widget.scene.center;
     if (current != null &&
@@ -207,7 +221,7 @@ class _SignMapState extends State<SignMap> {
     children: [
       MapLibreMap(
         key: ValueKey(_instance),
-        styleString: widget.styleString,
+        styleString: _style,
         // The picker needs one dot, not asynchronous annotation-manager setup.
         annotationOrder: widget.scene.pinOnly
             ? const []

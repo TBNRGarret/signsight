@@ -2,5 +2,6 @@ const style={version:8,sources:{streets:{type:'geojson',attribution:'Test map ·
 async function stubMaps(page){
  await page.route('https://**/*',route=>route.abort());
  await page.route('https://tiles.openfreemap.org/styles/*',route=>route.fulfill({json:style}));
+ await page.route('**/assets/maps/signsight-*.json',route=>route.fulfill({json:style}));
 }
 module.exports={stubMaps,style};

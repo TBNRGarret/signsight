@@ -8,6 +8,8 @@ import 'device_services.dart';
 import 'feedback.dart';
 import 'map_canvas.dart';
 import 'models.dart';
+import 'app_theme.dart';
+import 'ui_components.dart';
 
 class SignSightApp extends StatefulWidget {
   const SignSightApp({
@@ -30,17 +32,8 @@ class _SignSightAppState extends State<SignSightApp> {
     debugShowCheckedModeBanner: false,
     title: 'SignSight',
     themeMode: _theme,
-    theme: ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff2563eb)),
-      useMaterial3: true,
-    ),
-    darkTheme: ThemeData(
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xff60a5fa),
-        brightness: Brightness.dark,
-      ),
-      useMaterial3: true,
-    ),
+    theme: signSightTheme(Brightness.light),
+    darkTheme: signSightTheme(Brightness.dark),
     home: UserShell(
       controller: widget.controller,
       mapBuilder: widget.mapBuilder,
@@ -371,7 +364,7 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
         constraints: const BoxConstraints(maxWidth: 600),
         child: Scaffold(
           appBar: AppBar(
-            title: const Text('SignSight'),
+            title: Text(['SignSight', 'Đóng góp', 'Của tôi'][_tab]),
             actions: [
               if (_tab == 0 && c.signedIn)
                 IconButton(
@@ -382,7 +375,7 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
               IconButton(
                 tooltip: 'Tài khoản',
                 onPressed: _account,
-                icon: const Icon(Icons.account_circle_outlined),
+                icon: const Icon(Icons.person_outline),
               ),
               const SizedBox(width: 8),
             ],
@@ -416,8 +409,8 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
             onDestinationSelected: _changeTab,
             destinations: const [
               NavigationDestination(
-                icon: Icon(Icons.explore_outlined),
-                selectedIcon: Icon(Icons.explore),
+                icon: Icon(Icons.map_outlined),
+                selectedIcon: Icon(Icons.map),
                 label: 'Bản đồ',
               ),
               NavigationDestination(
@@ -426,7 +419,8 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
                 label: 'Đóng góp',
               ),
               NavigationDestination(
-                icon: Icon(Icons.history),
+                icon: Icon(Icons.inbox_outlined),
+                selectedIcon: Icon(Icons.inbox),
                 label: 'Của tôi',
               ),
             ],
@@ -471,8 +465,9 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
             mainAxisSize: MainAxisSize.min,
             children: [
               Material(
-                elevation: 3,
-                borderRadius: BorderRadius.circular(18),
+                elevation: 1,
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(14),
                 child: TextField(
                   controller: _query,
                   textInputAction: TextInputAction.search,
@@ -485,6 +480,7 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
                   },
                   decoration: InputDecoration(
                     hintText: 'Bạn muốn đi đâu?',
+                    filled: false,
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: c.mapBusy
                         ? const Padding(
@@ -507,6 +503,14 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
                             icon: const Icon(Icons.arrow_forward),
                           ),
                     border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(
+                        color: Theme.of(context).colorScheme.primary,
+                        width: 2,
+                      ),
+                    ),
                     contentPadding: const EdgeInsets.all(16),
                   ),
                 ),
@@ -515,29 +519,30 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
                 Container(
                   margin: const EdgeInsets.only(top: 6),
                   constraints: const BoxConstraints(maxHeight: 230),
-                  decoration: BoxDecoration(
+                  child: Material(
                     color: Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: c.places.length,
-                    itemBuilder: (context, i) {
-                      final place = c.places[i];
-                      return ListTile(
-                        dense: true,
-                        leading: const Icon(Icons.place_outlined),
-                        title: Text(
-                          place.name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        onTap: () {
-                          FocusScope.of(context).unfocus();
-                          unawaited(c.routeTo(place));
-                        },
-                      );
-                    },
+                    clipBehavior: Clip.antiAlias,
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: c.places.length,
+                      itemBuilder: (context, i) {
+                        final place = c.places[i];
+                        return ListTile(
+                          dense: true,
+                          leading: const Icon(Icons.place_outlined),
+                          title: Text(
+                            place.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onTap: () {
+                            FocusScope.of(context).unfocus();
+                            unawaited(c.routeTo(place));
+                          },
+                        );
+                      },
+                    ),
                   ),
                 ),
               if (c.mapError != null)
@@ -554,160 +559,189 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
             ],
           ),
         ),
-        Positioned(
-          right: 16,
-          bottom: 128,
-          child: FloatingActionButton.small(
-            heroTag: 'gps',
-            tooltip: 'Vị trí của tôi',
-            onPressed: c.signedIn ? () => _gps() : _account,
-            child: const Icon(Icons.my_location),
-          ),
-        ),
-        Positioned(
-          left: 16,
-          right: 16,
-          bottom: 36,
-          child: Material(
-            elevation: 4,
-            borderRadius: BorderRadius.circular(18),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: !c.signedIn
-                  ? Row(
-                      children: [
-                        const Expanded(
-                          child: Text('Đăng nhập để xem biển quanh đây'),
-                        ),
-                        TextButton(
-                          onPressed: _account,
-                          child: const Text('Đăng nhập'),
-                        ),
-                      ],
-                    )
-                  : c.selectedSign != null
-                  ? Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                c.selectedSign!.code,
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: 'Đóng chi tiết',
-                              onPressed: () => c.selectSign(null),
-                              icon: const Icon(Icons.close),
-                            ),
-                          ],
-                        ),
-                        Text(c.selectedSign!.name),
-                        Text(
-                          c.selectedSign!.needsConfirmation
-                              ? 'Cần xác nhận lại'
-                              : 'Đã được duyệt',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        TextButton.icon(
-                          onPressed: () => _report(c.selectedSign!),
-                          icon: const Icon(Icons.flag_outlined),
-                          label: const Text('Báo cáo / xác nhận'),
-                        ),
-                      ],
-                    )
-                  : c.route != null
-                  ? Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${(c.route!.distance / 1000).toStringAsFixed(1)} km · ${(c.route!.duration / 60).ceil()} phút',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              Text(
-                                '${c.route!.signs.length} biển gần tuyến · hành lang ${c.corridor} m',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'Danh sách biển trên tuyến',
-                          onPressed: _signList,
-                          icon: const Icon(Icons.list),
-                        ),
-                        IconButton(
-                          tooltip: 'Xóa tuyến',
-                          onPressed: c.clearRoute,
-                          icon: const Icon(Icons.close),
-                        ),
-                      ],
-                    )
-                  : Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                c.mapBusy
-                                    ? 'Đang tìm biển…'
-                                    : '${c.nearbyTotal} biển quanh điểm đang xem',
-                                style: Theme.of(context).textTheme.titleSmall,
-                              ),
-                              Text(
-                                'Bán kính ${c.radius} m',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'Tải lại biển',
-                          onPressed: c.mapBusy ? null : () => c.refreshNearby(),
-                          icon: const Icon(Icons.refresh),
-                        ),
-                        IconButton(
-                          tooltip: 'Danh sách biển',
-                          onPressed: _signList,
-                          icon: const Icon(Icons.list),
-                        ),
-                      ],
+        if (MediaQuery.viewInsetsOf(context).bottom == 0 && c.places.isEmpty)
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 28,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton.filledTonal(
+                    tooltip: 'Vị trí của tôi',
+                    onPressed: c.signedIn ? () => _gps() : _account,
+                    icon: const Icon(Icons.my_location),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Material(
+                  elevation: 2,
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.sizeOf(context).height * .4,
                     ),
+                    child: SingleChildScrollView(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: !c.signedIn
+                            ? Row(
+                                children: [
+                                  const Expanded(
+                                    child: Text(
+                                      'Đăng nhập để xem biển quanh đây',
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: _account,
+                                    child: const Text('Đăng nhập'),
+                                  ),
+                                ],
+                              )
+                            : c.selectedSign != null
+                            ? Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          c.selectedSign!.code,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium,
+                                        ),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Đóng chi tiết',
+                                        onPressed: () => c.selectSign(null),
+                                        icon: const Icon(Icons.close),
+                                      ),
+                                    ],
+                                  ),
+                                  Text(c.selectedSign!.name),
+                                  Text(
+                                    c.selectedSign!.needsConfirmation
+                                        ? 'Cần xác nhận lại'
+                                        : 'Đã được duyệt',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall,
+                                  ),
+                                  TextButton.icon(
+                                    onPressed: () => _report(c.selectedSign!),
+                                    icon: const Icon(Icons.flag_outlined),
+                                    label: const Text('Báo cáo / xác nhận'),
+                                  ),
+                                ],
+                              )
+                            : c.route != null
+                            ? Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${(c.route!.distance / 1000).toStringAsFixed(1)} km · ${(c.route!.duration / 60).ceil()} phút',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium,
+                                        ),
+                                        Text(
+                                          '${c.route!.signs.length} biển gần tuyến · hành lang ${c.corridor} m',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Danh sách biển trên tuyến',
+                                    onPressed: _signList,
+                                    icon: const Icon(Icons.list),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Xóa tuyến',
+                                    onPressed: c.clearRoute,
+                                    icon: const Icon(Icons.close),
+                                  ),
+                                ],
+                              )
+                            : Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Biển báo quanh đây',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          c.mapBusy
+                                              ? 'Đang tìm biển…'
+                                              : '${c.nearbyTotal} biển · Bán kính ${c.radius} m',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Tải lại biển',
+                                    onPressed: c.mapBusy
+                                        ? null
+                                        : () => c.refreshNearby(),
+                                    icon: const Icon(Icons.refresh),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+                if (c.signedIn &&
+                    c.route == null &&
+                    c.selectedSign == null) ...[
+                  const SizedBox(height: 8),
+                  FilledButton.icon(
+                    onPressed: _signList,
+                    icon: const Icon(Icons.format_list_bulleted),
+                    label: const Text('Danh sách biển'),
+                  ),
+                ],
+              ],
             ),
           ),
-        ),
       ],
     );
   }
 
   Widget _gate(String message) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.account_circle_outlined, size: 48),
-          const SizedBox(height: 16),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: _account,
-            child: const Text('Đăng nhập / Đăng ký'),
-          ),
-        ],
+    child: SingleChildScrollView(
+      child: AppEmptyState(
+        icon: _tab == 1 ? Icons.add_a_photo_outlined : Icons.inbox_outlined,
+        title: message,
+        message: _tab == 1
+            ? 'Góp ảnh biển báo, xác nhận thông tin và theo dõi kết quả duyệt.'
+            : 'Xem trạng thái, phản hồi và biển báo từ những ảnh bạn đã gửi.',
+        action: 'Đăng nhập / Đăng ký',
+        onAction: _account,
       ),
     ),
   );
@@ -716,41 +750,98 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
     final draft = c.draft;
     final busy = c.captureBusy || _picking;
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
       children: [
         Text('Thêm biển báo', style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 6),
-        const Text('Chụp rõ biển, kiểm tra rồi gửi.'),
-        const SizedBox(height: 20),
+        const SizedBox(height: 8),
+        Text(
+          'Một bức ảnh rõ. Một vị trí chính xác.',
+          style: Theme.of(context).textTheme.bodyLarge
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+        ContributionProgress(
+          step: draft == null
+              ? 0
+              : draft.labelConfirmed && draft.confirmedLocation != null
+              ? 2
+              : 1,
+        ),
         if (draft == null) ...[
-          const Icon(Icons.add_a_photo_outlined, size: 64),
-          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.add_a_photo_outlined,
+                  size: 48,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Bắt đầu từ một bức ảnh',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Giữ trọn biển trong khung hình, tránh mờ hoặc bị che khuất.',
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
           FilledButton.icon(
             onPressed: busy ? null : () => _pick(true),
             icon: const Icon(Icons.camera_alt_outlined),
             label: const Text('Chụp biển báo'),
           ),
+          const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: busy ? null : () => _pick(false),
             icon: const Icon(Icons.photo_library_outlined),
             label: const Text('Chọn từ thư viện'),
           ),
+          const SizedBox(height: 24),
+          const AppNotice(message: 'Chỉ chụp ảnh khi đã dừng xe an toàn.'),
+          const SizedBox(height: 12),
+          Text(
+            'Bạn sẽ kiểm tra nhãn và vị trí trước khi gửi. Biển chỉ xuất hiện trên bản đồ sau khi được duyệt.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
         ] else ...[
-          SizedBox(
-            height: 230,
-            child: CustomPaint(
-              foregroundPainter: DetectionPainter(draft),
-              child: Image.memory(
-                draft.bytes,
-                fit: BoxFit.contain,
-                errorBuilder: (_, error, stack) => const Center(
-                  child: Text('Không hiển thị được ảnh. Chọn ảnh khác.'),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: ColoredBox(
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
+              child: SizedBox(
+                height: 210,
+                child: CustomPaint(
+                  foregroundPainter: DetectionPainter(draft),
+                  child: Image.memory(
+                    draft.bytes,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, error, stack) => const Center(
+                      child: Text('Không hiển thị được ảnh. Chọn ảnh khác.'),
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 24),
           if (draft.detections.isNotEmpty) ...[
+            Text(
+              'Kiểm tra loại biển',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               initialValue: draft.selectedId,
               isExpanded: true,
@@ -892,6 +983,18 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
                 child: const Text('Chọn'),
               ),
             ),
+            if (!c.canSubmit)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  !draft.labelConfirmed
+                      ? 'Xác nhận loại biển và vị trí để gửi đóng góp.'
+                      : 'Còn một bước: xác nhận vị trí của biển.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
             FilledButton.icon(
               onPressed: c.canSubmit ? c.submitContribution : null,
               icon: const Icon(Icons.send_outlined),
@@ -921,10 +1024,7 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
             child: LinearProgressIndicator(),
           ),
         if (c.captureError != null) ...[
-          Text(
-            c.captureError!,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
+          AppNotice(message: c.captureError!, error: true),
           if (draft != null)
             TextButton.icon(
               onPressed: busy ? null : c.retryDetection,
@@ -935,7 +1035,7 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
         if (c.captureMessage != null)
           Padding(
             padding: const EdgeInsets.only(top: 16),
-            child: Text(c.captureMessage!),
+            child: AppNotice(message: c.captureMessage!),
           ),
       ],
     );
@@ -947,21 +1047,13 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: OutlinedButton.icon(
-            onPressed: _activity,
-            icon: const Icon(Icons.fact_check_outlined),
-            label: const Text('Báo cáo & xác nhận lại'),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          padding: const EdgeInsets.fromLTRB(24, 12, 16, 4),
           child: Row(
             children: [
               Expanded(
                 child: Text(
                   'Đóng góp của tôi',
-                  style: Theme.of(context).textTheme.titleLarge,
+                  style: Theme.of(context).textTheme.headlineSmall,
                 ),
               ),
               IconButton(
@@ -974,6 +1066,24 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
             ],
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+          child: Text(
+            'Ảnh bạn gửi và kết quả từ người duyệt.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: OutlinedButton.icon(
+            onPressed: _activity,
+            icon: const Icon(Icons.fact_check_outlined),
+            label: const Text('Báo cáo & xác nhận lại'),
+          ),
+        ),
+        const SizedBox(height: 16),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -983,7 +1093,7 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
                 null: 'Tất cả',
                 'pending': 'Chờ duyệt',
                 'accepted': 'Đã duyệt',
-                'rejected': 'Cần sửa',
+                'rejected': 'Từ chối',
               }.entries)
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
@@ -1013,9 +1123,25 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
                   : c.contributions.length + 1,
               itemBuilder: (context, index) {
                 if (c.contributions.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.all(28),
-                    child: Text('Chưa có đóng góp ở trạng thái này.'),
+                  if (c.historyBusy || c.historyError != null) {
+                    return const SizedBox.shrink();
+                  }
+                  return AppEmptyState(
+                    icon: c.historyStatus == null
+                        ? Icons.add_photo_alternate_outlined
+                        : Icons.filter_alt_off_outlined,
+                    title: c.historyStatus == null
+                        ? 'Bắt đầu với biển báo đầu tiên'
+                        : 'Chưa có đóng góp ở trạng thái này.',
+                    message: c.historyStatus == null
+                        ? 'Chụp hoặc chọn ảnh biển báo. Kết quả duyệt sẽ xuất hiện tại đây.'
+                        : 'Chọn trạng thái khác hoặc xem lại tất cả ảnh đã gửi.',
+                    action: c.historyStatus == null
+                        ? 'Đóng góp đầu tiên'
+                        : 'Xem tất cả đóng góp',
+                    onAction: c.historyStatus == null
+                        ? () => _changeTab(1)
+                        : () => c.loadHistory(),
                   );
                 }
                 if (index == c.contributions.length) {
@@ -1029,6 +1155,12 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
                       : const SizedBox(height: 12);
                 }
                 final item = c.contributions[index];
+                final colors = Theme.of(context).colorScheme;
+                final stateColor = item.status == 'accepted'
+                    ? colors.primary
+                    : item.status == 'rejected'
+                    ? colors.error
+                    : colors.onSurfaceVariant;
                 return ListTile(
                   leading: Icon(
                     item.status == 'accepted'
@@ -1036,14 +1168,26 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
                         : item.status == 'rejected'
                         ? Icons.edit_outlined
                         : Icons.schedule,
+                    color: stateColor,
                   ),
                   title: Text(item.code),
-                  subtitle: Text(
-                    item.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        item.statusLabel,
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(color: stateColor),
+                      ),
+                    ],
                   ),
-                  trailing: Text(item.statusLabel),
+                  trailing: const Icon(Icons.chevron_right),
                   onTap: () => _contributionDetail(item),
                 );
               },
