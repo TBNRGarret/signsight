@@ -2,6 +2,8 @@
 
 Scope sản phẩm: app Flutter cho người đi ô tô, web cho admin/manager, FastAPI quản lý evidence và các quyết định duyệt. Các đầu việc dưới đây là kế hoạch tiếp theo, không được tính là đã hoàn thành bởi việc dọn source.
 
+**Tiến độ task 1:** notebook EDA đã có công cụ xuất báo cáo grouping trên CPU: bảng nhóm/membership/coverage, ảnh nhóm lớn và cặp nối nhóm. Bước tiếp theo là chạy trên cache SupSign thật ở Colab và rà ZIP báo cáo; chưa kết luận grouping đúng/sai, chưa đổi split hay train lại. Xem [cách chạy và đọc báo cáo](../training/supsign_yolo11s_colab.md#task-1-rà-grouping-trên-cpu).
+
 ## P0 — Làm model có bằng chứng trước khi kích hoạt
 
 Run SupSign mới hợp lệ nhưng validation chỉ có 3 nhóm, test 2 nhóm; nhóm test lớn nhất chứa 12.036 ảnh. Các lớp tốc độ/cấm vượt/công trường có recall thấp; hai lớp không có GT holdout. Model mới chưa có mapping QCVN được rà hoặc tập ô tô độc lập.

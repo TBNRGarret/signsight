@@ -11,7 +11,22 @@
 
 EDA chạy được bằng CPU nhưng lần đầu vẫn phải tải, decode/hash và gom nhóm toàn bộ nguồn; không có thời gian chạy cố định. Notebook không cần clone repo hoặc Kaggle key. Khi `SAVE_TO_DRIVE=False`, cache và báo cáo chỉ ở runtime; phải tải cache ZIP **cùng checksum** trước khi runtime mất nếu muốn train sau.
 
-Hai notebook dùng nguyên code chuẩn bị/cache đã kiểm thử, không đổi recipe hiện tại. Có thể tái sử dụng cache V3 hợp lệ. Bản gộp cũ vẫn được giữ để tương thích các phiên đang mở.
+Hai notebook dùng nguyên code chuẩn bị/cache đã kiểm thử, không đổi recipe hiện tại. Có thể tái sử dụng cache V3 hợp lệ. Bản gộp cũ nằm trong Git history; dùng hai notebook tách biệt cho phiên mới.
+
+## Task 1: rà grouping trên CPU
+
+Upload lại notebook EDA mới để có cell **Rà nhóm trước khi quyết định train lại**. Nếu cache V3 cùng cấu hình đã nằm trên Drive, giữ `DATASET_VERSION` và `DRIVE_OUTPUT_ROOT` như trước; notebook khôi phục cache mà không tải/audit ZIP thô. Khi dùng tài khoản khác, điền `PREPARED_CACHE_URL` bằng link cache ZIP và `PREPARED_CACHE_SHA256` bằng checksum đã lưu. Nếu chưa có cache, dùng `SOURCE_URL` để chuẩn bị từ ZIP gốc.
+
+Sau khi chạy hết và tải ZIP báo cáo, giải nén rồi mở `grouping/index.html`. Nếu chạy lại cell grouping, notebook giữ bản trước và in tên thư mục `grouping_TIMESTAMP` mới. Đọc theo thứ tự:
+
+1. **Review flags / Splits:** số nhóm, số ảnh, tỷ lệ ảnh thuộc nhóm lớn nhất của từng split. Ít hơn 5 nhóm hoặc một nhóm chiếm trên 50% ảnh là cờ cần xem lại, không phải kết luận rò rỉ dữ liệu.
+2. **Ảnh nhóm và cặp liên kết:** ảnh mẫu của tối đa 12 nhóm lớn nhất, bbox/nhãn và tối đa 3 cặp nối nhóm mỗi nhóm. Các cặp giúp nhìn ra việc tên frame giống nhau ở thư mục khác nhau hoặc chuỗi dHash bắc cầu. Ảnh mẫu trải theo tên nguồn, không đảm bảo bao quát mọi nội dung trong nhóm.
+3. **Class coverage:** số box, ảnh và nhóm chứa từng lớp theo train/val/test. Số 0 ở holdout nghĩa là chưa đánh giá được lớp đó.
+4. **CSV đầy đủ:** `groups.csv`, `group_members.csv` (đường dẫn nguồn và alias), `grouping_edges.csv` và `class_coverage.csv`. JSON lưu checksum manifest/content identity và mức khớp của replay.
+
+`partition_matches=True` chỉ xác nhận phân hoạch tái dựng khớp manifest. Báo cáo lưu một spanning forest đủ nối nhóm, không xuất mọi cặp tương tự và không giả làm log lịch sử. Capture-group cache cần đúng CSV gốc khi khôi phục EDA theo recipe; API báo cáo riêng có thể đọc cache thiếu CSV nhưng sẽ ghi `evidence_complete=False`, không suy ra capture bằng tên file.
+
+Decode dHash vẫn đọc ảnh cache trên CPU và có thanh tiến độ; không cần GPU. Báo cáo được ghi bên ngoài dataset, giữ nguyên ảnh/nhãn/manifest/split. **Gửi ZIP báo cáo này để rà trước khi quyết định sửa grouping, tạo dataset phiên bản mới hoặc train tiếp.**
 
 ## Source and compatibility
 
@@ -31,7 +46,7 @@ python -m scripts.inspect_yolo_candidate --checkpoint 'PATH_TO_BEST_PT' --evalua
 
 Công cụ xác minh hash checkpoint, tên/thứ tự class, metrics validation từng lớp, thiếu ground truth và tương thích runtime. Với model mới, thêm `--catalog` và `--mapping` đã rà như hướng dẫn trên; không cung cấp mapping thì chỉ kiểm tra tương thích taxonomy cũ. Ngưỡng mặc định precision 0,85/recall 0,80 từng lớp là mục tiêu rà soát của dự án. Report tự khai có field test vẫn cần xem bằng chứng; công cụ không tự thay weights.
 
-Notebook được tạo từ `scripts/generate_supsign_notebook.py`, nhúng ba module đã kiểm thử (EDA, training và gdown). Chạy lại generator sau khi sửa helper:
+Notebook được tạo từ `scripts/generate_supsign_notebook.py`, nhúng các module đã kiểm thử trong `training/` cùng compatibility entry points. Chạy lại generator sau khi sửa helper:
 
 ```bash
 python -m scripts.generate_supsign_notebook

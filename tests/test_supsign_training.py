@@ -475,6 +475,7 @@ def test_separate_eda_exports_review_bundle_and_train_reuses_exact_split(tmp_pat
     eda_cells, train_cells = [
         {c['id']: ''.join(c['source']) for c in n['cells'] if c['cell_type'] == 'code'}
         for n in notebooks]
+    assert 'grouping' in eda_cells, 'EDA must export inspectable grouping evidence before training'
     downloads, model_calls, installs = [], [], []
     # Exercise the EDA installer without a GPU or a model package.
     monkeypatch.setitem(sys.modules, 'torch', None)
@@ -504,12 +505,18 @@ def test_separate_eda_exports_review_bundle_and_train_reuses_exact_split(tmp_pat
     context['CAR35'] = ['No_entry', 'No_parking']
     context['RECIPE'] = context['recipe'](context['CAR35'], 42, 1, None, None)
     monkeypatch.setattr(shutil, 'disk_usage', lambda _: types.SimpleNamespace(free=100*1024**3))
-    for identifier in ('prepare', 'eda', 'preview', 'export'):
+    for identifier in ('prepare', 'eda', 'preview', 'grouping', 'export'):
         exec(eda_cells[identifier], context)
     assert len(downloads) == 1 and downloads[0].is_file()
     with zipfile.ZipFile(downloads[0]) as archive:
         assert {'dataset_eda.json', 'class_counts.csv', 'eda_overview.png', 'bbox_preview.png',
                 'manifest.json', 'training_handoff.json', 'source_summary.json'} <= set(archive.namelist())
+        assert {'grouping/index.html', 'grouping/grouping_summary.json', 'grouping/groups.csv',
+                'grouping/grouping_edges.csv', 'grouping/class_coverage.csv'} <= set(archive.namelist())
+        grouping = json.loads(archive.read('grouping/grouping_summary.json'))
+        assert grouping['images'] == 18 and grouping['groups'] == 18
+        assert grouping['partition_matches'] is True
+        assert any(n.startswith('grouping/previews/') for n in archive.namelist())
         assert not any(name.endswith(('.pt', '.jpg')) or name.startswith('images/') for name in archive.namelist())
         handoff = json.loads(archive.read('training_handoff.json'))
         assert handoff['cache_sha256'] == hashlib.sha256(context['CACHE_ZIP'].read_bytes()).hexdigest()

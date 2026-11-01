@@ -35,7 +35,7 @@
 - [x] Implement diagnostic graph replay, retaining current preparation behavior as an independent comparison oracle in tests.
 - [x] Write tests for verified read-only dataset reporting, coverage/negatives, mismatch warnings, escaped HTML, bounded previews and unsafe output paths; see them fail.
 - [x] Implement JSON/CSV/contact sheets/HTML; run tests/test_grouping_review.py and existing training/cache tests.
-- [ ] Commit feat(training): export inspectable grouping review reports.
+- [x] Commit feat(training): export inspectable grouping review reports (`06b427a`).
 
 ### Task 2: CPU EDA integration
 
@@ -46,5 +46,12 @@
 - [x] Extend real embedded-runtime notebook test to execute grouping and inspect downloaded ZIP assets; run and observe failure.
 - [x] Add guide/code cell with decode/replay progress and compact summary; regenerate both notebooks deterministically.
 - [x] Document CPU/cache/report workflow and review-before-resplit boundary.
-- [ ] Run full Python suite, notebook determinism and public-source checker. Review complete diff, preserving original user diff.
-- [ ] Commit feat(notebooks): include grouping review in CPU EDA export.
+- [x] Run full Python suite, notebook determinism and public-source checker. Review complete diff, preserving original user diff.
+- [x] Commit feat(notebooks): include grouping review in CPU EDA export.
+
+## Verification
+
+- Full Python suite: 339 passed, 3 skipped (Windows symlink privilege and opt-in checkpoint coverage), 10 warnings (SQLAlchemy reflection and noninteractive Matplotlib).
+- TDD: graph, report, membership CSV and fresh embedded notebook export failed before implementation; reviewer performance regression failed before the bounded selection fix.
+- Fresh review: one performance finding fixed; capture CSV instructions clarified. Notebook/dataset preparation semantics and cache recipes remain unchanged.
+- No full SupSign dataset was processed by this local verification. Actual grouping/label review awaits the user's Colab report.

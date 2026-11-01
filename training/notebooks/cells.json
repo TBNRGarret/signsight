@@ -290,13 +290,59 @@
    },
    {
     "cell_type": "markdown",
+    "id": "grouping-guide",
+    "metadata": {},
+    "source": [
+     "## 4. Rà nhóm trước khi quyết định train lại\n",
+     "\n",
+     "Đọc cache đã kiểm tra, không audit ZIP nguồn lần nữa. Bước này chạy CPU;\n",
+     "nếu có dHash, cần decode ảnh cache để tái dựng liên kết nên vẫn có thể mất thời gian.\n",
+     "\n",
+     "Báo cáo gồm toàn bộ nhóm, membership/alias, số ảnh/box/nhóm của mỗi lớp theo split;\n",
+     "ảnh mẫu của 12 nhóm lớn nhất và cặp ảnh giải thích liên kết filename/dHash/capture.\n",
+     "Đây là tái dựng một tập liên kết đủ nối nhóm, không phải mọi cặp gần giống hay log lịch sử.\n",
+     "Ảnh mẫu trải theo tên nguồn, không đảm bảo đại diện thống kê cho cả nhóm.\n",
+     "\n",
+     "`partition_matches=True` chỉ nói rằng cách gom nhóm tái dựng khớp manifest;\n",
+     "không chứng minh các nhóm là chuyến xe độc lập hoặc nhãn đúng. Nhóm rất lớn/ít nhóm\n",
+     "holdout cần được xem bằng mắt trước khi đổi grouping. Không sửa nhãn/split ở bước này.\n",
+     "Cache dùng capture groups cần đúng GROUPS_CSV gốc để khôi phục EDA theo recipe.\n",
+     "Nếu mất CSV, chỉ API báo cáo riêng hỗ trợ ghi evidence chưa đầy đủ; notebook sẽ dừng ở bước khôi phục, không tự suy ra capture từ tên file.\n"
+    ]
+   },
+   {
+    "cell_type": "code",
+    "id": "grouping",
+    "metadata": {},
+    "execution_count": null,
+    "outputs": [],
+    "source": [
+     "from datetime import datetime, timezone\n",
+     "from training.data.grouping_review import write_grouping_review\n",
+     "GROUP_REVIEW_ROOT = EDA_ROOT / 'grouping'\n",
+     "if GROUP_REVIEW_ROOT.exists():\n",
+     "    # Giữ báo cáo trước khi chạy lại cell; không ghi đè ảnh/nhãn hoặc báo cáo cũ.\n",
+     "    GROUP_REVIEW_ROOT = EDA_ROOT / ('grouping_' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))\n",
+     "group_review = write_grouping_review(DATASET_ROOT, GROUP_REVIEW_ROOT, groups=GROUPS,\n",
+     "    max_groups=12, samples_per_group=6,\n",
+     "    progress=lambda items, desc, unit: tqdm(items, desc=desc, unit=unit))\n",
+     "print(f\"Grouping: {group_review['groups']:,} nhóm | {group_review['edge_count']:,} liên kết nối nhóm\")\n",
+     "print('Replay khớp manifest:', group_review['partition_matches'], '| Đủ metadata:', group_review['evidence_complete'])\n",
+     "for split, value in group_review['splits'].items():\n",
+     "    print(f\"{split}: {value['groups']} nhóm | nhóm lớn nhất {value['largest_group_images']:,}/{value['images']:,} ảnh\")\n",
+     "print('Cảnh báo:', ', '.join(group_review['warnings']) or 'Không có cờ tự động; vẫn cần xem nhãn.')\n",
+     "print('Sau khi tải/giải nén ZIP cuối notebook, mở:', GROUP_REVIEW_ROOT.name + '/index.html')\n"
+    ]
+   },
+   {
+    "cell_type": "markdown",
     "id": "export-guide",
     "metadata": {},
     "source": [
-     "## 4. Tải báo cáo để xem trước\n",
+     "## 5. Tải báo cáo để xem trước\n",
      "\n",
      "Gửi **EDA_REPORT_ZIP** tải xuống ở cell cuối, không cần gửi cache ZIP lớn.\n",
-     "Báo cáo gồm JSON/CSV, biểu đồ, ảnh bbox preview, manifest, audit nguồn và training_handoff.json.\n",
+     "Báo cáo gồm JSON/CSV, biểu đồ, ảnh bbox preview, manifest, audit nguồn, training_handoff.json và grouping/index.html (CSV + ảnh nhóm/cặp liên kết).\n",
      "Giữ cache ZIP + .sha256 trên Drive. Nếu dùng tài khoản khác, chia sẻ cache ZIP cho tải qua link;\n",
      "copy cache_sha256 và manifest_sha256 trong training_handoff.json sang notebook train.\n",
      "Nếu muốn đổi lớp sau khi xem EDA, cần chuẩn bị cache phiên bản mới; chưa train ở notebook này."
