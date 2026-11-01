@@ -31,7 +31,6 @@ $variables = @{
     DATABASE_URL = 'sqlite:///' + (Join-Path $DataRoot 'backend/signsight.db').Replace('\', '/')
     SIGNSIGHT_STORAGE_ROOT = Join-Path $DataRoot 'backend/uploads/images'
     SIGNSIGHT_YOLO_WEIGHTS = Join-Path $DataRoot 'ai_engine/checkpoints/detection/best.pt'
-    SIGNSIGHT_CNN_WEIGHTS = Join-Path $DataRoot 'ai_engine/checkpoints/best_model.pth'
 }
 $previous = @{}
 foreach ($name in $variables.Keys) {

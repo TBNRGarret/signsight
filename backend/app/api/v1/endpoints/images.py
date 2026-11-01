@@ -8,8 +8,7 @@ from PIL import Image
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ai_engine.detection import DetectionResult, DetectorUnavailable, Prediction
-from ai_engine.inference import classifier
+from ai_engine.detection import DetectorUnavailable
 from backend.app.core.security import get_current_user, require_roles
 from backend.app.db.database import get_db
 from backend.app.db.models import UploadedImage, InferenceRun, ImageDetection, Observation, User
@@ -107,22 +106,15 @@ def detect(image_id: str, request: Request, user: User = Depends(get_current_use
         raise HTTPException(503, str(error)) from error
 
 
-@router.post("/images/{image_id}/classify", response_model=RunResponse)
-def classify(image_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    image = authorized_image(db, image_id, user, owner_only=True)
-    if classifier.model is None:
-        raise HTTPException(503, "CNN checkpoint unavailable; simulated predictions cannot be submitted")
-    data = request.app.state.image_store.read(image.storage_key, image.sha256)
-    db.expunge(image)
-    db.rollback()
-    prediction = classifier.predict(data)
-    result = DetectionResult(classifier.model_version, [Prediction(prediction["predicted_class"], prediction["confidence"], None)])
-    return run_response(persist_run(db, image, "cnn", result,request.app.state.catalog),request.app.state.catalog)
+@router.post("/images/{image_id}/classify", deprecated=True)
+def classify(image_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    authorized_image(db, image_id, user, owner_only=True)
+    raise HTTPException(410, "CNN classification retired; use image detection and observations")
 
 
 @router.get("/ai/status")
 def ai_status(request: Request, user: User = Depends(get_current_user)):
-    return {"cnn": {"ready": classifier.model is not None, "task": "cropped_image_classification"},
+    return {"cnn": {"ready": False, "retired": True, "task": "cropped_image_classification"},
             "yolo": request.app.state.detector.status()}
 
 
