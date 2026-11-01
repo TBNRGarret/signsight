@@ -391,6 +391,7 @@ def test_notebook_runs_prepare_train_evaluate_export_then_restores_cache(tmp_pat
     monkeypatch.syspath_prepend(str(work/'pipeline'))
     for name in ('scripts.supsign_training','scripts.dataset_eda','scripts.colab_downloads','scripts'):
         monkeypatch.delitem(sys.modules,name,raising=False)
+    clear_embedded_modules(monkeypatch)
     exec(cells['pipeline'],context)
     # A two-class fixture exercises the real notebook flow without live images/weights/GPU.
     context['CAR35']=['No_entry','No_parking']
@@ -413,8 +414,11 @@ def test_notebook_runs_prepare_train_evaluate_export_then_restores_cache(tmp_pat
     monkeypatch.setattr(urllib.request, 'urlopen', lambda *a, **k:
                         io.BytesIO((root/'scripts/supsign_training.py').read_bytes()))
     def no_audit(*args, **kwargs): raise AssertionError('Recovery must not re-audit images')
-    monkeypatch.setattr(sys.modules['scripts.dataset_eda'], 'audit_dataset', no_audit)
-    exec((root/'scripts/recover_supsign_colab.py').read_text(),context)
+    monkeypatch.setattr(sys.modules['training.data.audit'], 'audit_dataset', no_audit)
+    monkeypatch.setattr(training, 'choose_splits', splitter)
+    context['manifest'] = training.recover_failed_preparation(context['_SIGNSIGHT_PREP_TRACEBACK'])
+    context['RECIPE'] = context['manifest']['recipe']
+    context['pack_dataset'](context['DATASET_ROOT'], context['CACHE_ZIP'])
     exec(cells['prepare'],context);exec(cells['eda'],context);exec(cells['preview'],context)
     exec(cells['train'],context);exec(cells['evaluate'],context);exec(cells['export'],context)
     assert context['BEST'].is_file() and len(downloaded)==1
@@ -495,6 +499,7 @@ def test_separate_eda_exports_review_bundle_and_train_reuses_exact_split(tmp_pat
     monkeypatch.syspath_prepend(str(work/'pipeline'))
     for name in ('scripts.supsign_training', 'scripts.dataset_eda', 'scripts.colab_downloads', 'scripts'):
         monkeypatch.delitem(sys.modules, name, raising=False)
+    clear_embedded_modules(monkeypatch)
     exec(eda_cells['pipeline'], context)
     context['CAR35'] = ['No_entry', 'No_parking']
     context['RECIPE'] = context['recipe'](context['CAR35'], 42, 1, None, None)
@@ -522,6 +527,7 @@ def test_separate_eda_exports_review_bundle_and_train_reuses_exact_split(tmp_pat
     monkeypatch.syspath_prepend(str(train_work/'pipeline'))
     for name in ('scripts.supsign_training', 'scripts.dataset_eda', 'scripts.colab_downloads', 'scripts'):
         monkeypatch.delitem(sys.modules, name, raising=False)
+    clear_embedded_modules(monkeypatch)
     exec(train_cells['pipeline'], train_context)
     train_context['CAR35'] = ['No_entry', 'No_parking']
     def forbidden(*a, **k): raise AssertionError('Train must not audit or split the raw dataset again')
@@ -563,3 +569,10 @@ def test_separate_eda_exports_review_bundle_and_train_reuses_exact_split(tmp_pat
     train_context['EXPECTED_MANIFEST_SHA256'] = '0'*64
     with pytest.raises(AssertionError, match='manifest'):
         exec(train_cells['restore'], train_context)
+
+
+def clear_embedded_modules(monkeypatch):
+    import sys
+    for name in list(sys.modules):
+        if name == 'training' or name == 'training.compatibility' or name.startswith(('training.data', 'training.experiments')):
+            monkeypatch.delitem(sys.modules,name,raising=False)

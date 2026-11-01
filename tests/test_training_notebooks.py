@@ -14,3 +14,11 @@ def test_supported_notebooks_do_not_depend_on_combined_builder(monkeypatch):
     ):
         notebook = builder()
         assert notebook == json.loads((Path(__file__).parents[1]/'notebooks'/name).read_text(encoding='utf-8'))
+
+
+def test_embedded_notebooks_are_stable_across_filesystem_enumeration_order(monkeypatch):
+    from training.notebooks import build_eda_notebook
+    expected=build_eda_notebook()
+    original=Path.rglob
+    monkeypatch.setattr(Path,'rglob',lambda self,pattern:iter(reversed(list(original(self,pattern)))))
+    assert build_eda_notebook()==expected

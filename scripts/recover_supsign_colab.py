@@ -22,7 +22,7 @@ _helper = sys.modules.get('scripts.supsign_training')
 _path = (Path(CODE_ROOT) / 'scripts/supsign_training.py').resolve()
 if _helper is None or Path(_helper.__file__).resolve() != _path:
     raise RuntimeError('Run this cell in the original SignSight notebook after its pipeline cell.')
-_revision = globals().get('SIGNSIGHT_RECOVERY_REVISION', 'main')
+_revision = globals().get('SIGNSIGHT_RECOVERY_REVISION', '521c240')
 _url = f'https://raw.githubusercontent.com/TBNRGarret/signsight/{_revision}/scripts/supsign_training.py'
 with urlopen(_url, timeout=30) as _response:
     _payload = _response.read()
