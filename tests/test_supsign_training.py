@@ -296,25 +296,25 @@ def test_test_metrics_are_opt_in_and_taxonomy_is_checked(tmp_path):
 
 
 def test_notebook_is_reproducible_self_contained_small_and_does_not_auto_run_test():
-    from scripts.generate_supsign_notebook import build_notebook
+    from scripts.generate_supsign_notebook import build_eda_notebook, build_train_notebook
     root=Path(__file__).resolve().parents[1]
-    notebook=build_notebook()
-    assert notebook==json.loads((root/'notebooks/SignSight_SupSign_YOLO11s_Colab.ipynb').read_text(encoding='utf-8'))
+    notebook=build_train_notebook()
+    assert notebook==json.loads((root/'notebooks/SignSight_SupSign_YOLO11s_Train_Colab.ipynb').read_text(encoding='utf-8'))
     for cell in notebook['cells']:
         if cell['cell_type']=='code':
             ast.parse(''.join(cell['source']));assert cell['outputs']==[] and cell['execution_count'] is None
     code='\n'.join(''.join(c['source']) for c in notebook['cells'] if c['cell_type']=='code')
     assert 'files.download' in code and 'drive.mount' in code and 'RUN_HELDOUT_TEST = False' in code
     assert 'KAGGLE' not in code and 'kagglehub' not in code
-    assert 'SOURCE_ZIP' in code and 'restore_dataset' in code and 'RESUME = False' in code
-    assert 'gdown==5.2.0' in code and 'SOURCE_URL' in code and 'SAVE_TO_DRIVE' in code
+    assert 'restore_dataset' in code and 'RESUME = False' in code
+    assert 'gdown==5.2.0' in code and 'PREPARED_CACHE_URL' in code and 'SAVE_TO_DRIVE' in code
 
 
 @pytest.mark.parametrize('save_to_drive', [False, True])
 def test_notebook_can_use_local_outputs_or_mount_the_current_account(tmp_path, monkeypatch, save_to_drive):
     import os, sys, types
-    from scripts.generate_supsign_notebook import build_notebook
-    source = next(''.join(c['source']) for c in build_notebook()['cells'] if c['id']=='config')
+    from scripts.generate_supsign_notebook import build_eda_notebook, build_train_notebook
+    source = next(''.join(c['source']) for c in build_eda_notebook()['cells'] if c['id']=='config')
     assert 'SAVE_TO_DRIVE' in source
     work, persist = tmp_path/'runtime', tmp_path/'current-account'
     source = source.replace("WORK = Path('/content/signsight_supsign')", f'WORK = Path({str(work)!r})')
@@ -346,14 +346,15 @@ def test_cache_does_not_delete_an_existing_partial_file(tmp_path):
 
 @pytest.mark.parametrize('use_gdown', [False, True])
 def test_notebook_runs_prepare_train_evaluate_export_then_restores_cache(tmp_path, monkeypatch, use_gdown):
-    from scripts.generate_supsign_notebook import build_notebook
+    from scripts.generate_supsign_notebook import build_eda_notebook, build_train_notebook
     import shutil
     import sys
     import types
     import matplotlib
     matplotlib.use('Agg')
-    notebook=build_notebook()
-    cells={cell['id']:''.join(cell['source']) for cell in notebook['cells'] if cell['cell_type']=='code'}
+    notebook=build_train_notebook()
+    cells={cell['id']:''.join(cell['source']) for cell in build_eda_notebook()['cells'] if cell['cell_type']=='code'}
+    cells.update({cell['id']:''.join(cell['source']) for cell in notebook['cells'] if cell['cell_type']=='code' and cell['id'] not in ('pipeline','config','install')})
     source=archive_fixture(tmp_path);work=tmp_path/'work';work.mkdir();persist=tmp_path/'drive';persist.mkdir()
     downloaded=[];calls=[]
     downloads=[]
