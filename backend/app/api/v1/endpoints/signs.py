@@ -12,33 +12,15 @@ from backend.app.schemas.sign import (
     SignRecordCreate,
     SignRecordResponse
 )
-from ai_engine.inference import classifier
 from backend.app.services.duplicate_service import check_and_create_duplicate_candidates
 from backend.app.services.lifecycle_service import calculate_expiration_date, check_and_update_lifecycle_status
-from backend.app.services.image_store import sanitize_image
 from backend.app.core.catalog import require_catalog_id
 
 router = APIRouter()
 
-@router.post("/classify", response_model=InferenceResponse)
-async def classify_sign_image(request: Request, file: UploadFile = File(...), user: User = Depends(get_current_user)):
-    """
-    Accepts an image file and runs AI inference.
-    Returns predicted Vietnam traffic sign class, confidence, and uncertainty flag.
-    """
-    chunks, size = [], 0
-    try:
-        while chunk := await file.read(64 * 1024):
-            size += len(chunk)
-            if size > request.app.state.settings.max_upload_bytes:
-                raise HTTPException(413, "Image exceeds upload size limit")
-            chunks.append(chunk)
-        image = sanitize_image(b"".join(chunks),file.content_type,request.app.state.settings.max_image_pixels)
-        if classifier.model is None:
-            raise HTTPException(503, "CNN checkpoint unavailable")
-        return classifier.predict(image.data)
-    finally:
-        await file.close()
+@router.post("/classify", deprecated=True)
+def classify_sign_image(user: User = Depends(get_current_user)):
+    raise HTTPException(410, "CNN classification retired; upload images and use YOLO detection")
 
 @router.post("/register", response_model=SignRecordResponse, deprecated=True)
 def register_sign_record(

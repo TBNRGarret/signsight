@@ -114,3 +114,7 @@ node_modules/
 
 # Third-party inference runtime fallback settings
 /Ultralytics/
+
+# Impeccable skill session data
+.impeccable/
+**/.impeccable/

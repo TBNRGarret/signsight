@@ -296,25 +296,25 @@ def test_test_metrics_are_opt_in_and_taxonomy_is_checked(tmp_path):
 
 
 def test_notebook_is_reproducible_self_contained_small_and_does_not_auto_run_test():
-    from scripts.generate_supsign_notebook import build_notebook
+    from scripts.generate_supsign_notebook import build_eda_notebook, build_train_notebook
     root=Path(__file__).resolve().parents[1]
-    notebook=build_notebook()
-    assert notebook==json.loads((root/'notebooks/SignSight_SupSign_YOLO11s_Colab.ipynb').read_text(encoding='utf-8'))
+    notebook=build_train_notebook()
+    assert notebook==json.loads((root/'notebooks/SignSight_SupSign_YOLO11s_Train_Colab.ipynb').read_text(encoding='utf-8'))
     for cell in notebook['cells']:
         if cell['cell_type']=='code':
             ast.parse(''.join(cell['source']));assert cell['outputs']==[] and cell['execution_count'] is None
     code='\n'.join(''.join(c['source']) for c in notebook['cells'] if c['cell_type']=='code')
     assert 'files.download' in code and 'drive.mount' in code and 'RUN_HELDOUT_TEST = False' in code
     assert 'KAGGLE' not in code and 'kagglehub' not in code
-    assert 'SOURCE_ZIP' in code and 'restore_dataset' in code and 'RESUME = False' in code
-    assert 'gdown==5.2.0' in code and 'SOURCE_URL' in code and 'SAVE_TO_DRIVE' in code
+    assert 'restore_dataset' in code and 'RESUME = False' in code
+    assert 'gdown==5.2.0' in code and 'PREPARED_CACHE_URL' in code and 'SAVE_TO_DRIVE' in code
 
 
 @pytest.mark.parametrize('save_to_drive', [False, True])
 def test_notebook_can_use_local_outputs_or_mount_the_current_account(tmp_path, monkeypatch, save_to_drive):
     import os, sys, types
-    from scripts.generate_supsign_notebook import build_notebook
-    source = next(''.join(c['source']) for c in build_notebook()['cells'] if c['id']=='config')
+    from scripts.generate_supsign_notebook import build_eda_notebook, build_train_notebook
+    source = next(''.join(c['source']) for c in build_eda_notebook()['cells'] if c['id']=='config')
     assert 'SAVE_TO_DRIVE' in source
     work, persist = tmp_path/'runtime', tmp_path/'current-account'
     source = source.replace("WORK = Path('/content/signsight_supsign')", f'WORK = Path({str(work)!r})')
@@ -346,14 +346,15 @@ def test_cache_does_not_delete_an_existing_partial_file(tmp_path):
 
 @pytest.mark.parametrize('use_gdown', [False, True])
 def test_notebook_runs_prepare_train_evaluate_export_then_restores_cache(tmp_path, monkeypatch, use_gdown):
-    from scripts.generate_supsign_notebook import build_notebook
+    from scripts.generate_supsign_notebook import build_eda_notebook, build_train_notebook
     import shutil
     import sys
     import types
     import matplotlib
     matplotlib.use('Agg')
-    notebook=build_notebook()
-    cells={cell['id']:''.join(cell['source']) for cell in notebook['cells'] if cell['cell_type']=='code'}
+    notebook=build_train_notebook()
+    cells={cell['id']:''.join(cell['source']) for cell in build_eda_notebook()['cells'] if cell['cell_type']=='code'}
+    cells.update({cell['id']:''.join(cell['source']) for cell in notebook['cells'] if cell['cell_type']=='code' and cell['id'] not in ('pipeline','config','install')})
     source=archive_fixture(tmp_path);work=tmp_path/'work';work.mkdir();persist=tmp_path/'drive';persist.mkdir()
     downloaded=[];calls=[]
     downloads=[]
@@ -390,6 +391,7 @@ def test_notebook_runs_prepare_train_evaluate_export_then_restores_cache(tmp_pat
     monkeypatch.syspath_prepend(str(work/'pipeline'))
     for name in ('scripts.supsign_training','scripts.dataset_eda','scripts.colab_downloads','scripts'):
         monkeypatch.delitem(sys.modules,name,raising=False)
+    clear_embedded_modules(monkeypatch)
     exec(cells['pipeline'],context)
     # A two-class fixture exercises the real notebook flow without live images/weights/GPU.
     context['CAR35']=['No_entry','No_parking']
@@ -412,8 +414,11 @@ def test_notebook_runs_prepare_train_evaluate_export_then_restores_cache(tmp_pat
     monkeypatch.setattr(urllib.request, 'urlopen', lambda *a, **k:
                         io.BytesIO((root/'scripts/supsign_training.py').read_bytes()))
     def no_audit(*args, **kwargs): raise AssertionError('Recovery must not re-audit images')
-    monkeypatch.setattr(sys.modules['scripts.dataset_eda'], 'audit_dataset', no_audit)
-    exec((root/'scripts/recover_supsign_colab.py').read_text(),context)
+    monkeypatch.setattr(sys.modules['training.data.audit'], 'audit_dataset', no_audit)
+    monkeypatch.setattr(training, 'choose_splits', splitter)
+    context['manifest'] = training.recover_failed_preparation(context['_SIGNSIGHT_PREP_TRACEBACK'])
+    context['RECIPE'] = context['manifest']['recipe']
+    context['pack_dataset'](context['DATASET_ROOT'], context['CACHE_ZIP'])
     exec(cells['prepare'],context);exec(cells['eda'],context);exec(cells['preview'],context)
     exec(cells['train'],context);exec(cells['evaluate'],context);exec(cells['export'],context)
     assert context['BEST'].is_file() and len(downloaded)==1
@@ -450,3 +455,124 @@ def test_pretrained_download_failure_can_retry_without_an_empty_run(tmp_path):
     def unavailable(_):raise OSError('offline')
     with pytest.raises(OSError,match='offline'):train_experiment(root,run,yolo_factory=unavailable)
     assert not run.exists()
+
+
+@pytest.mark.parametrize('shared_cache', [False, True])
+def test_separate_eda_exports_review_bundle_and_train_reuses_exact_split(tmp_path, monkeypatch, shared_cache):
+    from scripts import generate_supsign_notebook as generator
+    import os, shutil, sys, types
+    import matplotlib
+    matplotlib.use('Agg')
+    # Removing either notebook entry point must fail before a user uploads it.
+    assert hasattr(generator, 'build_eda_notebook'), 'Missing standalone EDA notebook'
+    assert hasattr(generator, 'build_train_notebook'), 'Missing standalone train notebook'
+    notebooks = [generator.build_eda_notebook(), generator.build_train_notebook()]
+    for notebook in notebooks:
+        for cell in notebook['cells']:
+            if cell['cell_type'] == 'code':
+                ast.parse(''.join(cell['source']))
+                assert cell['execution_count'] is None and cell['outputs'] == []
+    eda_cells, train_cells = [
+        {c['id']: ''.join(c['source']) for c in n['cells'] if c['cell_type'] == 'code'}
+        for n in notebooks]
+    downloads, model_calls, installs = [], [], []
+    # Exercise the EDA installer without a GPU or a model package.
+    monkeypatch.setitem(sys.modules, 'torch', None)
+    monkeypatch.setitem(sys.modules, 'ultralytics', None)
+    import subprocess
+    monkeypatch.setattr(subprocess, 'check_call', lambda args: installs.append(args))
+    exec(eda_cells['install'], {})
+    assert not any('ultralytics' in arg or 'torch' in arg for args in installs for arg in args)
+    files = types.ModuleType('google.colab.files')
+    files.download = lambda path: downloads.append(Path(path))
+    colab = types.ModuleType('google.colab'); colab.files = files
+    monkeypatch.setitem(sys.modules, 'google.colab', colab)
+    monkeypatch.setitem(sys.modules, 'google.colab.files', files)
+    source = archive_fixture(tmp_path)
+    work = tmp_path/'eda-runtime'; work.mkdir()
+    persist = tmp_path/'drive'; persist.mkdir()
+    context = dict(os=os, sys=sys, Path=Path, WORK=work, PERSIST=persist, SOURCE_ZIP=source,
+        SOURCE_URL='', SOURCE_SHA256='', PREPARED_CACHE_URL='', PREPARED_CACHE_SHA256='',
+        CACHE_ZIP=persist/'datasets/fixture-v1.zip', DATASET_ROOT=work/'dataset',
+        DATASET_VERSION='fixture-v1', GROUPS_CSV=None, SEED=42, FRAME_BLOCK_SIZE=1,
+        NEAR_HASH_DISTANCE=None, IMAGE_SIZE=640)
+    monkeypatch.syspath_prepend(str(work/'pipeline'))
+    for name in ('scripts.supsign_training', 'scripts.dataset_eda', 'scripts.colab_downloads', 'scripts'):
+        monkeypatch.delitem(sys.modules, name, raising=False)
+    clear_embedded_modules(monkeypatch)
+    exec(eda_cells['pipeline'], context)
+    context['CAR35'] = ['No_entry', 'No_parking']
+    context['RECIPE'] = context['recipe'](context['CAR35'], 42, 1, None, None)
+    monkeypatch.setattr(shutil, 'disk_usage', lambda _: types.SimpleNamespace(free=100*1024**3))
+    for identifier in ('prepare', 'eda', 'preview', 'export'):
+        exec(eda_cells[identifier], context)
+    assert len(downloads) == 1 and downloads[0].is_file()
+    with zipfile.ZipFile(downloads[0]) as archive:
+        assert {'dataset_eda.json', 'class_counts.csv', 'eda_overview.png', 'bbox_preview.png',
+                'manifest.json', 'training_handoff.json', 'source_summary.json'} <= set(archive.namelist())
+        assert not any(name.endswith(('.pt', '.jpg')) or name.startswith('images/') for name in archive.namelist())
+        handoff = json.loads(archive.read('training_handoff.json'))
+        assert handoff['cache_sha256'] == hashlib.sha256(context['CACHE_ZIP'].read_bytes()).hexdigest()
+        assert handoff['manifest_sha256'] == hashlib.sha256((context['DATASET_ROOT']/'manifest.json').read_bytes()).hexdigest()
+        assert json.loads(archive.read('dataset_eda.json'))['images'] == 18
+    expected_manifest = (context['DATASET_ROOT']/'manifest.json').read_bytes()
+    source.unlink()  # Training in a new runtime has no raw dataset or EDA variables.
+    train_work = tmp_path/'train-runtime'; train_work.mkdir()
+    train_context = dict(os=os, sys=sys, Path=Path, WORK=train_work, PERSIST=persist,
+        DATASET_ROOT=train_work/'dataset', CACHE_ZIP=context['CACHE_ZIP'],
+        PREPARED_CACHE_URL='', PREPARED_CACHE_SHA256='', DATASET_VERSION='fixture-v1',
+        EXPECTED_MANIFEST_SHA256=handoff['manifest_sha256'], LABEL_REVIEWED=False,
+        RUN_DIR=persist/'runs/first', RUN_NAME='first', EPOCHS=2, IMAGE_SIZE=640, BATCH=4,
+        RESUME=False, SMOKE=False, RUN_HELDOUT_TEST=False)
+    monkeypatch.syspath_prepend(str(train_work/'pipeline'))
+    for name in ('scripts.supsign_training', 'scripts.dataset_eda', 'scripts.colab_downloads', 'scripts'):
+        monkeypatch.delitem(sys.modules, name, raising=False)
+    clear_embedded_modules(monkeypatch)
+    exec(train_cells['pipeline'], train_context)
+    train_context['CAR35'] = ['No_entry', 'No_parking']
+    def forbidden(*a, **k): raise AssertionError('Train must not audit or split the raw dataset again')
+    monkeypatch.setattr(sys.modules['scripts.supsign_training'], 'prepare_supsign', forbidden)
+    def download(**options):
+        Path(options['output']).write_bytes(context['CACHE_ZIP'].read_bytes())
+        return options['output']
+    monkeypatch.setitem(sys.modules, 'gdown', types.SimpleNamespace(download=download))
+    if shared_cache:
+        train_context.update(CACHE_ZIP=tmp_path/'other-account/cache.zip',
+            PREPARED_CACHE_URL='fixture_cache_12345', PREPARED_CACHE_SHA256='0'*64)
+        with pytest.raises(ValueError, match='SHA-256'):
+            exec(train_cells['restore'], train_context)
+        assert not train_context['DATASET_ROOT'].exists()
+        train_context['PREPARED_CACHE_SHA256'] = handoff['cache_sha256']
+    exec(train_cells['restore'], train_context)
+    assert (train_context['DATASET_ROOT']/'manifest.json').read_bytes() == expected_manifest
+    class FakeYOLO:
+        task = 'detect'; names = {0: 'No_entry', 1: 'No_parking'}
+        def __init__(self, model): model_calls.append(('load', model))
+        def train(self, **options):
+            model_calls.append(('train', options))
+            weights = Path(options['project'])/options['name']/'weights'; weights.mkdir()
+            (weights/'best.pt').write_bytes(b'best'); (weights/'last.pt').write_bytes(b'last')
+        def val(self, **options):
+            model_calls.append(('val', options))
+            return types.SimpleNamespace(results_dict={'metrics/mAP50(B)': .6})
+    monkeypatch.setitem(sys.modules, 'ultralytics', types.SimpleNamespace(YOLO=FakeYOLO))
+    with pytest.raises(AssertionError, match='LABEL_REVIEWED'):
+        exec(train_cells['train'], train_context)
+    assert model_calls == []
+    train_context['LABEL_REVIEWED'] = True
+    for identifier in ('train', 'evaluate', 'export'):
+        exec(train_cells[identifier], train_context)
+    assert [options['split'] for kind, options in model_calls if kind == 'val'] == ['val']
+    with zipfile.ZipFile(downloads[-1]) as archive:
+        assert 'run/weights/best.pt' in archive.namelist()
+        assert archive.read('dataset/manifest.json') == expected_manifest
+    train_context['EXPECTED_MANIFEST_SHA256'] = '0'*64
+    with pytest.raises(AssertionError, match='manifest'):
+        exec(train_cells['restore'], train_context)
+
+
+def clear_embedded_modules(monkeypatch):
+    import sys
+    for name in list(sys.modules):
+        if name == 'training' or name == 'training.compatibility' or name.startswith(('training.data', 'training.experiments')):
+            monkeypatch.delitem(sys.modules,name,raising=False)

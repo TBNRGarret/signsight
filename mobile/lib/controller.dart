@@ -8,6 +8,10 @@ import 'session_store.dart';
 import 'draft_store.dart';
 import 'device_services.dart';
 
+part 'features/map/map_state.dart';
+part 'features/capture/capture_state.dart';
+part 'features/history/history_state.dart';
+
 class AppController extends ChangeNotifier {
   AppController(this.api, this.store, {DraftStore? drafts})
     : drafts = drafts ?? MemoryDraftStore() {
@@ -26,31 +30,73 @@ class AppController extends ChangeNotifier {
   Future<void> _draftWrites = Future.value();
   String? _draftOwner;
   UserProfile? user;
-  String? authError, mapError, captureError, captureMessage, historyError;
-  bool authBusy = false,
-      mapBusy = false,
-      captureBusy = false,
-      historyBusy = false;
-  GeoPoint center = const GeoPoint(10.7769, 106.7009);
-  List<Sign> nearbySigns = [];
-  int nearbyTotal = 0;
-  int radius = 500;
-  List<Place> places = [];
-  DrivingRoute? route;
-  Sign? selectedSign;
-  CaptureDraft? draft;
-  List<SignType> captureTypes = [];
-  bool captureTypesBusy = false;
-  String? captureTypesError;
-  List<Contribution> contributions = [];
-  int historyTotal = 0;
-  String? historyStatus;
-  int corridor = 50;
-  List<SignReport> reports = [];
-  List<Sign> confirmations = [];
-  int reportTotal = 0, confirmationTotal = 0;
-  bool feedbackBusy = false, reportBusy = false;
-  String? feedbackError, reportError;
+  String? authError;
+  bool authBusy = false;
+  final _mapState = _MapState();
+  String? get mapError => _mapState.mapError;
+  set mapError(String? value) => _mapState.mapError = value;
+  bool get mapBusy => _mapState.mapBusy;
+  set mapBusy(bool value) => _mapState.mapBusy = value;
+  GeoPoint get center => _mapState.center;
+  set center(GeoPoint value) => _mapState.center = value;
+  List<Sign> get nearbySigns => _mapState.nearbySigns;
+  set nearbySigns(List<Sign> value) => _mapState.nearbySigns = value;
+  int get nearbyTotal => _mapState.nearbyTotal;
+  set nearbyTotal(int value) => _mapState.nearbyTotal = value;
+  int get radius => _mapState.radius;
+  set radius(int value) => _mapState.radius = value;
+  List<Place> get places => _mapState.places;
+  set places(List<Place> value) => _mapState.places = value;
+  DrivingRoute? get route => _mapState.route;
+  set route(DrivingRoute? value) => _mapState.route = value;
+  Sign? get selectedSign => _mapState.selectedSign;
+  set selectedSign(Sign? value) => _mapState.selectedSign = value;
+  int get corridor => _mapState.corridor;
+  set corridor(int value) => _mapState.corridor = value;
+  final _captureState = _CaptureState();
+  String? get captureError => _captureState.captureError;
+  set captureError(String? value) => _captureState.captureError = value;
+  String? get captureMessage => _captureState.captureMessage;
+  set captureMessage(String? value) => _captureState.captureMessage = value;
+  bool get captureBusy => _captureState.captureBusy;
+  set captureBusy(bool value) => _captureState.captureBusy = value;
+  CaptureDraft? get draft => _captureState.draft;
+  set draft(CaptureDraft? value) => _captureState.draft = value;
+  List<SignType> get captureTypes => _captureState.captureTypes;
+  set captureTypes(List<SignType> value) => _captureState.captureTypes = value;
+  bool get captureTypesBusy => _captureState.captureTypesBusy;
+  set captureTypesBusy(bool value) => _captureState.captureTypesBusy = value;
+  String? get captureTypesError => _captureState.captureTypesError;
+  set captureTypesError(String? value) =>
+      _captureState.captureTypesError = value;
+  final _historyState = _HistoryState();
+  String? get historyError => _historyState.historyError;
+  set historyError(String? value) => _historyState.historyError = value;
+  bool get historyBusy => _historyState.historyBusy;
+  set historyBusy(bool value) => _historyState.historyBusy = value;
+  List<Contribution> get contributions => _historyState.contributions;
+  set contributions(List<Contribution> value) =>
+      _historyState.contributions = value;
+  int get historyTotal => _historyState.historyTotal;
+  set historyTotal(int value) => _historyState.historyTotal = value;
+  String? get historyStatus => _historyState.historyStatus;
+  set historyStatus(String? value) => _historyState.historyStatus = value;
+  List<SignReport> get reports => _historyState.reports;
+  set reports(List<SignReport> value) => _historyState.reports = value;
+  List<Sign> get confirmations => _historyState.confirmations;
+  set confirmations(List<Sign> value) => _historyState.confirmations = value;
+  int get reportTotal => _historyState.reportTotal;
+  set reportTotal(int value) => _historyState.reportTotal = value;
+  int get confirmationTotal => _historyState.confirmationTotal;
+  set confirmationTotal(int value) => _historyState.confirmationTotal = value;
+  bool get feedbackBusy => _historyState.feedbackBusy;
+  set feedbackBusy(bool value) => _historyState.feedbackBusy = value;
+  bool get reportBusy => _historyState.reportBusy;
+  set reportBusy(bool value) => _historyState.reportBusy = value;
+  String? get feedbackError => _historyState.feedbackError;
+  set feedbackError(String? value) => _historyState.feedbackError = value;
+  String? get reportError => _historyState.reportError;
+  set reportError(String? value) => _historyState.reportError = value;
   int _feedbackVersion = 0;
   int _authVersion = 0, _mapVersion = 0, _photoVersion = 0, _historyVersion = 0;
   bool _disposed = false;
@@ -74,50 +120,6 @@ class AppController extends ChangeNotifier {
 
   bool _current(int version) => !_disposed && version == _authVersion;
   Future<void> flushDraft() => _draftWrites;
-  void _saveDraft({String? clearOwner}) {
-    final owner = clearOwner ?? user?.id;
-    if (owner == null) return;
-    final value = clearOwner == null ? draft?.toJson() : null;
-    _draftWrites = _draftWrites
-        .catchError((_) {})
-        .then((_) async {
-          if (value == null) {
-            await drafts.clear(owner);
-          } else {
-            await drafts.save(owner, value);
-          }
-        })
-        .catchError((Object error) {
-          if (user?.id == owner) {
-            captureError =
-                'Chưa lưu được bản nháp trên thiết bị. Kiểm tra dung lượng.';
-            _notify();
-          }
-        });
-  }
-
-  Future<void> _restoreDraft(int version) async {
-    if (user == null || draft != null) return;
-    final operation = _photoVersion, owner = user!.id;
-    _draftOwner = owner;
-    try {
-      await _draftWrites;
-      final raw = await drafts.load(owner);
-      if (!_current(version) || operation != _photoVersion || draft != null) {
-        return;
-      }
-      if (raw != null) {
-        draft = CaptureDraft.fromJson(raw);
-        if (draft!.proposedClass != null) await loadCaptureTypes();
-        captureMessage = 'Đã khôi phục bản nháp. Kiểm tra rồi tiếp tục gửi.';
-      }
-    } catch (_) {
-      if (_current(version)) {
-        _saveDraft(clearOwner: owner);
-        captureError = 'Không đọc được bản nháp cũ. Chọn lại ảnh.';
-      }
-    }
-  }
 
   Future<void> _persist(int version, Session? session) {
     _writes = _writes.catchError((_) {}).then((_) async {
@@ -309,474 +311,38 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<void> refreshNearby({bool more = false}) async {
-    if (!signedIn || mapBusy) return;
-    final version = _authVersion, operation = ++_mapVersion;
-    mapBusy = true;
-    mapError = null;
-    _notify();
-    try {
-      final page = await api.nearby(
-        center.latitude,
-        center.longitude,
-        radius: radius,
-        offset: more ? nearbySigns.length : 0,
-      );
-      if (!_current(version) || operation != _mapVersion) return;
-      nearbySigns = more ? [...nearbySigns, ...page.items] : page.items;
-      nearbyTotal = page.total;
-    } catch (error) {
-      if (operation == _mapVersion) {
-        await _failure(error, version, (m) => mapError = m);
-      }
-    } finally {
-      if (_current(version) && operation == _mapVersion) {
-        mapBusy = false;
-        _notify();
-      }
-    }
-  }
-
-  void moveCenter(GeoPoint point) {
-    if (point.valid) {
-      center = point;
-      _notify();
-    }
-  }
-
-  Future<void> search(String query) async {
-    if (!signedIn) return;
-    final cleaned = query.trim();
-    if (cleaned.length < 3) {
-      mapError = 'Nhập ít nhất 3 ký tự.';
-      _notify();
-      return;
-    }
-    final version = _authVersion, operation = ++_mapVersion;
-    mapBusy = true;
-    mapError = null;
-    places = [];
-    _notify();
-    try {
-      final results = await api.search(cleaned);
-      if (_current(version) && operation == _mapVersion) {
-        places = results;
-        if (results.isEmpty) {
-          mapError = 'Chưa tìm thấy địa điểm. Thử thêm tên đường hoặc quận.';
-        }
-      }
-    } catch (error) {
-      if (operation == _mapVersion) {
-        await _failure(error, version, (m) => mapError = m);
-      }
-    } finally {
-      if (_current(version) && operation == _mapVersion) {
-        mapBusy = false;
-        _notify();
-      }
-    }
-  }
-
-  Future<void> routeTo(Place place) async {
-    if (!signedIn) return;
-    final version = _authVersion, operation = ++_mapVersion;
-    mapBusy = true;
-    mapError = null;
-    places = [];
-    route = null;
-    _notify();
-    try {
-      final result = await api.route(center, place.point, buffer: corridor);
-      if (_current(version) && operation == _mapVersion) route = result;
-    } catch (error) {
-      if (operation == _mapVersion) {
-        await _failure(error, version, (m) => mapError = m);
-      }
-    } finally {
-      if (_current(version) && operation == _mapVersion) {
-        mapBusy = false;
-        _notify();
-      }
-    }
-  }
-
-  void clearRoute() {
-    _mapVersion++;
-    route = null;
-    places = [];
-    mapBusy = false;
-    _notify();
-  }
-
-  void selectSign(Sign? sign) {
-    selectedSign = sign;
-    _notify();
-  }
-
-  Future<void> openSign(String id) async {
-    final version = _authVersion;
-    try {
-      final sign = await api.sign(id);
-      if (_current(version)) {
-        center = sign.point;
-        selectedSign = sign;
-        _notify();
-      }
-    } catch (error) {
-      await _failure(error, version, (m) => mapError = m);
-    }
-  }
-
-  Future<void> choosePhoto(Uint8List bytes, String name) async {
-    if (!signedIn || captureBusy) return;
-    if (bytes.length > 10 * 1024 * 1024) {
-      captureError = 'Ảnh tối đa 10 MB. Chọn ảnh nhỏ hơn.';
-      _notify();
-      return;
-    }
-    final version = _authVersion, operation = ++_photoVersion;
-    captureBusy = true;
-    captureError = null;
-    captureMessage = null;
-    draft = CaptureDraft(photo: null, bytes: bytes, name: name);
-    _saveDraft();
-    _notify();
-    try {
-      final photo = await api.upload(bytes, name);
-      if (!_current(version) || operation != _photoVersion) return;
-      draft!.photo = photo;
-      draft!.suggestion = photo.exif;
-      _saveDraft();
-      _notify();
-      final sanitized = await api.photoContent(photo.id);
-      if (!_current(version) || operation != _photoVersion) return;
-      draft!.bytes = sanitized;
-      draft!.previewReady = true;
-      _saveDraft();
-      final result = await api.detect(photo.id);
-      if (!_current(version) || operation != _photoVersion) return;
-      draft!.detections = result;
-      draft!.selectedId = result.firstOrNull?.id;
-      _saveDraft();
-      if (result.isEmpty) {
-        captureMessage = 'Chưa tìm thấy biển. Thử ảnh gần và rõ hơn.';
-      }
-    } catch (error) {
-      if (operation == _photoVersion) {
-        await _failure(error, version, (m) => captureError = m);
-      }
-    } finally {
-      if (_current(version) && operation == _photoVersion) {
-        captureBusy = false;
-        _notify();
-      }
-    }
-  }
-
-  Future<void> pickPhoto(Future<PickedPhoto?> Function() pick) async {
-    if (!signedIn || captureBusy) return;
-    final version = _authVersion, owner = user!.id;
-    var saved = false;
-    _draftWrites = _draftWrites
-        .catchError((_) {})
-        .then((_) async {
-          if (_current(version)) {
-            await drafts.save('picker', {'owner': owner});
-            saved = true;
-          }
-        })
-        .catchError((_) {
-          if (_current(version)) {
-            captureError =
-                'Chưa lưu được bản nháp trên thiết bị. Kiểm tra dung lượng.';
-            _notify();
-          }
-        });
-    await _draftWrites;
-    if (!_current(version) || !saved) return;
-    try {
-      final photo = await pick();
-      if (photo != null && _current(version)) {
-        await choosePhoto(photo.bytes, photo.name);
-      }
-    } finally {
-      if (_current(version)) {
-        _draftWrites = _draftWrites
-            .catchError((_) {})
-            .then((_) => drafts.clear('picker'))
-            .catchError((_) {});
-        await _draftWrites;
-      }
-    }
-  }
-
-  Future<void> recoverPhoto(Future<PickedPhoto?> Function() recover) async {
-    if (!signedIn || captureBusy) return;
-    final version = _authVersion;
-    await _draftWrites;
-    final marker = await drafts.load('picker');
-    if (!_current(version) || marker?['owner'] != user?.id) return;
-    await pickPhoto(recover);
-  }
-
-  Future<void> retryDetection() async {
-    if (draft == null || captureBusy || !signedIn) return;
-    final version = _authVersion, operation = ++_photoVersion;
-    captureBusy = true;
-    captureError = null;
-    captureMessage = null;
-    _notify();
-    try {
-      if (draft!.photo == null) {
-        final photo = await api.upload(draft!.bytes, draft!.name);
-        if (!_current(version) || operation != _photoVersion) return;
-        draft!.photo = photo;
-        draft!.suggestion = photo.exif;
-        _saveDraft();
-      }
-      if (!draft!.previewReady) {
-        final sanitized = await api.photoContent(draft!.photo!.id);
-        if (!_current(version) || operation != _photoVersion) return;
-        draft!.bytes = sanitized;
-        draft!.previewReady = true;
-        _saveDraft();
-      }
-      final result = await api.detect(draft!.photo!.id);
-      if (!_current(version) || operation != _photoVersion) return;
-      draft!.detections = result;
-      draft!.selectedId = result.firstOrNull?.id;
-      draft!.labelConfirmed = false;
-      draft!.proposedClass = null;
-      draft!.correctionReason = '';
-      draft!.confirmedLocation = null;
-      _saveDraft();
-      if (result.isEmpty) {
-        captureMessage = 'Chưa tìm thấy biển. Thử ảnh gần và rõ hơn.';
-      }
-    } catch (error) {
-      if (operation == _photoVersion) {
-        await _failure(error, version, (m) => captureError = m);
-      }
-    } finally {
-      if (_current(version) && operation == _photoVersion) {
-        captureBusy = false;
-        _notify();
-      }
-    }
-  }
-
-  void selectDetection(String id) {
-    if (draft?.selectedId == id) return;
-    if (draft?.detections.any((d) => d.id == id) != true) return;
-    draft!.selectedId = id;
-    draft!.labelConfirmed = false;
-    draft!.proposedClass = null;
-    draft!.correctionReason = '';
-    draft!.confirmedLocation = null;
-    _saveDraft();
-    _notify();
-  }
-
-  Future<void> loadCaptureTypes() async {
-    if (!signedIn || captureTypesBusy || captureTypes.isNotEmpty) return;
-    final version = _authVersion;
-    captureTypesBusy = true;
-    captureTypesError = null;
-    _notify();
-    try {
-      final types = await api.taxonomy();
-      if (!_current(version)) return;
-      if (types.isEmpty ||
-          types.any((type) => type.id < 0) ||
-          types.map((type) => type.id).toSet().length != types.length) {
-        throw const FormatException('Invalid catalog');
-      }
-      captureTypes = types;
-    } catch (error) {
-      await _failure(
-        error,
-        version,
-        (message) =>
-            captureTypesError = 'Chưa tải được danh mục biển. Thử lại.',
-      );
-    } finally {
-      if (_current(version)) {
-        captureTypesBusy = false;
-        _notify();
-      }
-    }
-  }
-
-  void proposeClass(int? id) {
-    if (draft?.selected == null || captureBusy) return;
-    if (id != null && !captureTypes.any((type) => type.id == id)) return;
-    draft!.proposedClass = id == draft!.selected!.classId ? null : id;
-    draft!.correctionReason = '';
-    draft!.labelConfirmed = false;
-    _saveDraft();
-    _notify();
-  }
-
-  void setCorrectionReason(String reason) {
-    if (draft == null || captureBusy) return;
-    draft!.correctionReason = reason;
-    draft!.labelConfirmed = false;
-    _saveDraft();
-    _notify();
-  }
-
-  void confirmLabel(bool value) {
-    draft?.labelConfirmed = value;
-    _saveDraft();
-    _notify();
-  }
-
-  void suggestLocation(GeoPoint point) {
-    if (point.valid && draft?.confirmedLocation == null) {
-      draft?.suggestion = point;
-      _saveDraft();
-      _notify();
-    }
-  }
-
-  void confirmLocation(GeoPoint point) {
-    if (point.valid && draft != null) {
-      draft!.suggestion = point;
-      draft!.confirmedLocation = point;
-      _saveDraft();
-      _notify();
-    }
-  }
-
-  Future<void> submitContribution() async {
-    if (!canSubmit) return;
-    final version = _authVersion, operation = ++_photoVersion;
-    final current = draft!;
-    captureBusy = true;
-    captureError = null;
-    _notify();
-    try {
-      await api.contribute(
-        current.photo!.id,
-        current.selected!.id,
-        current.confirmedLocation!,
-        proposedClass: current.proposedClass,
-        correctionReason: current.correctionReason.trim(),
-      );
-      if (!_current(version) || operation != _photoVersion) return;
-      draft = null;
-      _saveDraft();
-      captureMessage = 'Đã gửi đóng góp, đang chờ duyệt.';
-    } catch (error) {
-      if (operation == _photoVersion) {
-        await _failure(error, version, (m) => captureError = m);
-      }
-    } finally {
-      if (_current(version) && operation == _photoVersion) {
-        captureBusy = false;
-        _notify();
-      }
-    }
-  }
-
-  void discardDraft() {
-    if (captureBusy) return;
-    _photoVersion++;
-    draft = null;
-    captureError = captureMessage = null;
-    _saveDraft();
-    _notify();
-  }
-
-  Future<void> loadHistory({String? status, bool more = false}) async {
-    if (!signedIn) return;
-    final version = _authVersion, operation = ++_historyVersion;
-    historyBusy = true;
-    historyError = null;
-    if (!more) {
-      historyStatus = status;
-      contributions = [];
-    }
-    _notify();
-    try {
-      final page = await api.history(
-        status: historyStatus,
-        offset: more ? contributions.length : 0,
-      );
-      if (!_current(version) || operation != _historyVersion) return;
-      contributions = more ? [...contributions, ...page.items] : page.items;
-      historyTotal = page.total;
-    } catch (error) {
-      if (operation == _historyVersion) {
-        await _failure(error, version, (m) => historyError = m);
-      }
-    } finally {
-      if (_current(version) && operation == _historyVersion) {
-        historyBusy = false;
-        _notify();
-      }
-    }
-  }
-
-  Future<void> loadReports({bool more = false}) => _loadFeedback(false, more);
+  Future<void> refreshNearby({bool more = false}) =>
+      _actionRefreshNearby(more: more);
+  void moveCenter(GeoPoint point) => _actionMoveCenter(point);
+  Future<void> search(String query) => _actionSearch(query);
+  Future<void> routeTo(Place place) => _actionRouteTo(place);
+  void clearRoute() => _actionClearRoute();
+  void selectSign(Sign? sign) => _actionSelectSign(sign);
+  Future<void> openSign(String id) => _actionOpenSign(id);
+  Future<void> choosePhoto(Uint8List bytes, String name) =>
+      _actionChoosePhoto(bytes, name);
+  Future<void> pickPhoto(Future<PickedPhoto?> Function() pick) =>
+      _actionPickPhoto(pick);
+  Future<void> recoverPhoto(Future<PickedPhoto?> Function() recover) =>
+      _actionRecoverPhoto(recover);
+  Future<void> retryDetection() => _actionRetryDetection();
+  void selectDetection(String id) => _actionSelectDetection(id);
+  Future<void> loadCaptureTypes() => _actionLoadCaptureTypes();
+  void proposeClass(int? id) => _actionProposeClass(id);
+  void setCorrectionReason(String reason) => _actionSetCorrectionReason(reason);
+  void confirmLabel(bool value) => _actionConfirmLabel(value);
+  void suggestLocation(GeoPoint point) => _actionSuggestLocation(point);
+  void confirmLocation(GeoPoint point) => _actionConfirmLocation(point);
+  Future<void> submitContribution() => _actionSubmitContribution();
+  void discardDraft() => _actionDiscardDraft();
+  Future<void> loadHistory({String? status, bool more = false}) =>
+      _actionLoadHistory(status: status, more: more);
+  Future<void> loadReports({bool more = false}) =>
+      _actionLoadReports(more: more);
   Future<void> loadConfirmations({bool more = false}) =>
-      _loadFeedback(true, more);
-
-  Future<void> _loadFeedback(bool confirm, bool more) async {
-    if (!signedIn) return;
-    final version = _authVersion, operation = ++_feedbackVersion;
-    feedbackBusy = true;
-    feedbackError = null;
-    _notify();
-    try {
-      if (confirm) {
-        final page = await api.confirmations(
-          offset: more ? confirmations.length : 0,
-        );
-        if (!_current(version) || operation != _feedbackVersion) return;
-        confirmations = more ? [...confirmations, ...page.items] : page.items;
-        confirmationTotal = page.total;
-      } else {
-        final page = await api.reports(offset: more ? reports.length : 0);
-        if (!_current(version) || operation != _feedbackVersion) return;
-        reports = more ? [...reports, ...page.items] : page.items;
-        reportTotal = page.total;
-      }
-    } catch (error) {
-      if (operation == _feedbackVersion) {
-        await _failure(error, version, (m) => feedbackError = m);
-      }
-    } finally {
-      if (_current(version) && operation == _feedbackVersion) {
-        feedbackBusy = false;
-        _notify();
-      }
-    }
-  }
-
-  Future<UploadedPhoto?> uploadEvidence(Uint8List bytes, String name) async {
-    if (!signedIn || reportBusy) return null;
-    final version = _authVersion;
-    reportBusy = true;
-    reportError = null;
-    _notify();
-    try {
-      if (bytes.length > 10 * 1024 * 1024) {
-        throw const ApiFailure(422, 'Ảnh tối đa 10 MB.');
-      }
-      final photo = await api.upload(bytes, name);
-      return _current(version) ? photo : null;
-    } catch (error) {
-      await _failure(error, version, (m) => reportError = m);
-      return null;
-    } finally {
-      if (_current(version)) {
-        reportBusy = false;
-        _notify();
-      }
-    }
-  }
-
+      _actionLoadConfirmations(more: more);
+  Future<UploadedPhoto?> uploadEvidence(Uint8List bytes, String name) =>
+      _actionUploadEvidence(bytes, name);
   Future<bool> submitReport(
     String signId,
     ReportAction action,
@@ -784,42 +350,14 @@ class AppController extends ChangeNotifier {
     String comment, {
     GeoPoint? point,
     int? proposedClass,
-  }) async {
-    if (!signedIn || reportBusy) return false;
-    reportError = null;
-    if (comment.trim().length < 3 ||
-        action == ReportAction.correctLocation && point?.valid != true ||
-        action == ReportAction.correctClass && proposedClass == null) {
-      reportError = 'Thêm mô tả, ảnh và thông tin sửa đổi trước khi gửi.';
-      _notify();
-      return false;
-    }
-    final version = _authVersion;
-    reportBusy = true;
-    _notify();
-    try {
-      final report = await api.report(
-        signId,
-        action,
-        imageId,
-        comment,
-        point: point,
-        proposedClass: proposedClass,
-      );
-      if (!_current(version)) return false;
-      reports = [report, ...reports.where((r) => r.id != report.id)];
-      reportTotal++;
-      return true;
-    } catch (error) {
-      await _failure(error, version, (m) => reportError = m);
-      return false;
-    } finally {
-      if (_current(version)) {
-        reportBusy = false;
-        _notify();
-      }
-    }
-  }
+  }) => _actionSubmitReport(
+    signId,
+    action,
+    imageId,
+    comment,
+    point: point,
+    proposedClass: proposedClass,
+  );
 
   @override
   void dispose() {

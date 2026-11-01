@@ -42,6 +42,14 @@ Future<void> waitFor(WidgetTester tester, bool Function() ready) async {
   fail('Timed out waiting for native user flow');
 }
 
+Future<void> reviewFrame(WidgetTester tester, String name) async {
+  if (!const bool.fromEnvironment('SIGNSIGHT_CAPTURE_VISUALS')) return;
+  await tester.pump(const Duration(milliseconds: 500));
+  debugPrint('SIGNSIGHT_VISUAL_READY:$name');
+  // A host-side adb screencap preserves the native MapLibre surface.
+  await tester.runAsync(() => Future<void>.delayed(const Duration(seconds: 5)));
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets(
@@ -73,8 +81,11 @@ void main() {
           },
         ),
       );
+      await tester.pump(const Duration(seconds: 2));
+      await reviewFrame(tester, 'phone-map-guest');
       await tester.tap(find.byTooltip('Tài khoản'));
       await tester.pumpAndSettle();
+      await reviewFrame(tester, 'phone-login');
       await tester.enterText(
         find.widgetWithText(TextField, 'Tên đăng nhập'),
         name,
@@ -86,15 +97,36 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Đăng nhập'));
       await waitFor(tester, () => controller.signedIn && !controller.authBusy);
       await tester.pump(const Duration(seconds: 1));
+      await reviewFrame(tester, 'phone-map');
+      if (const bool.fromEnvironment('SIGNSIGHT_CAPTURE_VISUALS')) {
+        await tester.tap(find.byTooltip('Tài khoản'));
+        await tester.pumpAndSettle();
+        await reviewFrame(tester, 'phone-account');
+        Navigator.of(tester.element(find.text('Giao diện'))).pop();
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Danh sách biển'));
+        await tester.pumpAndSettle();
+        await reviewFrame(tester, 'phone-sign-list');
+        Navigator.of(tester.element(find.byType(SignList))).pop();
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Của tôi').last);
+        await tester.pumpAndSettle();
+        await reviewFrame(tester, 'phone-history-empty');
+      }
       await tester.tap(find.text('Đóng góp').last);
       await tester.pumpAndSettle();
+      await reviewFrame(tester, 'phone-capture');
       await tester.tap(find.text('Chụp biển báo'));
       await waitFor(
         tester,
         () => controller.draft?.selected != null && !controller.captureBusy,
       );
       await tester.pump();
-      await tester.ensureVisible(find.text('Sửa loại biển nếu AI nhận sai'));
+      await reviewFrame(tester, 'phone-detection');
+      await tester.scrollUntilVisible(
+        find.text('Sửa loại biển nếu AI nhận sai'),
+        160,
+      );
       await tester.tap(find.text('Sửa loại biển nếu AI nhận sai'));
       await waitFor(tester, () => controller.captureTypes.isNotEmpty);
       await tester.pumpAndSettle();
@@ -117,10 +149,7 @@ void main() {
       if (const bool.fromEnvironment('SIGNSIGHT_CAPTURE_VISUALS')) {
         // Capture via adb screencap: converting the Flutter surface can recreate
         // MapLibre platform views and interfere with lifecycle acceptance.
-        debugPrint('NATIVE_CORRECTION_PREVIEW_READY');
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(seconds: 8)),
-        );
+        await reviewFrame(tester, 'phone-correction');
       }
       await tester.ensureVisible(find.byType(CheckboxListTile));
       await tester.tap(find.byType(CheckboxListTile));
@@ -128,6 +157,7 @@ void main() {
       await tester.ensureVisible(find.text('Chọn'));
       await tester.tap(find.text('Chọn'));
       await tester.pump(const Duration(seconds: 1));
+      await reviewFrame(tester, 'phone-pin-picker');
       await tester.tap(find.byTooltip('Dùng GPS'));
       await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.text('Xác nhận vị trí'));
@@ -164,19 +194,23 @@ void main() {
       await controller.loadHistory();
       await tester.tap(find.text('Của tôi').last);
       await tester.pumpAndSettle();
+      await reviewFrame(tester, 'phone-history-approved');
       await tester.tap(find.text('P.125'));
       await tester.pumpAndSettle();
+      await reviewFrame(tester, 'phone-contribution-detail');
       await tester.tap(find.text('Xem trên bản đồ'));
       await waitFor(tester, () => controller.selectedSign?.id == signId);
       await tester.pump(const Duration(seconds: 2));
       expect(scene!.signs.map((s) => s.id), contains(signId));
       expect(find.byType(SignMap), findsOneWidget);
+      await reviewFrame(tester, 'phone-selected-sign');
       expect(
         find.text('Không thể cập nhật bản đồ. Thử tải lại.'),
         findsNothing,
       );
       await tester.tap(find.text('Báo cáo / xác nhận'));
       await tester.pumpAndSettle();
+      await reviewFrame(tester, 'phone-report');
       await tester.enterText(
         find.widgetWithText(TextField, 'Mô tả quan sát'),
         'Biển vẫn còn - synthetic evidence',
@@ -194,6 +228,22 @@ void main() {
         () => controller.reports.isNotEmpty && !controller.reportBusy,
       );
       expect(controller.reports.single.status, 'pending');
+      if (const bool.fromEnvironment('SIGNSIGHT_CAPTURE_VISUALS')) {
+        debugPrint('SIGNSIGHT_VISUAL_PROFILE:dark-large');
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(seconds: 4)),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Đóng góp').last);
+        await tester.pumpAndSettle();
+        await reviewFrame(tester, 'phone-dark-large-capture');
+        await tester.tap(find.text('Của tôi').last);
+        await tester.pumpAndSettle();
+        await reviewFrame(tester, 'phone-dark-large-history');
+        await tester.tap(find.text('Bản đồ').last);
+        await tester.pumpAndSettle();
+        await reviewFrame(tester, 'phone-dark-large-map');
+      }
       await controller.logout();
       await controller.flushDraft();
       await tester.pumpWidget(const SizedBox.shrink());

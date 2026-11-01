@@ -17,6 +17,7 @@ class WebFiles(StaticFiles):
         return bool(stat_result and os.path.samefile(full_path, Path(self.directory) / 'management.html'))
 
     async def get_response(self, path, scope):
+        path = {'auth.js': 'shared/auth.js', 'catalog.js': 'shared/catalog.js', 'theme.js': 'shared/theme.js', 'theme.css': 'shared/theme.css', 'sign_link.js': 'shared/sign_link.js', 'management.js': 'staff/management.js', 'management.css': 'staff/management.css'}.get(path, path)
         if await run_in_threadpool(self.is_staff_document, path):
             request = Request(scope)
             token = await oauth2_scheme(request)

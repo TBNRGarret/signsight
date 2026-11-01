@@ -21,7 +21,7 @@ function app(request) {
     dispatchEvent(event){for(const fn of events.get(event.type)||[])fn(event);}};
   const context=vm.createContext({window,document,URLSearchParams,clearTimeout,setTimeout,navigator:{},
     CustomEvent:class{constructor(type){this.type=type;}}});
-  vm.runInContext(read('catalog.js'),context);
+  vm.runInContext(read('shared/catalog.js'),context);
   return {api,window,document,elements,context,calls,finish,
     get:id=>document.getElementById(id), run:name=>{if(name==='observations.js')vm.runInContext(read('contribution_history.js'),context);return vm.runInContext(read(name),context);}};
 }
@@ -30,7 +30,7 @@ function mapApp(request) {
   a.window.signSightMap={mount:()=>({map})};
   a.window.signSightReports={mount:()=>({refreshPin(){},select(){}})};
   a.get('nearby-radius').value='1000';
-  a.run('routing.js');a.run('sign_link.js');
+  a.run('routing.js');a.run('shared/sign_link.js');
   for(const script of read('index.html').matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))vm.runInContext(script[1],a.context);
   return a;
 }

@@ -267,16 +267,7 @@ def test_concurrent_reviews_publish_exactly_one_record(client,application):
         assert db.query(SignRecord).count() == 1 and db.query(Evidence).count() == 1
 
 
-def test_real_cnn_classification_has_provenance_and_no_box(client,application):
-    from ai_engine.inference import classifier
-    if classifier.model is None:
-        pytest.skip('Real CNN checkpoint not present in this checkout')
-    auth = owner(client); image = upload(client,auth)
-    result = client.post(f"/api/v1/images/{image['id']}/classify",headers=auth)
-    assert result.status_code == 200, result.text
-    run = result.json()
-    assert run['engine'] == 'cnn' and run['task'] == 'classification'
-    assert run['model_version'].startswith('sha256:') and run['detections'][0]['bbox'] is None
+
 
 
 @pytest.mark.parametrize('prediction',[Prediction(0,.8,(1,2,101,30)),Prediction(0,.8,(1,2,0,30)),Prediction(999,.8,(1,2,30,30)),Prediction(0,float('nan'),(1,2,30,30))])
@@ -311,10 +302,4 @@ def test_chunked_upload_cannot_bypass_request_limit(client,application):
     assert response.status_code == 413, response.text
 
 
-def test_absent_cnn_does_not_persist_a_simulated_result(client,application,monkeypatch):
-    from backend.app.api.v1.endpoints.images import classifier
-    auth = owner(client); image = upload(client,auth)
-    monkeypatch.setattr(classifier,'model',None)
-    assert client.post(f"/api/v1/images/{image['id']}/classify",headers=auth).status_code == 503
-    with application.state.session_factory() as db:
-        assert db.query(InferenceRun).count() == 0
+

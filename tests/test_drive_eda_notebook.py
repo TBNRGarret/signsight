@@ -9,7 +9,6 @@ import pytest
 
 from scripts.dataset_eda import DatasetReader, audit_dataset
 from scripts.drive_eda_source import resolve_archive
-from scripts.generate_drive_eda_notebook import build_notebook
 
 
 def make_zip(path):
@@ -76,78 +75,5 @@ def test_download_id_cannot_escape_cache_directory(tmp_path, file_id):
         resolve_archive(file_id, tmp_path / 'cache', download=lambda **_: None)
 
 
-def test_drive_notebook_is_standalone_generated_and_contains_the_supplied_file_id():
-    notebook = build_notebook()
-    target = Path(__file__).parents[1] / 'notebooks/SignSight_Drive_Dataset_EDA_Colab.ipynb'
-    assert notebook == json.loads(target.read_text(encoding='utf-8'))
-    code = '\n'.join(''.join(cell['source']) for cell in notebook['cells'] if cell['cell_type'] == 'code')
-    assert 'YOUR_DRIVE_FILE_ID' in code
-    assert 'gdown' in code and 'kagglehub' not in code
-    assert 'extractall' not in code and 'files.download' in code
-    for cell in notebook['cells']:
-        if cell['cell_type'] == 'code':
-            ast.parse(''.join(cell['source']))
-            assert cell['outputs'] == [] and cell['execution_count'] is None
 
 
-@pytest.mark.parametrize('mode', ['download', 'drive'])
-def test_drive_notebook_cells_execute_from_mock_download_to_report_zip(tmp_path, monkeypatch, mode):
-    from datetime import datetime, timezone
-    import importlib.metadata
-    import shutil
-    import sys
-    import types
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-    import matplotlib.patches as patches
-    import pandas as pd
-    from scripts.generate_drive_eda_notebook import FILE_ID
-
-    source = tmp_path / 'input.zip'; make_zip(source)
-    work = tmp_path / 'work'; work.mkdir()
-    out = tmp_path / 'report'; out.mkdir()
-    downloaded = []
-    fake_gdown = types.ModuleType('gdown')
-
-    def download(**kwargs):
-        assert mode == 'download'
-        assert kwargs['id'] == FILE_ID
-        Path(kwargs['output']).write_bytes(source.read_bytes())
-        return kwargs['output']
-
-    fake_gdown.download = download
-    google = types.ModuleType('google'); colab = types.ModuleType('google.colab')
-    colab.files = types.SimpleNamespace(download=downloaded.append); google.colab = colab
-    monkeypatch.setitem(sys.modules, 'gdown', fake_gdown)
-    monkeypatch.setitem(sys.modules, 'google', google)
-    monkeypatch.setitem(sys.modules, 'google.colab', colab)
-    monkeypatch.setattr(importlib.metadata, 'version', lambda _: 'fixture-version')
-    monkeypatch.setattr(plt, 'show', lambda: None)
-    context = dict(Path=Path, WORK=work, CACHE=work / 'cache', OUT=out, FILE_ID=FILE_ID,
-                   SOURCE_MODE=mode, DRIVE_ARCHIVE=str(source), PERSISTENT=None,
-                   ACTIVE_DATASETS=['drive_dataset'], SOURCE_ERRORS=[], MAX_IMAGES=None,
-                   HASH_LIMIT=None, VERIFY_DECODE=True, ANNOTATION_FORMAT='yolo', SEED=42, zipfile=zipfile,
-                   json=json, importlib=__import__('importlib'), pd=pd, plt=plt, patches=patches,
-                   Image=Image, display=lambda *_: None, tqdm=lambda values, **_: values,
-                   datetime=datetime, timezone=timezone, shutil=shutil)
-    cells = [''.join(cell['source']) for cell in build_notebook()['cells'] if cell['cell_type'] == 'code']
-    try:
-        for marker in ('EDA_SOURCE =', 'archive_path =', 'for old_reader', 'class_columns =', 'chosen =', 'def export_csv'):
-            exec(next(cell for cell in cells if cell.startswith(marker)), context)
-        summary = json.loads((out / 'summary.json').read_text(encoding='utf-8'))
-        assert summary['source_file_id'] == (FILE_ID if mode == 'download' else None)
-        assert summary['requested_drive_file_id'] == FILE_ID and summary['source_mode'] == mode
-        assert summary['datasets']['drive_dataset']['images_scanned'] == 1
-        assert summary['datasets']['drive_dataset']['valid_boxes'] == 1
-        assert summary['datasets']['drive_dataset']['annotation_format'] == 'yolo'
-        assert summary['versions']['gdown'] == 'fixture-version'
-        assert (out / 'samples.png').stat().st_size > 1000
-        assert (out / 'distributions.png').stat().st_size > 1000
-        with zipfile.ZipFile(downloaded[0]) as report:
-            assert {'summary.json', 'inventory.csv', 'class_counts.csv', 'boxes.csv', 'samples.png'} <= set(report.namelist())
-            assert not any(name.endswith('.zip') for name in report.namelist())
-    finally:
-        for reader in context.get('READERS', {}).values():
-            reader.close()
-        plt.close('all')

@@ -12,7 +12,7 @@ function setup({store=new Map(),dark=false,blocked=false,deferred=false}={}){
   const window={matchMedia:()=>media,addEventListener:(name,fn)=>events.set(name,fn),localStorage:{
     getItem(name){if(blocked)throw Error('blocked');return store.get(name)??null;},
     setItem(name,value){if(blocked)throw Error('blocked');store.set(name,value);}}};
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../frontend/theme.js'),'utf8'),{window,document});
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../frontend/shared/theme.js'),'utf8'),{window,document});
   return{root,buttons,store,events,selected(){return buttons.filter(b=>b.attributes['aria-pressed']==='true').map(b=>b.dataset.themeChoice);},
     choose(value){buttons.find(b=>b.dataset.themeChoice===value).handlers.click();},
     finish(){nodes.push(...buttons);document.readyState='complete';ready();},
@@ -47,7 +47,7 @@ test('theme works with blocked storage and rejects unknown saved values',()=>{
 test('all pages initialize theme in the head and provide a labelled chooser',()=>{
   for(const name of ['index','observations','management']){
     const html=fs.readFileSync(path.join(__dirname,`../frontend/${name}.html`),'utf8');
-    const head=html.split('</head>')[0];assert.match(head,/src="theme\.js/);assert.match(head,/href="theme\.css/);
+    const head=html.split('</head>')[0];assert.match(head,/src="shared\/theme\.js/);assert.match(head,/href="shared\/theme\.css/);
     assert.match(html,/role="group" aria-label="Giao diện"/);
     for(const [value,label] of [['system','Theo thiết bị'],['light','Sáng'],['dark','Tối']]){
       assert.match(html,new RegExp('<button[^>]*data-theme-choice="'+value+'"[^>]*aria-label="'+label+'"'));

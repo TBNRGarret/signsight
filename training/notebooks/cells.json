@@ -1,0 +1,676 @@
+{
+ "eda": {
+  "cells": [
+   {
+    "cell_type": "markdown",
+    "id": "intro",
+    "metadata": {},
+    "source": [
+     "# SignSight — 1. EDA SupSign trước khi train\n",
+     "\n",
+     "Dùng **CPU runtime**; không cần GPU, Torch hay weights. Dán link ZIP SupSign vào SOURCE_URL.\n",
+     "Chạy lần lượt tới cuối để tải **ZIP báo cáo EDA** rồi gửi file đó để rà soát trước khi train.\n",
+     "Báo cáo gồm audit nguồn 107 lớp và thống kê/bbox của subset CAR35 dành cho ô tô.\n",
+     "Lọc 35 lớp là cấu hình hiện tại, có thể điều chỉnh sau khi đọc báo cáo; chưa phải mapping QCVN đã duyệt.\n",
+     "Cache giữ ảnh/nhãn/split đã kiểm tra cho notebook train. Lần đầu phải đọc/hash toàn bộ ZIP nên có thể lâu.\n",
+     "Notebook chạy độc lập, không clone repo; lưu notebook không lưu dataset.\n",
+     "Nhóm filename/dHash chỉ là heuristic; test chưa chứng minh hiệu quả thực địa độc lập."
+    ]
+   },
+   {
+    "cell_type": "code",
+    "id": "install",
+    "metadata": {},
+    "source": [
+     "import sys, subprocess, os\n",
+     "os.environ['YOLO_AUTOINSTALL'] = 'false'\n",
+     "os.environ['WANDB_MODE'] = 'disabled'\n",
+     "subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-q',\n",
+     "    'Pillow>=10,<13', 'matplotlib>=3.8,<4', 'PyYAML>=6,<7', 'tqdm>=4.66,<5', 'gdown==5.2.0'])\n",
+     "print('EDA dùng CPU; không giữ GPU trong lúc xử lý dữ liệu.')"
+    ],
+    "execution_count": null,
+    "outputs": []
+   },
+   {
+    "cell_type": "markdown",
+    "id": "config-guide",
+    "metadata": {},
+    "source": [
+     "## 1. Cấu hình\n",
+     "\n",
+     "SAVE_TO_DRIVE=True giữ cache/kết quả trên Drive của tài khoản hiện tại.\n",
+     "False chỉ lưu trong runtime; tải kết quả trước khi ngắt. Link gdown phải là **file ZIP** cho phép tải qua link,\n",
+     "không phải folder; quota và quyền Drive vẫn áp dụng. Không đưa link riêng vào GitHub public.\n",
+     "Giữ DATASET_VERSION giống nhau ở hai notebook. Đổi version khi thay dữ liệu/lớp/grouping.\n",
+     "\n",
+     "GROUPS_CSV tùy chọn có cột path,group cho mọi ảnh/alias hợp lệ. Không tự coi tên frame là chuyến xe."
+    ]
+   },
+   {
+    "cell_type": "code",
+    "id": "config",
+    "metadata": {},
+    "source": [
+     "from pathlib import Path\n",
+     "WORK = Path('/content/signsight_supsign')\n",
+     "SAVE_TO_DRIVE = True\n",
+     "DRIVE_OUTPUT_ROOT = Path('/content/drive/MyDrive/SignSight/supsign_training')\n",
+     "if SAVE_TO_DRIVE:\n",
+     "    from google.colab import drive\n",
+     "    drive.mount('/content/drive')\n",
+     "    PERSIST = DRIVE_OUTPUT_ROOT\n",
+     "else:\n",
+     "    PERSIST = WORK / 'outputs'\n",
+     "DATASET_VERSION = 'supsign107-car35-v3'\n",
+     "PREPARED_CACHE_URL = ''\n",
+     "PREPARED_CACHE_SHA256 = ''\n",
+     "IMAGE_SIZE = 640\n",
+     "assert DATASET_VERSION and Path(DATASET_VERSION).name == DATASET_VERSION and DATASET_VERSION not in ('.', '..')\n",
+     "WORK.mkdir(parents=True, exist_ok=True)\n",
+     "PERSIST.mkdir(parents=True, exist_ok=True)\n",
+     "CACHE_ZIP = PERSIST / 'datasets' / (DATASET_VERSION + '.zip')\n",
+     "DATASET_ROOT = WORK / DATASET_VERSION\n",
+     "os.environ['YOLO_CONFIG_DIR'] = str(WORK / '.ultralytics')\n",
+     "print('Output:', PERSIST)\n",
+     "print('Cache:', CACHE_ZIP)\n",
+     "\n",
+     "SOURCE_URL = ''  # Link file ZIP SupSign gốc hoặc file ID\n",
+     "SOURCE_SHA256 = ''  # Tùy chọn checksum ZIP gốc\n",
+     "SOURCE_ZIP = WORK / 'downloads' / DATASET_VERSION / 'source_supsign.zip'\n",
+     "GROUPS_CSV = None\n",
+     "SEED = 42\n",
+     "FRAME_BLOCK_SIZE = 100\n",
+     "NEAR_HASH_DISTANCE = 4"
+    ],
+    "execution_count": null,
+    "outputs": []
+   },
+   {
+    "cell_type": "code",
+    "id": "pipeline",
+    "metadata": {
+     "cellView": "form",
+     "jupyter": {
+      "source_hidden": true
+     }
+    },
+    "source": [
+     "# Code đã kiểm thử, nhúng trong notebook để chạy độc lập.\n",
+     "import json, shutil, csv, zipfile\n",
+     "TRAINING_FILES = __EMBEDDED_FILES__\n",
+     "CODE_ROOT = WORK / 'pipeline'\n",
+     "for relative, source in TRAINING_FILES.items():\n",
+     "    target = CODE_ROOT / relative\n",
+     "    target.parent.mkdir(parents=True, exist_ok=True)\n",
+     "    target.write_text(source, encoding='utf-8')\n",
+     "(CODE_ROOT / 'scripts/__init__.py').touch()\n",
+     "if str(CODE_ROOT) not in sys.path: sys.path.insert(0, str(CODE_ROOT))\n",
+     "from scripts.supsign_training import (CAR35, recipe, prepare_supsign, verify_dataset,\n",
+     "    digest_file, pack_dataset, restore_dataset, train_experiment, evaluate_checkpoint,\n",
+     "    summarize_prepared_dataset, recover_failed_preparation)\n",
+     "from scripts.colab_downloads import download_drive_zip\n",
+     "from training.compatibility import require_compatible_recipe\n",
+     "GROUPS = None\n",
+     "if GROUPS_CSV is not None:\n",
+     "    with Path(GROUPS_CSV).open(newline='', encoding='utf-8-sig') as stream:\n",
+     "        group_rows = list(csv.DictReader(stream))\n",
+     "    assert all(row.get('path') and row.get('group') for row in group_rows), 'CSV cần path,group.'\n",
+     "    GROUPS = {row['path']: row['group'] for row in group_rows}\n",
+     "    assert len(GROUPS) == len(group_rows), 'CSV có đường dẫn trùng.'\n",
+     "RECIPE = recipe(CAR35, SEED, FRAME_BLOCK_SIZE, NEAR_HASH_DISTANCE, GROUPS)\n",
+     "print('Taxonomy:', len(CAR35), 'lớp. Cache sẽ kiểm tra cùng recipe/code và checksum.')"
+    ],
+    "execution_count": null,
+    "outputs": []
+   },
+   {
+    "cell_type": "markdown",
+    "id": "prepare-guide",
+    "metadata": {},
+    "source": [
+     "## 2. Chuẩn bị dataset hoặc khôi phục cache\n",
+     "\n",
+     "Lần đầu gdown tải ZIP về local, sau đó đọc/hash toàn bộ ZIP. Cần đủ ổ local cho ZIP và dataset/cache,\n",
+     "và đủ Drive nếu bật lưu Drive. Không giải nén ZIP nguồn tùy ý; chỉ ghi ảnh/nhãn đã kiểm tra.\n",
+     "Dataset local/cache sẵn có được ưu tiên; khi đổi tài khoản, PREPARED_CACHE_URL có thể dùng lại cache cũ.\n",
+     "Link Drive bị chặn/quota không được thay bằng dữ liệu giả. Tải gián đoạn có thể retry trong cùng runtime.\n",
+     "Cache có checksum; thay code/classes/grouping thì phải dùng một DATASET_VERSION mới.\n",
+     "V3 giữ đủ lớp trong train nếu có thể tạo ba split không rỗng mà không tách nhóm.\n",
+     "Lớp chỉ có trong một nhóm được giữ ở train; val/test có thể thiếu lớp đó và được ghi rõ.\n",
+     "\n",
+     "Nhãn lỗi bị cách ly cả ảnh, không lặng lẽ sửa annotation nguồn. Ảnh trùng byte nhưng nhãn khác\n",
+     "cũng bị cách ly để xem lại. Ảnh chỉ chứa lớp ngoài scope được giữ làm nền đối với 35 lớp mục tiêu."
+    ]
+   },
+   {
+    "cell_type": "code",
+    "id": "prepare",
+    "metadata": {},
+    "source": [
+     "from tqdm.auto import tqdm\n",
+     "if DATASET_ROOT.exists():\n",
+     "    info = verify_dataset(DATASET_ROOT)\n",
+     "    manifest = json.loads((DATASET_ROOT / 'manifest.json').read_text())\n",
+     "    require_compatible_recipe(manifest['recipe'], RECIPE)\n",
+     "    print('Dùng dataset local đã kiểm tra:', info['images'], 'ảnh')\n",
+     "elif CACHE_ZIP.is_file():\n",
+     "    manifest = restore_dataset(CACHE_ZIP, DATASET_ROOT, expected_recipe=RECIPE)\n",
+     "    print('Đã khôi phục cache, không đọc lại ZIP thô.')\n",
+     "elif PREPARED_CACHE_URL.strip():\n",
+     "    assert PREPARED_CACHE_SHA256.strip(), 'Điền SHA-256 từ file cache .zip.sha256.'\n",
+     "    shared_cache = download_drive_zip(PREPARED_CACHE_URL,\n",
+     "        WORK / 'downloads' / (DATASET_VERSION + '.zip'), expected_sha256=PREPARED_CACHE_SHA256)\n",
+     "    shared_cache.with_suffix(shared_cache.suffix + '.sha256').write_text(PREPARED_CACHE_SHA256.strip().lower())\n",
+     "    manifest = restore_dataset(shared_cache, DATASET_ROOT, expected_recipe=RECIPE)\n",
+     "    print('Đã khôi phục cache chia sẻ từ tài khoản khác; không audit ZIP gốc.')\n",
+     "else:\n",
+     "    if SOURCE_URL.strip():\n",
+     "        SOURCE_ZIP = download_drive_zip(SOURCE_URL, SOURCE_ZIP, expected_sha256=SOURCE_SHA256)\n",
+     "    assert SOURCE_ZIP.is_file(), 'Dán link ZIP/file ID vào SOURCE_URL ở cell Cấu hình.'\n",
+     "    assert zipfile.is_zipfile(SOURCE_ZIP), 'Nguồn tải về không phải ZIP hợp lệ.'\n",
+     "    with zipfile.ZipFile(SOURCE_ZIP) as source_archive:\n",
+     "        required = sum(member.file_size for member in source_archive.infolist()) * 2 + 2*1024**3\n",
+     "    free = shutil.disk_usage(WORK).free\n",
+     "    assert free >= required, f'Ổ local cần khoảng {required/1024**3:.1f} GiB trống; còn {free/1024**3:.1f}.'\n",
+     "    manifest = prepare_supsign(SOURCE_ZIP, DATASET_ROOT, classes=CAR35, groups=GROUPS,\n",
+     "        seed=SEED, block_size=FRAME_BLOCK_SIZE, near_threshold=NEAR_HASH_DISTANCE,\n",
+     "        progress=lambda items, desc, unit: tqdm(items, desc=desc, unit=unit))\n",
+     "    print('Đang kiểm tra và lưu cache dataset...', flush=True)\n",
+     "    pack_dataset(DATASET_ROOT, CACHE_ZIP)\n",
+     "    print('Đã lưu cache:', CACHE_ZIP)\n",
+     "from collections import Counter\n",
+     "split_counts = Counter(row['split'] for row in manifest['images'])\n",
+     "print(' | '.join(f'{s}: {split_counts[s]:,} ảnh' for s in ('train', 'val', 'test')))\n",
+     "print('Loại bản sao:', manifest['duplicates_removed'], '| Cách ly:', len(manifest['excluded']))\n",
+     "print('Split:', manifest['split_provenance'], '| Test thực địa độc lập:', manifest['independent_field_test'])\n",
+     "for split, missing in manifest['missing_classes'].items():\n",
+     "    if missing: print('Lớp thiếu ở', split, ':', ', '.join(missing))"
+    ],
+    "execution_count": null,
+    "outputs": []
+   },
+   {
+    "cell_type": "markdown",
+    "id": "eda-guide",
+    "metadata": {},
+    "source": [
+     "## EDA trước khi train — lưu báo cáo trên Drive\n",
+     "\n",
+     "Thống kê **đúng dataset 35 lớp sau khi lọc**, kèm audit nguồn trong `source_summary`/manifest.\n",
+     "Xuất JSON + CSV (ảnh, bbox, số mẫu từng lớp), biểu đồ phân bố lớp/split, kích thước ảnh,\n",
+     "diện tích và cạnh ngắn bbox ở kích thước train. `boxes_under_16px` giúp nhận ra biển nhỏ khó học.\n",
+     "Không audit lại ZIP thô nếu đã có cache. Chỉ in tóm tắt; chi tiết lỗi/cách ly nằm trong manifest.\n",
+     "Nhóm filename/dHash vẫn là heuristic; EDA không thay tập kiểm tra qua kính ô tô độc lập."
+    ]
+   },
+   {
+    "cell_type": "code",
+    "id": "eda",
+    "metadata": {},
+    "source": [
+     "import matplotlib.pyplot as plt\n",
+     "from collections import Counter\n",
+     "eda = summarize_prepared_dataset(DATASET_ROOT, imgsz=IMAGE_SIZE)\n",
+     "EDA_ROOT = PERSIST / 'eda' / DATASET_VERSION\n",
+     "EDA_ROOT.mkdir(parents=True, exist_ok=True)\n",
+     "(EDA_ROOT / 'dataset_eda.json').write_text(json.dumps(eda['summary'], ensure_ascii=False, indent=2), encoding='utf-8')\n",
+     "for key in ('class_counts', 'images', 'boxes'):\n",
+     "    rows = eda[key]\n",
+     "    with (EDA_ROOT / (key + '.csv')).open('w', newline='', encoding='utf-8-sig') as stream:\n",
+     "        if rows:\n",
+     "            writer = csv.DictWriter(stream, fieldnames=list(rows[0])); writer.writeheader(); writer.writerows(rows)\n",
+     "fig, axes = plt.subplots(2, 2, figsize=(18, 14))\n",
+     "y = list(range(len(eda['class_counts']))); starts = [0] * len(y)\n",
+     "for split in ('train', 'val', 'test'):\n",
+     "    values = [r[split] for r in eda['class_counts']]\n",
+     "    axes[0,0].barh(y, values, left=starts, label=split)\n",
+     "    starts = [a+b for a,b in zip(starts, values)]\n",
+     "axes[0,0].set_yticks(y, [r['name'] for r in eda['class_counts']], fontsize=8)\n",
+     "axes[0,0].set_title('Boxes per class / split'); axes[0,0].legend()\n",
+     "axes[0,1].hist([r['short_side_at_input'] for r in eda['boxes']], bins=40)\n",
+     "axes[0,1].axvline(16, color='red', linestyle='--'); axes[0,1].set_title(f'BBox short side at input {IMAGE_SIZE} (px)')\n",
+     "axes[1,0].scatter([r['width'] for r in eda['images']], [r['height'] for r in eda['images']], s=3, alpha=.15)\n",
+     "axes[1,0].set(xlabel='Image width', ylabel='Image height', title='Image dimensions')\n",
+     "axes[1,1].hist([r['area_fraction'] for r in eda['boxes']], bins=40)\n",
+     "axes[1,1].set_title('BBox area / image area')\n",
+     "fig.tight_layout(); fig.savefig(EDA_ROOT / 'eda_overview.png', dpi=150); plt.show(); plt.close(fig)\n",
+     "summary = eda['summary']\n",
+     "print(f\"EDA: {summary['images']:,} images | {summary['boxes']:,} boxes | {summary['negative_images']:,} negatives\")\n",
+     "print(f\"Small boxes (<16 px at {IMAGE_SIZE}): {summary['boxes_under_16px']:,}\")\n",
+     "print('Duplicate copies removed:', summary['duplicates_removed'], '| Quarantined:', summary['excluded_images'])\n",
+     "print('Saved:', EDA_ROOT)"
+    ],
+    "execution_count": null,
+    "outputs": []
+   },
+   {
+    "cell_type": "markdown",
+    "id": "preview-guide",
+    "metadata": {},
+    "source": [
+     "## 3. Kiểm tra nhãn và phân bố lớp\n",
+     "\n",
+     "Xem ảnh đầy đủ, bbox và tên lớp trước khi train. Phân biệt cấm ô tô/cấm chung, cấm đỗ/cấm dừng,\n",
+     "biển hướng trái/phải. Class ID mới là 0–34 theo CAR35; **không dùng ID này thay trực tiếp vào database 10 lớp**.\n",
+     "Các lớp thiếu val/test phải được ghi nhận khi đọc metric; chưa có nhãn không có nghĩa model đạt chất lượng."
+    ]
+   },
+   {
+    "cell_type": "code",
+    "id": "preview",
+    "metadata": {},
+    "source": [
+     "import matplotlib.pyplot as plt\n",
+     "from PIL import Image, ImageDraw\n",
+     "import random\n",
+     "sample_rows = manifest['images'].copy()\n",
+     "random.Random(SEED).shuffle(sample_rows)\n",
+     "fig, axes = plt.subplots(2, 3, figsize=(15, 8))\n",
+     "for axis in axes.flat: axis.axis('off')\n",
+     "for axis, row in zip(axes.flat, sample_rows[:6]):\n",
+     "    with Image.open(DATASET_ROOT / row['image']) as source: image = source.convert('RGB')\n",
+     "    draw = ImageDraw.Draw(image)\n",
+     "    for line in (DATASET_ROOT / row['label']).read_text().splitlines():\n",
+     "        if not line.strip(): continue\n",
+     "        cls, x, y, w, h = map(float, line.split())\n",
+     "        box = ((x-w/2)*image.width, (y-h/2)*image.height, (x+w/2)*image.width, (y+h/2)*image.height)\n",
+     "        draw.rectangle(box, outline='yellow', width=2)\n",
+     "        draw.text((max(0, box[0]), max(0, box[1]-12)), CAR35[int(cls)], fill='yellow')\n",
+     "    axis.imshow(image); axis.set_title(row['split'])\n",
+     "plt.tight_layout(); fig.savefig(EDA_ROOT / 'bbox_preview.png', dpi=150); plt.show(); plt.close(fig)\n",
+     "# Gọn 35 dòng để thấy lớp ít mẫu; không in hàng chục nghìn đường dẫn.\n",
+     "print(f\"{'Class':35s} {'train':>7s} {'val':>7s} {'test':>7s}\")\n",
+     "for i, name in enumerate(CAR35):\n",
+     "    values = [manifest['class_counts'][s].get(str(i), manifest['class_counts'][s].get(i, 0)) for s in ('train', 'val', 'test')]\n",
+     "    print(f'{name:35s} {values[0]:7d} {values[1]:7d} {values[2]:7d}')"
+    ],
+    "execution_count": null,
+    "outputs": []
+   },
+   {
+    "cell_type": "markdown",
+    "id": "export-guide",
+    "metadata": {},
+    "source": [
+     "## 4. Tải báo cáo để xem trước\n",
+     "\n",
+     "Gửi **EDA_REPORT_ZIP** tải xuống ở cell cuối, không cần gửi cache ZIP lớn.\n",
+     "Báo cáo gồm JSON/CSV, biểu đồ, ảnh bbox preview, manifest, audit nguồn và training_handoff.json.\n",
+     "Giữ cache ZIP + .sha256 trên Drive. Nếu dùng tài khoản khác, chia sẻ cache ZIP cho tải qua link;\n",
+     "copy cache_sha256 và manifest_sha256 trong training_handoff.json sang notebook train.\n",
+     "Nếu muốn đổi lớp sau khi xem EDA, cần chuẩn bị cache phiên bản mới; chưa train ở notebook này."
+    ]
+   },
+   {
+    "cell_type": "code",
+    "id": "export",
+    "metadata": {},
+    "source": [
+     "from datetime import datetime, timezone\n",
+     "from google.colab import files\n",
+     "# Dataset local đã có nhưng chưa lưu cache (ví dụ runtime trước bị ngắt lúc pack).\n",
+     "cache_to_share = CACHE_ZIP if CACHE_ZIP.is_file() else globals().get('shared_cache')\n",
+     "if cache_to_share is None:\n",
+     "    pack_dataset(DATASET_ROOT, CACHE_ZIP)\n",
+     "    cache_to_share = CACHE_ZIP\n",
+     "handoff = dict(schema_version=1, dataset_version=DATASET_VERSION,\n",
+     "    cache_name=cache_to_share.name, cache_sha256=digest_file(cache_to_share),\n",
+     "    manifest_sha256=digest_file(DATASET_ROOT / 'manifest.json'),\n",
+     "    names=manifest['names'], recipe=manifest['recipe'], input_size=IMAGE_SIZE)\n",
+     "(EDA_ROOT / 'training_handoff.json').write_text(json.dumps(handoff, ensure_ascii=False, indent=2), encoding='utf-8')\n",
+     "(EDA_ROOT / 'source_summary.json').write_text(json.dumps(manifest['source_summary'], ensure_ascii=False, indent=2), encoding='utf-8')\n",
+     "for name in ('manifest.json', 'data.yaml'): shutil.copy2(DATASET_ROOT / name, EDA_ROOT / name)\n",
+     "exports = PERSIST / 'exports'; exports.mkdir(exist_ok=True)\n",
+     "report_name = DATASET_VERSION + '_eda_' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')\n",
+     "EDA_REPORT_ZIP = Path(shutil.make_archive(str(exports / report_name), 'zip', EDA_ROOT))\n",
+     "print('EDA report:', EDA_REPORT_ZIP)\n",
+     "print('Cache để train:', cache_to_share)\n",
+     "print('PREPARED_CACHE_SHA256 =', repr(handoff['cache_sha256']))\n",
+     "print('EXPECTED_MANIFEST_SHA256 =', repr(handoff['manifest_sha256']))\n",
+     "files.download(str(EDA_REPORT_ZIP))"
+    ],
+    "execution_count": null,
+    "outputs": []
+   }
+  ],
+  "metadata": {
+   "colab": {
+    "name": "SignSight_SupSign_EDA_Colab.ipynb"
+   },
+   "kernelspec": {
+    "display_name": "Python 3",
+    "language": "python",
+    "name": "python3"
+   },
+   "language_info": {
+    "name": "python",
+    "version": "3.11"
+   }
+  },
+  "nbformat": 4,
+  "nbformat_minor": 5
+ },
+ "train": {
+  "cells": [
+   {
+    "cell_type": "markdown",
+    "id": "intro",
+    "metadata": {},
+    "source": [
+     "# SignSight — 2. Train YOLO11s từ dataset đã EDA\n",
+     "\n",
+     "Chỉ chạy **sau khi xem báo cáo EDA và rà nhãn**. Chọn GPU runtime.\n",
+     "Notebook chỉ khôi phục cache; không tải ZIP nguồn, audit lại hay chia split mới.\n",
+     "Cùng Drive: dùng nguyên DATASET_VERSION và CACHE_ZIP. Khác tài khoản: chia sẻ file cache ZIP,\n",
+     "điền PREPARED_CACHE_URL và PREPARED_CACHE_SHA256 từ training_handoff.json trong báo cáo EDA.\n",
+     "Điền EXPECTED_MANIFEST_SHA256 từ cùng file để khóa đúng dataset đã xem.\n",
+     "Đổi LABEL_REVIEWED=True khi đã kiểm tra nhãn. Không tự kích hoạt checkpoint trong backend."
+    ]
+   },
+   {
+    "cell_type": "code",
+    "id": "install",
+    "metadata": {},
+    "source": [
+     "import sys, subprocess, os\n",
+     "os.environ['YOLO_AUTOINSTALL'] = 'false'\n",
+     "os.environ['WANDB_MODE'] = 'disabled'\n",
+     "subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-q',\n",
+     "                       'ultralytics==8.4.173', 'PyYAML>=6,<7', 'tqdm>=4.66,<5', 'gdown==5.2.0'])\n",
+     "import torch\n",
+     "assert torch.cuda.is_available(), 'Bật GPU runtime trước khi train.'\n",
+     "print('GPU:', torch.cuda.get_device_name(0), '| Torch:', torch.__version__)"
+    ],
+    "execution_count": null,
+    "outputs": []
+   },
+   {
+    "cell_type": "markdown",
+    "id": "config-guide",
+    "metadata": {},
+    "source": [
+     "## 1. Cấu hình\n",
+     "\n",
+     "SAVE_TO_DRIVE=True giữ cache/kết quả trên Drive của tài khoản hiện tại.\n",
+     "False chỉ lưu trong runtime; tải kết quả trước khi ngắt. Link gdown phải là **file ZIP** cho phép tải qua link,\n",
+     "không phải folder; quota và quyền Drive vẫn áp dụng. Không đưa link riêng vào GitHub public.\n",
+     "Giữ DATASET_VERSION giống nhau ở hai notebook. Đổi version khi thay dữ liệu/lớp/grouping.\n",
+     "\n",
+     "Cache ZIP lớn chứa dataset; ZIP báo cáo EDA nhỏ chỉ để xem, không dùng làm cache train.\n",
+     "80 epochs, 640 px, batch 8 là mốc ban đầu. Hết VRAM: run mới với batch 4.\n",
+     "Resume cần last.pt + training_request.json cùng dataset và settings; best.pt không đủ để resume."
+    ]
+   },
+   {
+    "cell_type": "code",
+    "id": "config",
+    "metadata": {},
+    "source": [
+     "from pathlib import Path\n",
+     "WORK = Path('/content/signsight_supsign')\n",
+     "SAVE_TO_DRIVE = True\n",
+     "DRIVE_OUTPUT_ROOT = Path('/content/drive/MyDrive/SignSight/supsign_training')\n",
+     "if SAVE_TO_DRIVE:\n",
+     "    from google.colab import drive\n",
+     "    drive.mount('/content/drive')\n",
+     "    PERSIST = DRIVE_OUTPUT_ROOT\n",
+     "else:\n",
+     "    PERSIST = WORK / 'outputs'\n",
+     "DATASET_VERSION = 'supsign107-car35-v3'\n",
+     "PREPARED_CACHE_URL = ''\n",
+     "PREPARED_CACHE_SHA256 = ''\n",
+     "IMAGE_SIZE = 640\n",
+     "assert DATASET_VERSION and Path(DATASET_VERSION).name == DATASET_VERSION and DATASET_VERSION not in ('.', '..')\n",
+     "WORK.mkdir(parents=True, exist_ok=True)\n",
+     "PERSIST.mkdir(parents=True, exist_ok=True)\n",
+     "CACHE_ZIP = PERSIST / 'datasets' / (DATASET_VERSION + '.zip')\n",
+     "DATASET_ROOT = WORK / DATASET_VERSION\n",
+     "os.environ['YOLO_CONFIG_DIR'] = str(WORK / '.ultralytics')\n",
+     "print('Output:', PERSIST)\n",
+     "print('Cache:', CACHE_ZIP)\n",
+     "\n",
+     "EXPECTED_MANIFEST_SHA256 = ''  # manifest_sha256 trong training_handoff.json của EDA\n",
+     "RUN_NAME = 'yolo11s_car35_640_v3'\n",
+     "EPOCHS = 80\n",
+     "BATCH = 8\n",
+     "RESUME = False\n",
+     "SMOKE = False\n",
+     "LABEL_REVIEWED = False\n",
+     "RUN_HELDOUT_TEST = False\n",
+     "assert RUN_NAME and Path(RUN_NAME).name == RUN_NAME and RUN_NAME not in ('.', '..')\n",
+     "RUN_DIR = PERSIST / 'runs' / (RUN_NAME + ('_smoke' if SMOKE else ''))\n",
+     "print('Run:', RUN_DIR)"
+    ],
+    "execution_count": null,
+    "outputs": []
+   },
+   {
+    "cell_type": "code",
+    "id": "pipeline",
+    "metadata": {
+     "cellView": "form",
+     "jupyter": {
+      "source_hidden": true
+     }
+    },
+    "source": [
+     "# Code đã kiểm thử, nhúng trong notebook để chạy độc lập.\n",
+     "import json, shutil, csv, zipfile\n",
+     "TRAINING_FILES = __EMBEDDED_FILES__\n",
+     "CODE_ROOT = WORK / 'pipeline'\n",
+     "for relative, source in TRAINING_FILES.items():\n",
+     "    target = CODE_ROOT / relative\n",
+     "    target.parent.mkdir(parents=True, exist_ok=True)\n",
+     "    target.write_text(source, encoding='utf-8')\n",
+     "(CODE_ROOT / 'scripts/__init__.py').touch()\n",
+     "if str(CODE_ROOT) not in sys.path: sys.path.insert(0, str(CODE_ROOT))\n",
+     "from scripts.supsign_training import (CAR35, recipe, prepare_supsign, verify_dataset,\n",
+     "    digest_file, pack_dataset, restore_dataset, train_experiment, evaluate_checkpoint,\n",
+     "    summarize_prepared_dataset, recover_failed_preparation)\n",
+     "from scripts.colab_downloads import download_drive_zip\n",
+     "\n",
+     "from PIL import Image\n",
+     "\n",
+     "from training.compatibility import require_compatible_recipe\n"
+    ],
+    "execution_count": null,
+    "outputs": []
+   },
+   {
+    "cell_type": "markdown",
+    "id": "restore-guide",
+    "metadata": {},
+    "source": [
+     "## 2. Khôi phục đúng dataset đã EDA\n",
+     "\n",
+     "Ưu tiên dataset local, sau đó CACHE_ZIP trên Drive; nếu không có thì dùng link cache chia sẻ.\n",
+     "Kiểm tra checksum, inventory ảnh/nhãn, lớp, recipe/code và manifest trước train.\n",
+     "Không cần GROUPS_CSV ở notebook này: manifest đã lưu nhóm/split từ bước EDA.\n",
+     "Nếu đổi code chuẩn bị hay scope lớp, quay lại EDA với DATASET_VERSION mới."
+    ]
+   },
+   {
+    "cell_type": "code",
+    "id": "restore",
+    "metadata": {},
+    "source": [
+     "if DATASET_ROOT.exists():\n",
+     "    verify_dataset(DATASET_ROOT)\n",
+     "    manifest = json.loads((DATASET_ROOT / 'manifest.json').read_text(encoding='utf-8'))\n",
+     "elif CACHE_ZIP.is_file():\n",
+     "    manifest = restore_dataset(CACHE_ZIP, DATASET_ROOT)\n",
+     "elif PREPARED_CACHE_URL.strip():\n",
+     "    assert PREPARED_CACHE_SHA256.strip(), 'Điền cache_sha256 từ training_handoff.json.'\n",
+     "    shared_cache = download_drive_zip(PREPARED_CACHE_URL,\n",
+     "        WORK / 'downloads' / (DATASET_VERSION + '.zip'), expected_sha256=PREPARED_CACHE_SHA256)\n",
+     "    shared_cache.with_suffix(shared_cache.suffix + '.sha256').write_text(PREPARED_CACHE_SHA256.strip().lower())\n",
+     "    manifest = restore_dataset(shared_cache, DATASET_ROOT)\n",
+     "else:\n",
+     "    raise FileNotFoundError('Chạy notebook EDA trước: cần CACHE_ZIP + .sha256 hoặc link cache và checksum.')\n",
+     "assert manifest['names'] == CAR35, 'Cache khác taxonomy CAR35; xem lại EDA.'\n",
+     "require_compatible_recipe(manifest['recipe'])\n",
+     "if EXPECTED_MANIFEST_SHA256.strip():\n",
+     "    assert digest_file(DATASET_ROOT / 'manifest.json') == EXPECTED_MANIFEST_SHA256.strip().lower(), 'Dataset manifest khác bản đã EDA.'\n",
+     "print('Restored:', len(manifest['images']), 'images; giữ nguyên split EDA.')\n",
+     "print('Missing classes:', manifest['missing_classes'])"
+    ],
+    "execution_count": null,
+    "outputs": []
+   },
+   {
+    "cell_type": "markdown",
+    "id": "train-guide",
+    "metadata": {},
+    "source": [
+     "## 4. Train YOLO11s\n",
+     "\n",
+     "Tải pretrained **yolo11s.pt**, không tiếp tục model GTSRB cũ. Tắt lật ngang/dọc và xoay ảnh để giữ nghĩa biển.\n",
+     "Checkpoint, results.csv, cấu hình và plots được ghi vào RUN_DIR (Drive hoặc local theo SAVE_TO_DRIVE).\n",
+     "Ảnh train luôn ở local Colab. Nếu đổi tài khoản, thư mục run ở Drive cũ không tự xuất hiện trong Drive mới.\n",
+     "Best được chọn theo validation. Cell này **không đánh giá test**.\n",
+     "\n",
+     "Nếu runtime ngắt giữa chừng: mở lại notebook, giữ RUN_NAME/EPOCHS/IMAGE_SIZE/BATCH,\n",
+     "đổi RESUME=True rồi chạy lại các cell. Checkpoint last.pt giữ trạng thái optimizer để resume;\n",
+     "run đã hoàn tất có thể không còn resume được. Run mới phải có tên mới."
+    ]
+   },
+   {
+    "cell_type": "code",
+    "id": "train",
+    "metadata": {},
+    "source": [
+     "assert LABEL_REVIEWED, 'Xem EDA và ảnh bbox, rồi đổi LABEL_REVIEWED=True ở cell Cấu hình.'\n",
+     "BEST = train_experiment(DATASET_ROOT, RUN_DIR,\n",
+     "    epochs=1 if SMOKE else EPOCHS, imgsz=IMAGE_SIZE, batch=BATCH, device='0', resume=RESUME)\n",
+     "print('Best checkpoint:', BEST)"
+    ],
+    "execution_count": null,
+    "outputs": []
+   },
+   {
+    "cell_type": "markdown",
+    "id": "evaluation-guide",
+    "metadata": {},
+    "source": [
+     "## 5. Validation và test có chủ đích\n",
+     "\n",
+     "Chọn cấu hình bằng validation; so sánh precision/recall/mAP từng lớp, không chỉ mAP tổng.\n",
+     "Giữ RUN_HELDOUT_TEST=False trong lúc chọn model. Khi bật True, kết quả test vẫn ghi rõ đây là split\n",
+     "của dataset, chưa phải một tập thu thập thực địa độc lập. Không dùng test để điều chỉnh confidence.\n",
+     "Chọn EVAL_NAME mới nếu muốn lưu một lượt đánh giá khác."
+    ]
+   },
+   {
+    "cell_type": "code",
+    "id": "evaluate",
+    "metadata": {},
+    "source": [
+     "EVAL_NAME = 'evaluation_v1'\n",
+     "validation = evaluate_checkpoint(BEST, DATASET_ROOT, RUN_DIR / EVAL_NAME / 'val',\n",
+     "                                 imgsz=IMAGE_SIZE, batch=BATCH)\n",
+     "print('Validation:', json.dumps(validation['metrics'], indent=2))\n",
+     "if RUN_HELDOUT_TEST:\n",
+     "    test_report = evaluate_checkpoint(BEST, DATASET_ROOT, RUN_DIR / EVAL_NAME / 'test',\n",
+     "        split='test', allow_test=True, imgsz=IMAGE_SIZE, batch=BATCH)\n",
+     "    print('Dataset test:', json.dumps(test_report['metrics'], indent=2))\n",
+     "else:\n",
+     "    print('Chưa chạy test. Chốt cấu hình bằng val trước khi bật RUN_HELDOUT_TEST.')\n",
+     "from IPython.display import display\n",
+     "for name in ('results.png', EVAL_NAME + '/val/confusion_matrix.png'):\n",
+     "    plot = RUN_DIR / name\n",
+     "    if plot.is_file(): display(Image.open(plot))"
+    ],
+    "execution_count": null,
+    "outputs": []
+   },
+   {
+    "cell_type": "markdown",
+    "id": "photo-guide",
+    "metadata": {},
+    "source": [
+     "## 6. Thử ảnh đường phố riêng (tùy chọn)\n",
+     "\n",
+     "Upload vài ảnh qua kính xe / ảnh không có biển / biển xa để xem bbox. Đây là kiểm tra trực quan,\n",
+     "không thay phép đánh giá với ground truth. Confidence xem ảnh không thay metric mAP của validation."
+    ]
+   },
+   {
+    "cell_type": "code",
+    "id": "own-photos",
+    "metadata": {},
+    "source": [
+     "TRY_OWN_PHOTOS = False\n",
+     "if TRY_OWN_PHOTOS:\n",
+     "    from google.colab import files\n",
+     "    from ultralytics import YOLO\n",
+     "    uploaded = files.upload()\n",
+     "    photo_root = WORK / 'own_photos'; photo_root.mkdir(exist_ok=True)\n",
+     "    paths = []\n",
+     "    for filename, content in uploaded.items():\n",
+     "        target = photo_root / Path(filename).name\n",
+     "        target.write_bytes(content); paths.append(str(target))\n",
+     "    for result in YOLO(str(BEST)).predict(paths, conf=0.25, imgsz=IMAGE_SIZE, save=False):\n",
+     "        display(Image.fromarray(result.plot()[..., ::-1]))"
+    ],
+    "execution_count": null,
+    "outputs": []
+   },
+   {
+    "cell_type": "markdown",
+    "id": "export-guide",
+    "metadata": {},
+    "source": [
+     "## 6. Tải kết quả train\n",
+     "\n",
+     "ZIP gồm best.pt/last.pt, metrics, cấu hình và manifest; không kèm toàn bộ dataset.\n",
+     "Giữ cả ZIP báo cáo EDA riêng để đối chiếu. Kết quả lưu tại PERSIST/exports và tải bằng files.download.\n",
+     "Catalog/mapping 35 lớp cần rà soát theo docs/model_activation.md trước khi tích hợp backend."
+    ]
+   },
+   {
+    "cell_type": "code",
+    "id": "export",
+    "metadata": {},
+    "source": [
+     "from datetime import datetime, timezone\n",
+     "from google.colab import files\n",
+     "export_name = RUN_NAME + '_' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')\n",
+     "export_root = WORK / 'exports' / export_name\n",
+     "export_root.mkdir(parents=True, exist_ok=False)\n",
+     "shutil.copytree(RUN_DIR, export_root / 'run')\n",
+     "eda_dir = globals().get('EDA_ROOT', PERSIST / 'eda' / DATASET_VERSION)\n",
+     "if eda_dir.is_dir(): shutil.copytree(eda_dir, export_root / 'eda')\n",
+     "metadata = export_root / 'dataset'; metadata.mkdir()\n",
+     "for name in ('data.yaml', 'manifest.json'): shutil.copy2(DATASET_ROOT / name, metadata / name)\n",
+     "(metadata / 'classes.json').write_text(json.dumps(CAR35, indent=2), encoding='utf-8')\n",
+     "archive = Path(shutil.make_archive(str(export_root), 'zip', export_root))\n",
+     "exports_drive = PERSIST / 'exports'; exports_drive.mkdir(exist_ok=True)\n",
+     "drive_export = exports_drive / archive.name\n",
+     "shutil.copy2(archive, drive_export)\n",
+     "print('Saved results:', drive_export)\n",
+     "files.download(str(archive))"
+    ],
+    "execution_count": null,
+    "outputs": []
+   }
+  ],
+  "metadata": {
+   "accelerator": "GPU",
+   "colab": {
+    "name": "SignSight_SupSign_YOLO11s_Train_Colab.ipynb"
+   },
+   "kernelspec": {
+    "display_name": "Python 3",
+    "language": "python",
+    "name": "python3"
+   },
+   "language_info": {
+    "name": "python",
+    "version": "3.11"
+   }
+  },
+  "nbformat": 4,
+  "nbformat_minor": 5
+ }
+}

@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict');
-const {mount}=require('../frontend/sign_link.js');
+const {mount}=require('../frontend/shared/sign_link.js');
 const tick=()=>new Promise(r=>setImmediate(r));
 const id='12345678-1234-1234-1234-123456789abc';
 function setup(select,search='?sign='+id){

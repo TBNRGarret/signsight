@@ -1,0 +1,9 @@
+-r ../ai_engine/requirements-yolo.txt
+Pillow>=10,<13
+matplotlib>=3.8,<4
+tqdm>=4.66,<5
+gdown==5.2.0
+
+# Legacy CSV preparation CLI.
+pandas>=2.0.0
+numpy>=1.24.0

@@ -13,8 +13,8 @@ function setup(handler,ready){
  const api={user:{username:'mod',role:'manager'},ready,async request(route,options){calls.push(route);if(route==='/taxonomy')return require('./catalog_fixture.cjs');return handler(route,options);}};
  const document={getElementById(id){if(!elements.has(id))elements.set(id,new Element());return elements.get(id);},createElement:tag=>new Element(tag)};
  const window={signSightAuth:api,location:{replace:url=>redirects.push(url)},addEventListener:(n,f)=>events.set(n,f)};
- window.signSightCatalog=require('../frontend/catalog.js');
- vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../frontend/management.js'),'utf8'),{window,document,URLSearchParams,
+ window.signSightCatalog=require('../frontend/shared/catalog.js');
+ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../frontend/staff/management.js'),'utf8'),{window,document,URLSearchParams,
   createImageBitmap:async()=>({width:100,height:100,close(){}}),URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}}});
  return {api,elements,calls,redirects,get:document.getElementById,changed:events.get('signsight-auth-changed')};
 }
