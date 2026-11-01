@@ -41,4 +41,4 @@ Không commit `.cache`, môi trường Python, dataset gốc, model weights, dat
 
 CI dùng Python 3.11, Node.js 24 và PyTorch CPU; không cần weights/dataset. Trên Linux/macOS dùng `python -m pytest tests -q` và `node --test tests/*.test.cjs`. Cài `backend/requirements-dev.txt` trước khi kiểm thử.
 
-Chuẩn bị bản public theo [hướng dẫn GitHub](docs/github_preparation.md); không push repo môn học có tài liệu cá nhân trong lịch sử.
+Chuẩn bị bản public theo [hướng dẫn GitHub](docs/development/github_preparation.md); không push repo môn học có tài liệu cá nhân trong lịch sử.

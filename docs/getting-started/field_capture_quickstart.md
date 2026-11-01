@@ -27,7 +27,7 @@ HTTP qua IP LAN không hỗ trợ GPS trình duyệt. Để thử GPS, làm ph�
 
 ## Lượt thử đầu: 20 ảnh, chưa cần gán nhãn toàn bộ
 
-Chọn khoảng 5 biển thật thuộc 10 lớp trong [giao thức thực địa](field_dataset_protocol.md), mỗi biển 3 góc nhìn: gần, xa, lệch góc. Thêm 5 ảnh đường phố/bảng quảng cáo hoặc biển ngoài 10 lớp để kiểm tra nhận nhầm. Đứng ở nơi an toàn khi chụp.
+Chọn khoảng 5 biển thật thuộc 10 lớp trong [giao thức thực địa](../training/field_dataset_protocol.md), mỗi biển 3 góc nhìn: gần, xa, lệch góc. Thêm 5 ảnh đường phố/bảng quảng cáo hoặc biển ngoài 10 lớp để kiểm tra nhận nhầm. Đứng ở nơi an toàn khi chụp.
 
 Giữ ảnh gốc trên điện thoại hoặc trong `data/field/` (đã được Git bỏ qua). Ghi tên ảnh, địa điểm/phiên chụp, biển thực tế, model tìm đúng/bỏ sót/nhầm nhãn và thời gian chờ ước lượng. Đây là kiểm tra định tính ban đầu, chưa phải precision/recall vì chưa có ground truth đầy đủ. Ảnh không có detection vẫn cần giữ lại; chúng thường không tạo observation.
 

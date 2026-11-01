@@ -3,7 +3,7 @@
   'use strict';
   const ACTIONS={confirm_existing:'Xác nhận biển vẫn còn',report_removed:'Biển đã bị tháo',report_damaged:'Biển hư hỏng',
     correct_class:'Sai loại biển',correct_location:'Sai vị trí',update_evidence:'Bổ sung ảnh mới'};
-  const catalog=typeof module!=='undefined'&&module.exports?require('./catalog.js'):root.signSightCatalog;
+  const catalog=typeof module!=='undefined'&&module.exports?require('./shared/catalog.js'):root.signSightCatalog;
   const REPORT_STATUS={pending:'chờ duyệt',accepted:'đã chấp nhận',rejected:'bị từ chối'};
   const VERIFICATION={unverified:'chưa xác minh',current:'đã xác minh',needs_confirmation:'cần xác nhận lại'};
   const SIGN_STATUS={active:'đang hiệu lực',expired:'quá hạn xác nhận',pending_revalidation:'chờ kiểm tra lại',removed:'đã tháo'};

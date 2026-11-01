@@ -39,6 +39,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           python -m pip install -r backend/requirements-dev.txt
+      - name: Public source policy
+        run: python -m scripts.check_public_source
       - name: Python tests
         run: python -m pytest tests -q
       - name: JavaScript tests

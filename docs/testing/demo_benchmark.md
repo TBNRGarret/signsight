@@ -31,4 +31,4 @@ Mỗi stage bỏ các lượt warmup trước khi tính thống kê. Các reques
 
 Không chạy test suite hoặc nhiều benchmark đồng thời khi đo. Ghi tình trạng máy và chạy thêm lượt độc lập nếu cần đánh giá độ biến động. Các số này chưa bao gồm Wi-Fi, HTTPS, Safari, camera/GPS, Nominatim/OSRM hoặc tải cao nhiều user.
 
-Kết quả local đã đo: 14/10/2026 (tài liệu nội bộ, không kèm bản public). Đánh giá ảnh đường phố và chọn confidence theo [giao thức dataset thực địa](field_dataset_protocol.md); thử user flow thật theo [hướng dẫn iPhone/iPad](iphone_ipad_testing.md).
+Kết quả local đã đo: 14/10/2026 (tài liệu nội bộ, không kèm bản public). Đánh giá ảnh đường phố và chọn confidence theo [giao thức dataset thực địa](../training/field_dataset_protocol.md); thử user flow thật theo [hướng dẫn iPhone/iPad](../getting-started/iphone_ipad_testing.md).

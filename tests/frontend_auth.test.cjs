@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const source = fs.readFileSync(path.join(__dirname, '../frontend/auth.js'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '../frontend/shared/auth.js'), 'utf8');
 const response = (status, body) => ({status, ok: status >= 200 && status < 300, json: async () => body});
 const profile = (role = 'admin') => ({id:'id',username:'owner',role});
 const session = () => ({access_token:'secret-token',user:profile()});

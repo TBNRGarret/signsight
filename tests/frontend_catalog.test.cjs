@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict');
-const catalog=require('../frontend/catalog.js');
+const catalog=require('../frontend/shared/catalog.js');
 const items=[{new_id:5,qcvn_code:'P.102',name_vi:'Existing sign'},
   {new_id:42,qcvn_code:'FIXTURE.42',name_vi:'Synthetic extension'}];
 

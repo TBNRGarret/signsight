@@ -18,4 +18,4 @@ Kiểm thử trình duyệt dùng backend tạm ở 127.0.0.1:8765, không dùng
 
 ## Map renderer
 
-MapLibre + OpenFreeMap is shared by both map pages. Run npm ci and npm run build:maps to rebuild the pinned local browser assets. See [maplibre.md](maplibre.md). The committed assets let the Python server run without Node at runtime.
+MapLibre + OpenFreeMap is shared by both map pages. Run npm ci and npm run build:maps to rebuild the pinned local browser assets. See [maplibre.md](../runtime/maplibre.md). The committed assets let the Python server run without Node at runtime.

@@ -34,7 +34,7 @@ Web release and Android debug builds completed locally. Release task selection r
 
 ## Run the training notebook
 
-Run [the EDA notebook](../notebooks/SignSight_SupSign_EDA_Colab.ipynb) on CPU first and review its downloadable report ZIP. Then use [the training notebook](../notebooks/SignSight_SupSign_YOLO11s_Train_Colab.ipynb) on GPU with the same verified prepared cache; it does not audit or split the raw data again. See [the notebook guide](supsign_yolo11s_colab.md) for gdown, cross-account cache transfer, label review, resume and export. Follow [model_activation.md](model_activation.md) to draft/review/bind the catalog mapping and test the candidate on a copied runtime. The currently served model is not automatically changed.
+Run [the EDA notebook](../../notebooks/SignSight_SupSign_EDA_Colab.ipynb) on CPU first and review its downloadable report ZIP. Then use [the training notebook](../../notebooks/SignSight_SupSign_YOLO11s_Train_Colab.ipynb) on GPU with the same verified prepared cache; it does not audit or split the raw data again. See [the notebook guide](../training/supsign_yolo11s_colab.md) for gdown, cross-account cache transfer, label review, resume and export. Follow [model_activation.md](model_activation.md) to draft/review/bind the catalog mapping and test the candidate on a copied runtime. The currently served model is not automatically changed.
 
 ## Physical acceptance checklist
 

@@ -1,4 +1,4 @@
-﻿# Repository entry points and cleanup map
+# Repository entry points and cleanup map
 
 Canonical source is this checkout. Parent workspace owns runtime/private data.
 

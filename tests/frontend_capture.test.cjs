@@ -20,7 +20,7 @@ function app(request) {
       if(route.startsWith('/me/'))return {items:[],total:0,offset:0,limit:10};return request(route,options);}};
   const context = {window:{signSightAuth:api,addEventListener:(name,fn)=>events.set(name,fn)}, document, URLSearchParams,
     navigator:{}, FormData:class{append(){}}, createImageBitmap:async()=>({width:640,height:360,close(){}})};
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../frontend/catalog.js'),'utf8'), context);
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../frontend/shared/catalog.js'),'utf8'), context);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../frontend/contribution_history.js'),'utf8'), context);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../frontend/observations.js'),'utf8'), context);
   return {calls, api, get:document.getElementById, events};

@@ -88,7 +88,7 @@ Trước khi nâng revision của SQLite đã có bảng dữ liệu, migration 
 ```powershell
 python -m pytest tests -q
 node --test tests/frontend_auth.test.cjs
-python scripts/test_end_to_end_flow.py
+python -m pytest tests/test_images_observations.py tests/test_duplicate_review.py tests/test_reports_policy.py -q
 ```
 
 Test Python và integration script dùng database tạm. Test browser session kiểm tra cookie qua các trang, hết hạn, logout, Secure trên HTTPS, chặn cookie write khác origin và giữ hợp đồng Bearer. Test JavaScript kiểm tra khôi phục phiên, đồng bộ tab, logout offline, request trả muộn và khởi tạo dữ liệu khi phiên được khôi phục. Các kiểm tra này chưa thay thế nghiệm thu giao diện trên trình duyệt điện thoại.

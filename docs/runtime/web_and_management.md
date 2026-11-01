@@ -25,7 +25,7 @@ Link Xem vị trí mở bản đồ kiểm tra bản ghi; form báo cáo cá nh�
 
 ## Chạy và kiểm tra
 
-Xem [local_development.md](local_development.md). Workspace có source signsight/ và dữ liệu ở thư mục cha dùng scripts/start_signsight.ps1 từ thư mục cha. Không chạy backend legacy.
+Xem [local_development.md](../getting-started/local_development.md). Workspace có source signsight/ và dữ liệu ở thư mục cha dùng scripts/start_signsight.ps1 từ thư mục cha. Không chạy backend legacy.
 
 Test dùng database tạm; browser fixture tạo 65 biển để kiểm tra nhiều trang, không chèn dữ liệu vào DB của người dùng.
 

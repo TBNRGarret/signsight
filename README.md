@@ -2,11 +2,11 @@
 
 Web quản trị cho admin/manager và backend FastAPI quản lý dữ liệu biển báo. App Flutter cho user đã có MVP ba tab (bản đồ, đóng góp ảnh, lịch sử); web user tiếp tục được giữ để kiểm tra các luồng chưa chuyển sang app. FastAPI phục vụ API và frontend HTML/CSS/JavaScript trong một server.
 
-Hướng dẫn [chạy app Flutter và preview trên laptop](docs/flutter_user_app.md).
+Hướng dẫn [chạy app Flutter và preview trên laptop](docs/getting-started/flutter_user_app.md).
 
-[Trạng thái core và các bước nghiệm thu còn lại](docs/core_completion.md) · [Laptop, HTTPS và backup/restore](docs/deployment.md).
+[Trạng thái core và các bước nghiệm thu còn lại](docs/runtime/core_completion.md) · [Laptop, HTTPS và backup/restore](docs/runtime/deployment.md).
 
-Hướng dẫn [đóng góp ảnh và xem biển được duyệt](docs/contribution_flow.md).
+Hướng dẫn [đóng góp ảnh và xem biển được duyệt](docs/getting-started/contribution_flow.md).
 
 Luồng chính: **chụp/upload ảnh → YOLO phát hiện → người dùng xác nhận nhãn và tọa độ → gửi đóng góp → manager duyệt → biển xuất hiện trên bản đồ**.
 
@@ -24,7 +24,7 @@ Bản đồ chỉ hiển thị biển đã được ghi nhận/duyệt trong Sig
 
 ## Chạy trên máy mới
 
-Nếu đã có database, ảnh và weights local, xem [cách dùng lại dữ liệu](docs/local_development.md).
+Nếu đã có database, ảnh và weights local, xem [cách dùng lại dữ liệu](docs/getting-started/local_development.md).
 
 Cần Python 3.11; Node.js 24 dùng cho kiểm thử frontend. Clone repo GitHub của bạn rồi chạy từ thư mục gốc.
 
@@ -73,11 +73,11 @@ Weights, dataset gốc, database và ảnh upload không nằm trong Git. App v�
 .\.venv\Scripts\python.exe -m pip install -r ai_engine/requirements-yolo.txt
 ```
 
-Đặt checkpoint tương thích tại `ai_engine/checkpoints/detection/best.pt`, giữ báo cáo huấn luyện cùng checkpoint, rồi khởi động lại server. Adapter hiện yêu cầu đúng thứ tự taxonomy 10 lớp của project; không thay trực tiếp bằng weights 100 lớp hoặc weights COCO. Xem [ảnh và YOLO](docs/images_and_detection.md).
+Đặt checkpoint tương thích tại `ai_engine/checkpoints/detection/best.pt`, giữ báo cáo huấn luyện cùng checkpoint, rồi khởi động lại server. Adapter mặc định nhận baseline 10 lớp; catalog mở rộng và mapping được rà soát theo checkpoint cho phép model mới mà giữ ID dữ liệu cũ. Không thay trực tiếp bằng weights khác taxonomy. Xem [ảnh và YOLO](docs/runtime/images_and_detection.md).
 
-Baseline dùng GTSRB ROI để kiểm tra pipeline, chưa chứng minh chất lượng ảnh đường phố Việt Nam. Taxonomy là mapping thử nghiệm của dự án, cần rà soát trước khi áp dụng thực tế. Notebook Drive trong bản public dùng `YOUR_DRIVE_FILE_ID`: tự điền ID nguồn bạn có quyền truy cập. Dataset và weights có điều kiện sử dụng riêng, không được phân phối kèm repo này.
+Baseline dùng GTSRB ROI để kiểm tra pipeline, chưa chứng minh chất lượng ảnh đường phố Việt Nam. Taxonomy là mapping thử nghiệm của dự án, cần rà soát trước khi áp dụng thực tế. Hai notebook public để trống link nguồn/cache: tự điền `SOURCE_URL` hoặc `PREPARED_CACHE_URL` bằng nguồn bạn có quyền truy cập. Dataset và weights có điều kiện sử dụng riêng, không được phân phối kèm repo này.
 
-Train dữ liệu Việt Nam: [notebook SupSign 35 lớp với YOLO11s trên Colab](docs/supsign_yolo11s_colab.md). Dataset và checkpoint cache trên Drive; sau khi train, [rà mapping và tích hợp model trên runtime thử](docs/model_activation.md). Danh mục lớp trên API/web/Flutter lấy từ catalog đã cấu hình; model mới cần mapping được rà và đánh giá thực địa.
+Train dữ liệu Việt Nam: [notebook SupSign 35 lớp với YOLO11s trên Colab](docs/training/supsign_yolo11s_colab.md). Dataset và checkpoint cache trên Drive; sau khi train, [rà mapping và tích hợp model trên runtime thử](docs/runtime/model_activation.md). Danh mục lớp trên API/web/Flutter lấy từ catalog đã cấu hình; model mới cần mapping được rà và đánh giá thực địa.
 
 ## Cấu hình và lưu trữ
 
@@ -88,7 +88,7 @@ $env:SIGNSIGHT_YOLO_DEVICE = 'cpu'
 $env:SIGNSIGHT_PLACES_PROVIDER = 'photon'
 ```
 
-Nền bản đồ, tìm địa điểm và routing cần Internet tới các provider. Trên điện thoại dùng IP LAN của máy chạy backend; GPS cần HTTPS. Xem [thử chụp ảnh](docs/field_capture_quickstart.md) và [HTTPS trên iPhone/iPad](docs/iphone_ipad_testing.md). Thử trên thiết bị thật vẫn là bước nghiệm thu cần thực hiện.
+Nền bản đồ, tìm địa điểm và routing cần Internet tới các provider. Trên điện thoại dùng IP LAN của máy chạy backend; GPS cần HTTPS. Xem [thử chụp ảnh](docs/getting-started/field_capture_quickstart.md) và [HTTPS trên iPhone/iPad](docs/getting-started/iphone_ipad_testing.md). Thử trên thiết bị thật vẫn là bước nghiệm thu cần thực hiện.
 
 ## Cấu trúc
 
@@ -96,7 +96,8 @@ Nền bản đồ, tìm địa điểm và routing cần Internet tới các pro
 backend/      API, auth, migrations, lưu ảnh và nghiệp vụ
 frontend/     Web quản trị, web user kiểm thử, theme và MapLibre vendored
 mobile/       Flutter app user, Android/iOS và preview web
-ai_engine/    Inference, chuẩn bị dữ liệu và huấn luyện
+ai_engine/    Runtime detector/catalog và compatibility imports
+training/     Offline EDA, cache, train/evaluate và notebook builders
 data/         Taxonomy và CSV split baseline, không chứa ảnh gốc
 notebooks/    EDA và train trên Colab/Kaggle
 scripts/      Công cụ dữ liệu, benchmark và chuẩn bị repo public
@@ -123,14 +124,16 @@ node --test tests/*.test.cjs
 
 CI chạy các bộ kiểm thử trên CPU, không tải dataset/weights. Kiểm thử checkpoint thật là opt-in; xem [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Tài liệu thêm: [quản lý và backup](docs/web_and_management.md), [đăng nhập/migrations](docs/authentication_setup.md), [pipeline dữ liệu Việt Nam](docs/local_vietnam_pipeline.md), [EDA Drive](docs/drive_dataset_eda.md).
+Tài liệu thêm: [quản lý và backup](docs/runtime/web_and_management.md), [đăng nhập/migrations](docs/runtime/authentication_setup.md), [pipeline dữ liệu Việt Nam](docs/training/local_vietnam_pipeline.md), [EDA Drive](docs/training/drive_dataset_eda.md).
 
 ## Đưa lên GitHub
 
-Repo source chính: signsight, nhánh main. Phát triển trực tiếp trong checkout GitHub cố định ngoài cache. Tài liệu môn học giữ riêng; không sao chép lịch sử Git từ thư mục tài liệu vào repo này. Xem [source và dữ liệu local](docs/local_development.md).
+Repo source chính: signsight, nhánh main. Phát triển trực tiếp trong checkout GitHub cố định ngoài cache. Tài liệu môn học giữ riêng; không sao chép lịch sử Git từ thư mục tài liệu vào repo này. Xem [source và dữ liệu local](docs/getting-started/local_development.md).
 
 Chưa chọn giấy phép cho source code của dự án. MapLibre giữ giấy phép riêng tại [frontend/vendor/maplibre/LICENSE.txt](frontend/vendor/maplibre/LICENSE.txt).
 
-Chi tiết bản đồ và cách build renderer: [MapLibre + OFM](docs/maplibre.md).
+Chi tiết bản đồ và cách build renderer: [MapLibre + OFM](docs/runtime/maplibre.md).
 
-Luồng staff và quyền từng tab: [Web quản trị](docs/web_and_management.md).
+Luồng staff và quyền từng tab: [Web quản trị](docs/runtime/web_and_management.md).
+
+[Technical documentation index](docs/README.md) · [Repository cleanup and improvement plan](docs/development/system_improvements_2026-11-01.md)

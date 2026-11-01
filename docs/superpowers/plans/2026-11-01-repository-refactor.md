@@ -129,3 +129,8 @@ Làm Task 1–2 trước để giảm bối rối khi dùng notebook. Task 3 c�
 - [ ] Giữ thay đổi `mobile/DESIGN.md` và runtime/doc riêng của user.
 
 Chưa có task nào ở trên được đánh dấu đã làm. Audit checkpoint là công việc riêng đã hoàn thành trong workspace, không đồng nghĩa model được nghiệm thu.
+
+
+## Execution outcome
+
+Tasks 1?6 implemented. Web user pages remain a test lab because native/physical-device parity is a separate acceptance gate. Tests remain flat while shared test helpers rely on current imports. Five notebook variants and CNN prediction writers were retired; legacy readers/CLIs remain compatible. See the linked completion report for evidence and limitations.
