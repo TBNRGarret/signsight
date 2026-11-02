@@ -17,7 +17,7 @@ Hai notebook dùng nguyên code chuẩn bị/cache đã kiểm thử, không đ�
 
 Upload lại notebook EDA mới để có cell **Rà nhóm trước khi quyết định train lại**. Giữ `DATASET_VERSION='supsign107-car35-v3'`, điền `PREPARED_CACHE_URL` bằng link cache ZIP đã lưu và `PREPARED_CACHE_SHA256` bằng checksum tương ứng. Notebook dùng gdown tải cache vào /content, không audit lại ZIP thô. Đặt `DOWNLOAD_PREPARED_CACHE=False` nếu chỉ muốn tải báo cáo mới và cache cũ đã được giữ an toàn. Nếu chưa có cache, dùng `SOURCE_URL` để chuẩn bị từ ZIP gốc.
 
-Sau khi chạy hết và tải ZIP báo cáo, giải nén rồi mở `grouping/index.html`. Nếu chạy lại cell grouping, notebook giữ bản trước và in tên thư mục `grouping_TIMESTAMP` mới. Đọc theo thứ tự:
+Sau khi chạy hết và tải ZIP báo cáo, giải nén rồi mở **`index.html` ở thư mục gốc ZIP** để vào đúng báo cáo hiện tại. Nếu chạy lại cell grouping, notebook giữ bản trước và tạo thư mục `grouping_TIMESTAMP` mới; handoff/index sẽ trỏ vào thư mục mới, không yêu cầu đoán bản nào đúng. Đọc theo thứ tự:
 
 1. **Review flags / Splits:** số nhóm, số ảnh, tỷ lệ ảnh thuộc nhóm lớn nhất của từng split. Ít hơn 5 nhóm hoặc một nhóm chiếm trên 50% ảnh là cờ cần xem lại, không phải kết luận rò rỉ dữ liệu.
 2. **Global dHash review:** tối đa 12 cặp, chia tối đa 3 trang ảnh, chọn từ toàn bộ nhóm chứ không chỉ top 12. Ưu tiên phủ khoảng cách hash và nhiều nhóm; `dhash_edges.csv` chứa mọi cạnh dHash trong forest tái dựng. Đây chưa phải mọi cặp near-duplicate và không tự xác nhận cạnh nối đúng/sai.
@@ -28,6 +28,12 @@ Sau khi chạy hết và tải ZIP báo cáo, giải nén rồi mở `grouping/i
 `partition_matches=True` chỉ xác nhận phân hoạch tái dựng khớp manifest. Báo cáo lưu một spanning forest đủ nối nhóm, không xuất mọi cặp tương tự và không giả làm log lịch sử. Capture-group cache cần đúng CSV gốc khi khôi phục EDA theo recipe; API báo cáo riêng có thể đọc cache thiếu CSV nhưng sẽ ghi `evidence_complete=False`, không suy ra capture bằng tên file.
 
 Decode dHash vẫn đọc ảnh cache trên CPU và có thanh tiến độ; không cần GPU. Báo cáo được ghi bên ngoài dataset, giữ nguyên ảnh/nhãn/manifest/split. **Gửi ZIP báo cáo này để rà trước khi quyết định sửa grouping, tạo dataset phiên bản mới hoặc train tiếp.**
+
+### Đối chiếu đúng code và đúng báo cáo
+
+Cell pipeline, grouping và export đều in mã `pipeline` giống nhau. Mã đầy đủ nằm trong `training_handoff.json` và `grouping_summary.json`; handoff còn có `grouping_report` chỉ đúng index của lượt vừa chạy. Export sẽ dừng nếu báo cáo thiếu `dhash_review`, khác mã pipeline hoặc khác checksum manifest.
+
+Khi cập nhật notebook trong runtime đang dùng, cell pipeline tự nạp lại các module nhúng của nó. Thư mục code được đặt theo hash nội dung để tránh dùng nhầm bytecode; cache dataset và /content outputs không bị xóa. Nếu dataset, EDA_ROOT và cấu hình vẫn còn trong runtime, chạy lại ba cell **pipeline → grouping → export** là đủ, không cần tải/audit ZIP nguồn lại. Nếu runtime đã bị xóa thì phải khôi phục cache bằng gdown như hướng dẫn trên.
 
 ## Source and compatibility
 

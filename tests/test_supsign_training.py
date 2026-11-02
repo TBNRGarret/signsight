@@ -522,12 +522,37 @@ def test_separate_eda_exports_review_bundle_and_train_reuses_exact_split(tmp_pat
         grouping = json.loads(archive.read('grouping/grouping_summary.json'))
         assert grouping['images'] == 18 and grouping['groups'] == 18
         assert grouping['partition_matches'] is True
+        assert 'dhash_review' in grouping
         assert any(n.startswith('grouping/previews/') for n in archive.namelist())
         assert not any(name.endswith(('.pt', '.jpg')) or name.startswith('images/') for name in archive.namelist())
         handoff = json.loads(archive.read('training_handoff.json'))
+        assert handoff.get('grouping_report') == 'grouping/index.html'
+        assert handoff.get('notebook_pipeline_sha256') == grouping.get('notebook_pipeline_sha256')
+        assert 'index.html' in archive.namelist()
         assert handoff['cache_sha256'] == hashlib.sha256(context['CACHE_ZIP'].read_bytes()).hexdigest()
         assert handoff['manifest_sha256'] == hashlib.sha256((context['DATASET_ROOT']/'manifest.json').read_bytes()).hexdigest()
         assert json.loads(archive.read('dataset_eda.json'))['images'] == 18
+    # Refuse an old/incomplete grouping report, rather than silently packing it
+    # alongside current EDA tables. The prepared dataset itself is untouched.
+    grouping_path = context['GROUP_REVIEW_ROOT']/'grouping_summary.json'
+    original_grouping = grouping_path.read_bytes()
+    incomplete = json.loads(original_grouping); incomplete.pop('dhash_review')
+    grouping_path.write_text(json.dumps(incomplete), encoding='utf-8')
+    download_count = len(downloads)
+    with pytest.raises(AssertionError, match='grouping'):
+        exec(eda_cells['export'], context)
+    assert len(downloads) == download_count
+    grouping_path.write_bytes(original_grouping)
+    # On a second review the root index/handoff must point at the new folder,
+    # while the old grouping folder is retained for traceability.
+    exec(eda_cells['grouping'], context)
+    assert context['GROUP_REVIEW_ROOT'].name != 'grouping'
+    exec(eda_cells['export'], context)
+    with zipfile.ZipFile(downloads[download_count]) as archive:
+        latest = json.loads(archive.read('training_handoff.json'))['grouping_report']
+        assert latest == context['GROUP_REVIEW_ROOT'].name+'/index.html'
+        assert latest in archive.namelist()
+        assert latest in archive.read('index.html').decode('utf-8')
     expected_manifest = (context['DATASET_ROOT']/'manifest.json').read_bytes()
     source.unlink()  # Training in a new runtime has no raw dataset or EDA variables.
     train_work = tmp_path/'train-runtime'; train_work.mkdir()
