@@ -49,3 +49,23 @@ This creates temporary accounts, SQLite and image storage. It preserves the pers
 5. After a catalog extension has been registered, preserve that catalog even if switching back to the legacy detector. To undo an incompatible schema/catalog change, restore the earlier backup into a new directory with its matching configuration. Do not delete extended records to make an old configuration start.
 
 Production signing, trusted HTTPS, physical camera/GPS, real map providers and independent car-view evaluation remain separate acceptance steps. Catalogs, mappings, weights, photos, DBs and private review artifacts belong outside public Git.
+
+## Launch a selected local runtime
+
+`scripts/start_local.ps1 -RuntimeProfile ABSOLUTE_PROFILE_JSON` can select a copied runtime and model bundle without replacing the legacy checkpoint. The optional profile overrides these settings only:
+
+```json
+{
+  "database_url": "sqlite:///ABSOLUTE_PATH_TO_COPIED_DATABASE",
+  "storage_root": "ABSOLUTE_PATH_TO_COPIED_IMAGES",
+  "yolo_weights": "ABSOLUTE_PATH_TO_BEST_PT",
+  "catalog_path": "ABSOLUTE_PATH_TO_CATALOG_JSON",
+  "yolo_mapping_path": "ABSOLUTE_PATH_TO_MAPPING_JSON",
+  "yolo_device": "0",
+  "yolo_confidence": 0.35
+}
+```
+
+Keep this file outside public source. Paths in the profile are absolute; `database_url` uses forward slashes. Unknown keys are rejected. Without a profile the original DataRoot layout remains the default. The launcher restores process environment values when the server exits. Model readiness and catalog/mapping validity remain backend checks; supplying a profile does not bypass them.
+
+For a phone on the same LAN, explicitly pass `-BindAddress 0.0.0.0` for that run; the source launcher default remains loopback. HTTP LAN supports testing photo selection/upload, while browser GPS needs trusted HTTPS. Manual pin confirmation remains available. Camera/GPS behavior on physical devices still requires hands-on testing.
