@@ -2,27 +2,28 @@
 
 ## Luồng hai notebook: EDA trước, train sau
 
-1. Upload [SignSight_SupSign_EDA_Colab.ipynb](../../notebooks/SignSight_SupSign_EDA_Colab.ipynb) lên Colab, dùng **CPU runtime**. Điền `SOURCE_URL` bằng link file ZIP SupSign cho phép tải qua link. Giữ `SAVE_TO_DRIVE=True` để lưu dataset cache qua các phiên.
+1. Upload [SignSight_SupSign_EDA_Colab.ipynb](../../notebooks/SignSight_SupSign_EDA_Colab.ipynb) lên Colab, dùng **CPU runtime**. Chỉ tải dataset bằng **gdown**, không mount Drive hoặc ghi vào tài khoản. Nếu đã có cache, điền `PREPARED_CACHE_URL` và checksum; nếu chưa có, điền `SOURCE_URL` bằng link ZIP SupSign gốc.
 2. Chạy hết notebook EDA. Cell cuối tải `DATASET_VERSION_eda_TIMESTAMP.zip`: **gửi ZIP báo cáo này để rà soát trước**, không cần gửi cache dataset lớn. Báo cáo chứa thống kê subset CAR35, audit tổng quan nguồn, CSV, biểu đồ, ảnh bbox preview, manifest và `training_handoff.json`. Đây chưa phải đánh giá model.
-3. Giữ `datasets/DATASET_VERSION.zip` và `.zip.sha256` trên Drive. Cache chứa dataset đã lọc/chia nhóm; ZIP báo cáo chỉ chứa báo cáo và ảnh preview.
-4. Sau khi rà soát, upload [SignSight_SupSign_YOLO11s_Train_Colab.ipynb](../../notebooks/SignSight_SupSign_YOLO11s_Train_Colab.ipynb), chọn **GPU**. Cùng tài khoản: giữ nguyên `DATASET_VERSION` và thư mục Drive. Khác tài khoản: chia sẻ cache ZIP rồi điền `PREPARED_CACHE_URL`, `PREPARED_CACHE_SHA256` từ `cache_sha256` trong handoff. Điền `EXPECTED_MANIFEST_SHA256` từ `manifest_sha256` để đối chiếu đúng dataset đã xem.
+3. Mặc định `DOWNLOAD_PREPARED_CACHE=True` tải thêm cache ZIP lớn và `.zip.sha256` về máy, có thể cần cho phép nhiều lượt tải. Cache chứa dataset đã lọc/chia nhóm; ZIP báo cáo nhỏ không dùng để train. Nếu cache cũ đã được lưu an toàn, đặt False để chỉ tải báo cáo.
+4. Sau khi rà soát, upload [SignSight_SupSign_YOLO11s_Train_Colab.ipynb](../../notebooks/SignSight_SupSign_YOLO11s_Train_Colab.ipynb), chọn **GPU**. Runtime/tài khoản mới: tự lưu/chia sẻ cache thành file cho phép tải qua link, điền `PREPARED_CACHE_URL`, `PREPARED_CACHE_SHA256` từ handoff; notebook tải bằng gdown. Điền `EXPECTED_MANIFEST_SHA256` để khóa đúng dataset đã xem. Không có bước tự upload hoặc mount.
 5. Train chỉ khôi phục và xác minh cache, không audit ZIP thô/chia split lại. Không cần nhập lại CSV nhóm. Bật `LABEL_REVIEWED=True` sau khi kiểm tra nhãn. Nếu thay lớp/grouping/code chuẩn bị, quay lại EDA và tạo cache phiên bản mới.
 6. Train mặc định YOLO11s pretrained, 80 epochs, 640 px, batch 8; validation trước, held-out test chỉ chạy khi bật riêng. Cell cuối tải ZIP weights/metrics/config/manifest, không kèm toàn bộ dataset.
 
-EDA chạy được bằng CPU nhưng lần đầu vẫn phải tải, decode/hash và gom nhóm toàn bộ nguồn; không có thời gian chạy cố định. Notebook không cần clone repo hoặc Kaggle key. Khi `SAVE_TO_DRIVE=False`, cache và báo cáo chỉ ở runtime; phải tải cache ZIP **cùng checksum** trước khi runtime mất nếu muốn train sau.
+EDA chạy được bằng CPU nhưng lần đầu vẫn phải tải, decode/hash và gom nhóm toàn bộ nguồn; không có thời gian chạy cố định. Notebook không cần clone repo, Kaggle key hoặc đăng nhập Drive. Mọi file nằm dưới `/content/signsight_supsign`, sẽ mất khi runtime bị xóa. Tải kết quả/cache cần giữ trước khi ngắt. `RESUME=True` chỉ dùng khi RUN_DIR còn `last.pt` và `training_request.json` đúng settings; notebook chưa tự khôi phục backup run ở runtime mới.
 
 Hai notebook dùng nguyên code chuẩn bị/cache đã kiểm thử, không đổi recipe hiện tại. Có thể tái sử dụng cache V3 hợp lệ. Bản gộp cũ nằm trong Git history; dùng hai notebook tách biệt cho phiên mới.
 
 ## Task 1: rà grouping trên CPU
 
-Upload lại notebook EDA mới để có cell **Rà nhóm trước khi quyết định train lại**. Nếu cache V3 cùng cấu hình đã nằm trên Drive, giữ `DATASET_VERSION` và `DRIVE_OUTPUT_ROOT` như trước; notebook khôi phục cache mà không tải/audit ZIP thô. Khi dùng tài khoản khác, điền `PREPARED_CACHE_URL` bằng link cache ZIP và `PREPARED_CACHE_SHA256` bằng checksum đã lưu. Nếu chưa có cache, dùng `SOURCE_URL` để chuẩn bị từ ZIP gốc.
+Upload lại notebook EDA mới để có cell **Rà nhóm trước khi quyết định train lại**. Giữ `DATASET_VERSION='supsign107-car35-v3'`, điền `PREPARED_CACHE_URL` bằng link cache ZIP đã lưu và `PREPARED_CACHE_SHA256` bằng checksum tương ứng. Notebook dùng gdown tải cache vào /content, không audit lại ZIP thô. Đặt `DOWNLOAD_PREPARED_CACHE=False` nếu chỉ muốn tải báo cáo mới và cache cũ đã được giữ an toàn. Nếu chưa có cache, dùng `SOURCE_URL` để chuẩn bị từ ZIP gốc.
 
 Sau khi chạy hết và tải ZIP báo cáo, giải nén rồi mở `grouping/index.html`. Nếu chạy lại cell grouping, notebook giữ bản trước và in tên thư mục `grouping_TIMESTAMP` mới. Đọc theo thứ tự:
 
 1. **Review flags / Splits:** số nhóm, số ảnh, tỷ lệ ảnh thuộc nhóm lớn nhất của từng split. Ít hơn 5 nhóm hoặc một nhóm chiếm trên 50% ảnh là cờ cần xem lại, không phải kết luận rò rỉ dữ liệu.
-2. **Ảnh nhóm và cặp liên kết:** ảnh mẫu của tối đa 12 nhóm lớn nhất, bbox/nhãn và tối đa 3 cặp nối nhóm mỗi nhóm. Các cặp giúp nhìn ra việc tên frame giống nhau ở thư mục khác nhau hoặc chuỗi dHash bắc cầu. Ảnh mẫu trải theo tên nguồn, không đảm bảo bao quát mọi nội dung trong nhóm.
-3. **Class coverage:** số box, ảnh và nhóm chứa từng lớp theo train/val/test. Số 0 ở holdout nghĩa là chưa đánh giá được lớp đó.
-4. **CSV đầy đủ:** `groups.csv`, `group_members.csv` (đường dẫn nguồn và alias), `grouping_edges.csv` và `class_coverage.csv`. JSON lưu checksum manifest/content identity và mức khớp của replay.
+2. **Global dHash review:** tối đa 12 cặp, chia tối đa 3 trang ảnh, chọn từ toàn bộ nhóm chứ không chỉ top 12. Ưu tiên phủ khoảng cách hash và nhiều nhóm; `dhash_edges.csv` chứa mọi cạnh dHash trong forest tái dựng. Đây chưa phải mọi cặp near-duplicate và không tự xác nhận cạnh nối đúng/sai.
+3. **Ảnh nhóm và cặp liên kết:** ảnh mẫu của tối đa 12 nhóm lớn nhất, bbox/nhãn và tối đa 3 cặp nối nhóm mỗi nhóm. Mỗi loại liên kết có suất trước khi thêm ví dụ collision, để filename không lấn hết dHash. Ảnh mẫu trải theo tên nguồn, không đảm bảo bao quát mọi nội dung trong nhóm.
+4. **Class coverage:** số box, ảnh và nhóm chứa từng lớp theo train/val/test. Số 0 ở holdout nghĩa là chưa đánh giá được lớp đó.
+5. **CSV đầy đủ:** `groups.csv`, `group_members.csv` (đường dẫn nguồn và alias), `grouping_edges.csv`, `dhash_edges.csv` và `class_coverage.csv`. JSON lưu checksum manifest/content identity và mức khớp của replay.
 
 `partition_matches=True` chỉ xác nhận phân hoạch tái dựng khớp manifest. Báo cáo lưu một spanning forest đủ nối nhóm, không xuất mọi cặp tương tự và không giả làm log lịch sử. Capture-group cache cần đúng CSV gốc khi khôi phục EDA theo recipe; API báo cáo riêng có thể đọc cache thiếu CSV nhưng sẽ ghi `evidence_complete=False`, không suy ra capture bằng tên file.
 

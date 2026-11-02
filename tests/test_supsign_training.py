@@ -304,31 +304,34 @@ def test_notebook_is_reproducible_self_contained_small_and_does_not_auto_run_tes
         if cell['cell_type']=='code':
             ast.parse(''.join(cell['source']));assert cell['outputs']==[] and cell['execution_count'] is None
     code='\n'.join(''.join(c['source']) for c in notebook['cells'] if c['cell_type']=='code')
-    assert 'files.download' in code and 'drive.mount' in code and 'RUN_HELDOUT_TEST = False' in code
+    assert 'files.download' in code and 'RUN_HELDOUT_TEST = False' in code
     assert 'KAGGLE' not in code and 'kagglehub' not in code
     assert 'restore_dataset' in code and 'RESUME = False' in code
-    assert 'gdown==5.2.0' in code and 'PREPARED_CACHE_URL' in code and 'SAVE_TO_DRIVE' in code
+    assert 'gdown==5.2.0' in code and 'PREPARED_CACHE_URL' in code
 
 
-@pytest.mark.parametrize('save_to_drive', [False, True])
-def test_notebook_can_use_local_outputs_or_mount_the_current_account(tmp_path, monkeypatch, save_to_drive):
+@pytest.mark.parametrize('stage', ['eda', 'train'])
+def test_notebook_config_uses_only_runtime_storage_without_drive_access(tmp_path, monkeypatch, stage):
     import os, sys, types
     from scripts.generate_supsign_notebook import build_eda_notebook, build_train_notebook
-    source = next(''.join(c['source']) for c in build_eda_notebook()['cells'] if c['id']=='config')
-    assert 'SAVE_TO_DRIVE' in source
-    work, persist = tmp_path/'runtime', tmp_path/'current-account'
+    notebook = build_eda_notebook() if stage == 'eda' else build_train_notebook()
+    source = next(''.join(c['source']) for c in notebook['cells'] if c['id']=='config')
+    work = tmp_path/'runtime'
     source = source.replace("WORK = Path('/content/signsight_supsign')", f'WORK = Path({str(work)!r})')
-    source = source.replace("DRIVE_OUTPUT_ROOT = Path('/content/drive/MyDrive/SignSight/supsign_training')",
-                            f'DRIVE_OUTPUT_ROOT = Path({str(persist)!r})')
-    source = source.replace('SAVE_TO_DRIVE = True', f'SAVE_TO_DRIVE = {save_to_drive}')
-    mounts=[]
-    monkeypatch.setitem(sys.modules, 'google.colab', types.SimpleNamespace(
-        drive=types.SimpleNamespace(mount=lambda path: mounts.append(path))))
+    class NoDrive:
+        @property
+        def drive(self):
+            raise AssertionError('Drive access is prohibited; use gdown ZIP links')
+    monkeypatch.setitem(sys.modules, 'google.colab', NoDrive())
     monkeypatch.setenv('YOLO_CONFIG_DIR', str(tmp_path/'settings'))
     context={'os':os}
     exec(source,context)
-    assert len(mounts) == int(save_to_drive)
-    assert context['PERSIST'] == (persist if save_to_drive else work/'outputs')
+    assert context['PERSIST'] == work/'outputs'
+    assert context['CACHE_ZIP'].is_relative_to(work)
+    if stage == 'train':
+        assert context['RUN_DIR'].is_relative_to(work)
+        return
+    assert context['DOWNLOAD_PREPARED_CACHE'] is True
     assert context['SOURCE_ZIP'].is_relative_to(work)
     first = context['SOURCE_ZIP'];first.parent.mkdir(parents=True, exist_ok=True);first.write_bytes(b'old source')
     second={"os":os}
@@ -496,7 +499,7 @@ def test_separate_eda_exports_review_bundle_and_train_reuses_exact_split(tmp_pat
         SOURCE_URL='', SOURCE_SHA256='', PREPARED_CACHE_URL='', PREPARED_CACHE_SHA256='',
         CACHE_ZIP=persist/'datasets/fixture-v1.zip', DATASET_ROOT=work/'dataset',
         DATASET_VERSION='fixture-v1', GROUPS_CSV=None, SEED=42, FRAME_BLOCK_SIZE=1,
-        NEAR_HASH_DISTANCE=None, IMAGE_SIZE=640)
+        NEAR_HASH_DISTANCE=None, IMAGE_SIZE=640, DOWNLOAD_PREPARED_CACHE=shared_cache)
     monkeypatch.syspath_prepend(str(work/'pipeline'))
     for name in ('scripts.supsign_training', 'scripts.dataset_eda', 'scripts.colab_downloads', 'scripts'):
         monkeypatch.delitem(sys.modules, name, raising=False)
@@ -507,7 +510,10 @@ def test_separate_eda_exports_review_bundle_and_train_reuses_exact_split(tmp_pat
     monkeypatch.setattr(shutil, 'disk_usage', lambda _: types.SimpleNamespace(free=100*1024**3))
     for identifier in ('prepare', 'eda', 'preview', 'grouping', 'export'):
         exec(eda_cells[identifier], context)
-    assert len(downloads) == 1 and downloads[0].is_file()
+    assert len(downloads) == (3 if shared_cache else 1) and downloads[0].is_file()
+    if shared_cache:
+        assert downloads[1] == context['CACHE_ZIP']
+        assert downloads[2].read_text().strip() == hashlib.sha256(downloads[1].read_bytes()).hexdigest()
     with zipfile.ZipFile(downloads[0]) as archive:
         assert {'dataset_eda.json', 'class_counts.csv', 'eda_overview.png', 'bbox_preview.png',
                 'manifest.json', 'training_handoff.json', 'source_summary.json'} <= set(archive.namelist())

@@ -46,8 +46,53 @@ def _table(rows, fields):
                                      '</tr>' for r in rows)+'</tbody></table></div>'
 
 
+def _dhash_review(root, output, members, edges, preview_groups):
+    """Sample globally, including groups outside the largest-group preview window."""
+    candidates = sorted((e for e in edges if e['reason'] == 'dhash'), key=lambda e: (
+        -len(members[e['left_group']]), -(e['distance'] or 0), e['left'], e['right']))
+    fields = ['left', 'right', 'reason', 'key', 'distance', 'left_alias', 'right_alias',
+              'left_group', 'right_group', 'cross_split', 'namespace_collision']
+    write_csv(output/'dhash_edges.csv', candidates, fields)
+    by_distance, by_group = {}, {}
+    for i, edge in enumerate(candidates):
+        by_distance.setdefault(edge['distance'], i)
+        by_group.setdefault(edge['left_group'], i)
+    selected, seen = [], set()
+    outside = [index for group, index in by_group.items() if group not in preview_groups]
+    # Reserve an outside-window slot when available, then cover distances and
+    # more groups. Integer-index membership avoids comparing all edge dicts.
+    for index in [*outside[:1], *by_distance.values(), *by_group.values(), *range(len(candidates))]:
+        if index not in seen:
+            selected.append(candidates[index])
+            seen.add(index)
+        if len(selected) == 12:
+            break
+    by_hash = {r['sha256']: r for rows in members.values() for r in rows}
+    sheets, cards = [], []
+    for start in range(0, len(selected), 4):
+        page = selected[start:start+4]
+        sheet = f'previews/dhash_{start//4:04d}.png'
+        pairs = [by_hash[e[key]] for e in page for key in ('left', 'right')]
+        captions = [f"dhash | distance={e['distance']}" for e in page for _ in range(2)]
+        _contact_sheet(root, output/sheet, pairs, columns=2, captions=captions)
+        sheets.append(sheet)
+        cards.append(f'<img src="{sheet}" alt="Global dHash joining pairs, one pair per row">'+
+                     _table(page, ['distance', 'left_group', 'left_alias', 'right_alias']))
+    evidence = dict(available_edges=len(candidates), edge_examples=selected, contact_sheets=sheets,
+                    outside_preview_groups_available=len(outside),
+                    outside_preview_groups_sampled=sorted({e['left_group'] for e in selected
+                                                          if e['left_group'] not in preview_groups}))
+    detail = '<section><h2>Global dHash review</h2>'
+    detail += f'<p>{len(candidates):,} dHash joining edges in the replayed forest; {len(selected)} sampled pairs. '
+    detail += 'Samples prioritize available distances and multiple groups. When an outside-window edge is available, one slot is reserved for it. '
+    detail += 'Inspect scene similarity before changing grouping. This is not every near-duplicate pair.</p>'
+    detail += '<p><a href="dhash_edges.csv">All dHash forest edges CSV</a></p>'
+    detail += ''.join(cards) if cards else '<p>No dHash joining edge was recorded in this forest.</p>'
+    return evidence, detail+'</section>'
+
+
 def render_review(root, output, summary, group_rows, coverage, members, edges, max_groups, samples):
-    """Return preview inventory and write HTML + contact sheets for largest groups."""
+    """Write offline evidence; return group previews and add global dHash summary."""
     preview_dir = output/'previews'
     preview_dir.mkdir()
     by_hash = {r['sha256']: r for rows in members.values() for r in rows}
@@ -63,13 +108,12 @@ def render_review(root, output, summary, group_rows, coverage, members, edges, m
         chosen = [ordered[i] for i in positions]
         sheet = f'previews/group_{index:04d}.png'
         _contact_sheet(root, output/sheet, chosen)
-        # At most three joining edges per group: show namespace collisions first,
-        # then one example of each reason, then high-distance dHash joins.
+        # Reserve one slot per available reason before filling collision examples.
         candidates = sorted(edge_groups.get(group, []), key=lambda e: (
             not e['namespace_collision'], e['reason'], -(e['distance'] or 0), e['left'], e['right']))
         selected, reasons = [], set()
         for edge in candidates:
-            if edge['namespace_collision'] or edge['reason'] not in reasons:
+            if edge['reason'] not in reasons:
                 selected.append(edge)
                 reasons.add(edge['reason'])
             if len(selected) == 3:
@@ -98,6 +142,8 @@ def render_review(root, output, summary, group_rows, coverage, members, edges, m
             detail += _table(selected, ['reason', 'distance', 'left_alias', 'right_alias', 'namespace_collision', 'cross_split'])
         previews.append(inventory)
         cards.append('<section>'+detail+'</section>')
+    summary['dhash_review'], dhash_html = _dhash_review(root, output, members, edges,
+                                                      {p['group'] for p in previews})
     warnings = ''.join('<li>'+escape(w)+'</li>' for w in summary['warnings']) or '<li>No automatic concentration flags.</li>'
     split_rows = [dict(split=split, **values) for split, values in summary['splits'].items()]
     page = '''<!doctype html><html lang="en"><meta charset="utf-8">
@@ -118,7 +164,7 @@ code,li{overflow-wrap:anywhere}details{margin:16px 0}.notice{background:#273746;
     page += '<a href="grouping_edges.csv">All forest edges CSV</a> · <a href="group_members.csv">All members / source aliases CSV</a> · <a href="class_coverage.csv">Class coverage CSV</a></p>'
     page += '<h2>Splits</h2>'+_table(split_rows, ['split', 'images', 'groups', 'largest_group_images', 'largest_group_fraction'])
     page += '<h2>All stored groups</h2>'+_table(group_rows, ['group', 'split', 'images', 'boxes', 'negative_images', 'source_namespaces'])
-    page += ''.join(cards)
+    page += dhash_html+''.join(cards)
     page += '<section><h2>Class coverage</h2><p>Zero holdout counts mean unevaluated, not successful recognition. '
     page += 'Group counts are heuristic support, not verified independent trips.</p>'
     page += _table(coverage, ['class_id', 'name', 'split', 'boxes', 'images', 'groups'])+'</section>'

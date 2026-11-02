@@ -37,14 +37,17 @@
     "id": "config-guide",
     "metadata": {},
     "source": [
-     "## 1. Cấu hình\n",
+     "## 1. Cấu hình — gdown, không mount Drive\n",
      "\n",
-     "SAVE_TO_DRIVE=True giữ cache/kết quả trên Drive của tài khoản hiện tại.\n",
-     "False chỉ lưu trong runtime; tải kết quả trước khi ngắt. Link gdown phải là **file ZIP** cho phép tải qua link,\n",
-     "không phải folder; quota và quyền Drive vẫn áp dụng. Không đưa link riêng vào GitHub public.\n",
-     "Giữ DATASET_VERSION giống nhau ở hai notebook. Đổi version khi thay dữ liệu/lớp/grouping.\n",
+     "Mọi dữ liệu và kết quả nằm trong `/content/signsight_supsign`, không lưu tự động lên tài khoản.\n",
+     "Link gdown phải là file ZIP cho phép tải qua link, không phải folder; không yêu cầu đăng nhập/mount.\n",
+     "Quyền chia sẻ và quota của file vẫn áp dụng. Không đưa link riêng vào repo public.\n",
+     "Giữ DATASET_VERSION giống nhau ở hai notebook; đổi version khi thay dữ liệu/lớp/grouping.\n",
      "\n",
-     "GROUPS_CSV tùy chọn có cột path,group cho mọi ảnh/alias hợp lệ. Không tự coi tên frame là chuyến xe."
+     "Runtime bị xóa sẽ mất file local: tải ZIP kết quả và cache cần giữ trước khi ngắt.\n",
+     "EDA dùng CPU. DOWNLOAD_PREPARED_CACHE=True tải thêm cache ZIP lớn và checksum sau báo cáo.\n",
+     "Nếu đã có cache gốc được lưu an toàn, đặt False để chỉ tải báo cáo rà grouping.\n",
+     "SOURCE_URL là ZIP SupSign gốc; PREPARED_CACHE_URL là cache đã chuẩn bị, cần checksum tương ứng.\n"
     ]
    },
    {
@@ -54,18 +57,12 @@
     "source": [
      "from pathlib import Path\n",
      "WORK = Path('/content/signsight_supsign')\n",
-     "SAVE_TO_DRIVE = True\n",
-     "DRIVE_OUTPUT_ROOT = Path('/content/drive/MyDrive/SignSight/supsign_training')\n",
-     "if SAVE_TO_DRIVE:\n",
-     "    from google.colab import drive\n",
-     "    drive.mount('/content/drive')\n",
-     "    PERSIST = DRIVE_OUTPUT_ROOT\n",
-     "else:\n",
-     "    PERSIST = WORK / 'outputs'\n",
+     "PERSIST = WORK / 'outputs'\n",
      "DATASET_VERSION = 'supsign107-car35-v3'\n",
      "PREPARED_CACHE_URL = ''\n",
      "PREPARED_CACHE_SHA256 = ''\n",
      "IMAGE_SIZE = 640\n",
+     "DOWNLOAD_PREPARED_CACHE = True\n",
      "assert DATASET_VERSION and Path(DATASET_VERSION).name == DATASET_VERSION and DATASET_VERSION not in ('.', '..')\n",
      "WORK.mkdir(parents=True, exist_ok=True)\n",
      "PERSIST.mkdir(parents=True, exist_ok=True)\n",
@@ -129,18 +126,16 @@
     "id": "prepare-guide",
     "metadata": {},
     "source": [
-     "## 2. Chuẩn bị dataset hoặc khôi phục cache\n",
+     "## 2. Chuẩn bị dataset hoặc khôi phục cache bằng gdown\n",
      "\n",
-     "Lần đầu gdown tải ZIP về local, sau đó đọc/hash toàn bộ ZIP. Cần đủ ổ local cho ZIP và dataset/cache,\n",
-     "và đủ Drive nếu bật lưu Drive. Không giải nén ZIP nguồn tùy ý; chỉ ghi ảnh/nhãn đã kiểm tra.\n",
-     "Dataset local/cache sẵn có được ưu tiên; khi đổi tài khoản, PREPARED_CACHE_URL có thể dùng lại cache cũ.\n",
-     "Link Drive bị chặn/quota không được thay bằng dữ liệu giả. Tải gián đoạn có thể retry trong cùng runtime.\n",
-     "Cache có checksum; thay code/classes/grouping thì phải dùng một DATASET_VERSION mới.\n",
-     "V3 giữ đủ lớp trong train nếu có thể tạo ba split không rỗng mà không tách nhóm.\n",
-     "Lớp chỉ có trong một nhóm được giữ ở train; val/test có thể thiếu lớp đó và được ghi rõ.\n",
+     "Lần đầu tải ZIP về /content, đọc/hash nguồn rồi lưu cache local. Cần đủ ổ cho ZIP và dataset/cache.\n",
+     "Dataset/cache đã có trong cùng runtime được ưu tiên; runtime mới dùng PREPARED_CACHE_URL + checksum\n",
+     "để khôi phục mà không audit lại ZIP nguồn. SOURCE_URL chỉ dùng khi chưa có prepared cache.\n",
+     "Không giải nén ZIP tùy ý; chỉ ghi ảnh/nhãn đã kiểm tra. Quota/lỗi tải không được thay bằng dữ liệu giả.\n",
      "\n",
-     "Nhãn lỗi bị cách ly cả ảnh, không lặng lẽ sửa annotation nguồn. Ảnh trùng byte nhưng nhãn khác\n",
-     "cũng bị cách ly để xem lại. Ảnh chỉ chứa lớp ngoài scope được giữ làm nền đối với 35 lớp mục tiêu."
+     "Không đổi recipe/grouping ở lượt review này. Giữ V3 và đọc báo cáo trước khi tạo version mới.\n",
+     "Lớp chỉ có một nhóm được giữ ở train; nhãn lỗi hoặc duplicate có nhãn mâu thuẫn bị cách ly.\n",
+     "Ảnh chỉ chứa lớp ngoài CAR35 được giữ làm nền đối với subset, không có nghĩa ảnh không có biển.\n"
     ]
    },
    {
@@ -195,7 +190,7 @@
     "id": "eda-guide",
     "metadata": {},
     "source": [
-     "## EDA trước khi train — lưu báo cáo trên Drive\n",
+     "## EDA trước khi train — báo cáo local trong /content\n",
      "\n",
      "Thống kê **đúng dataset 35 lớp sau khi lọc**, kèm audit nguồn trong `source_summary`/manifest.\n",
      "Xuất JSON + CSV (ảnh, bbox, số mẫu từng lớp), biểu đồ phân bố lớp/split, kích thước ảnh,\n",
@@ -307,7 +302,11 @@
      "không chứng minh các nhóm là chuyến xe độc lập hoặc nhãn đúng. Nhóm rất lớn/ít nhóm\n",
      "holdout cần được xem bằng mắt trước khi đổi grouping. Không sửa nhãn/split ở bước này.\n",
      "Cache dùng capture groups cần đúng GROUPS_CSV gốc để khôi phục EDA theo recipe.\n",
-     "Nếu mất CSV, chỉ API báo cáo riêng hỗ trợ ghi evidence chưa đầy đủ; notebook sẽ dừng ở bước khôi phục, không tự suy ra capture từ tên file.\n"
+     "Nếu mất CSV, chỉ API báo cáo riêng hỗ trợ ghi evidence chưa đầy đủ; notebook sẽ dừng ở bước khôi phục, không tự suy ra capture từ tên file.\n",
+     "\n",
+     "Mục dHash riêng có tối đa 12 cặp từ toàn bộ nhóm (kể cả nhóm ngoài top 12),\n",
+     "ưu tiên đa dạng nhóm/khoảng cách; dhash_edges.csv chứa mọi cạnh dHash trong forest tái dựng.\n",
+     "Các cặp này vẫn cần rà bằng mắt trước khi quyết định thay grouping.\n"
     ]
    },
    {
@@ -339,13 +338,16 @@
     "id": "export-guide",
     "metadata": {},
     "source": [
-     "## 5. Tải báo cáo để xem trước\n",
+     "## 5. Tải kết quả về máy\n",
      "\n",
-     "Gửi **EDA_REPORT_ZIP** tải xuống ở cell cuối, không cần gửi cache ZIP lớn.\n",
-     "Báo cáo gồm JSON/CSV, biểu đồ, ảnh bbox preview, manifest, audit nguồn, training_handoff.json và grouping/index.html (CSV + ảnh nhóm/cặp liên kết).\n",
-     "Giữ cache ZIP + .sha256 trên Drive. Nếu dùng tài khoản khác, chia sẻ cache ZIP cho tải qua link;\n",
-     "copy cache_sha256 và manifest_sha256 trong training_handoff.json sang notebook train.\n",
-     "Nếu muốn đổi lớp sau khi xem EDA, cần chuẩn bị cache phiên bản mới; chưa train ở notebook này."
+     "Gửi EDA_REPORT_ZIP ở cell dưới để rà soát; không cần gửi cache dataset lớn.\n",
+     "Giải nén báo cáo, mở grouping/index.html và mục dHash riêng. Có JSON/CSV, ảnh minh họa,\n",
+     "manifest, audit nguồn và training_handoff.json. Không dùng ZIP báo cáo làm cache train.\n",
+     "\n",
+     "DOWNLOAD_PREPARED_CACHE=True tải thêm cache ZIP lớn và file .zip.sha256, có thể cần cho phép nhiều lượt tải.\n",
+     "False chỉ tải báo cáo: dùng khi đã lưu cache cũ an toàn. /content không tự lưu qua runtime khác.\n",
+     "Muốn train ở tài khoản khác, tự lưu/chia sẻ cache thành file có link gdown rồi điền URL và checksum\n",
+     "trong notebook train. Không tự upload hoặc ghi file vào Drive.\n"
     ]
    },
    {
@@ -374,7 +376,13 @@
      "print('Cache để train:', cache_to_share)\n",
      "print('PREPARED_CACHE_SHA256 =', repr(handoff['cache_sha256']))\n",
      "print('EXPECTED_MANIFEST_SHA256 =', repr(handoff['manifest_sha256']))\n",
-     "files.download(str(EDA_REPORT_ZIP))"
+     "files.download(str(EDA_REPORT_ZIP))\n",
+     "if DOWNLOAD_PREPARED_CACHE:\n",
+     "    cache_sidecar = cache_to_share.with_suffix(cache_to_share.suffix + '.sha256')\n",
+     "    cache_sidecar.write_text(handoff['cache_sha256'] + '\\n', encoding='utf-8')\n",
+     "    print('Downloading prepared dataset cache and checksum; keep both before runtime ends.')\n",
+     "    files.download(str(cache_to_share))\n",
+     "    files.download(str(cache_sidecar))\n"
     ],
     "execution_count": null,
     "outputs": []
@@ -404,14 +412,13 @@
     "id": "intro",
     "metadata": {},
     "source": [
-     "# SignSight — 2. Train YOLO11s từ dataset đã EDA\n",
+     "# SignSight — 2. Train YOLO11s từ cache EDA qua gdown\n",
      "\n",
-     "Chỉ chạy **sau khi xem báo cáo EDA và rà nhãn**. Chọn GPU runtime.\n",
-     "Notebook chỉ khôi phục cache; không tải ZIP nguồn, audit lại hay chia split mới.\n",
-     "Cùng Drive: dùng nguyên DATASET_VERSION và CACHE_ZIP. Khác tài khoản: chia sẻ file cache ZIP,\n",
-     "điền PREPARED_CACHE_URL và PREPARED_CACHE_SHA256 từ training_handoff.json trong báo cáo EDA.\n",
-     "Điền EXPECTED_MANIFEST_SHA256 từ cùng file để khóa đúng dataset đã xem.\n",
-     "Đổi LABEL_REVIEWED=True khi đã kiểm tra nhãn. Không tự kích hoạt checkpoint trong backend."
+     "Notebook độc lập, GPU; không mount Drive hoặc lưu tự động vào tài khoản.\n",
+     "Điền PREPARED_CACHE_URL và PREPARED_CACHE_SHA256, EXPECTED_MANIFEST_SHA256 từ handoff EDA.\n",
+     "Khôi phục đúng dataset/split đã rà, không audit lại ZIP gốc và không tự chia split.\n",
+     "Đổi LABEL_REVIEWED=True sau khi kiểm tra nhãn. Không tự kích hoạt checkpoint trong backend.\n",
+     "Tải ZIP kết quả trước khi runtime bị xóa; file /content không được giữ qua tài khoản/runtime mới.\n"
     ]
    },
    {
@@ -436,16 +443,18 @@
     "id": "config-guide",
     "metadata": {},
     "source": [
-     "## 1. Cấu hình\n",
+     "## 1. Cấu hình — gdown, không mount Drive\n",
      "\n",
-     "SAVE_TO_DRIVE=True giữ cache/kết quả trên Drive của tài khoản hiện tại.\n",
-     "False chỉ lưu trong runtime; tải kết quả trước khi ngắt. Link gdown phải là **file ZIP** cho phép tải qua link,\n",
-     "không phải folder; quota và quyền Drive vẫn áp dụng. Không đưa link riêng vào GitHub public.\n",
-     "Giữ DATASET_VERSION giống nhau ở hai notebook. Đổi version khi thay dữ liệu/lớp/grouping.\n",
+     "Mọi dữ liệu và kết quả nằm trong `/content/signsight_supsign`, không lưu tự động lên tài khoản.\n",
+     "Link gdown phải là file ZIP cho phép tải qua link, không phải folder; không yêu cầu đăng nhập/mount.\n",
+     "Quyền chia sẻ và quota của file vẫn áp dụng. Không đưa link riêng vào repo public.\n",
+     "Giữ DATASET_VERSION giống nhau ở hai notebook; đổi version khi thay dữ liệu/lớp/grouping.\n",
      "\n",
-     "Cache ZIP lớn chứa dataset; ZIP báo cáo EDA nhỏ chỉ để xem, không dùng làm cache train.\n",
-     "80 epochs, 640 px, batch 8 là mốc ban đầu. Hết VRAM: run mới với batch 4.\n",
-     "Resume cần last.pt + training_request.json cùng dataset và settings; best.pt không đủ để resume."
+     "Runtime bị xóa sẽ mất file local: tải ZIP kết quả và cache cần giữ trước khi ngắt.\n",
+     "PREPARED_CACHE_URL là cache dataset từ EDA, không phải ZIP báo cáo nhỏ.\n",
+     "Điền PREPARED_CACHE_SHA256 và EXPECTED_MANIFEST_SHA256 từ training_handoff.json.\n",
+     "80 epochs, 640 px, batch 8 là cấu hình ban đầu; chọn sau khi đã rà dữ liệu.\n",
+     "RESUME chỉ dùng khi RUN_DIR còn checkpoint last.pt và training_request.json đúng dataset/settings.\n"
     ]
    },
    {
@@ -455,14 +464,7 @@
     "source": [
      "from pathlib import Path\n",
      "WORK = Path('/content/signsight_supsign')\n",
-     "SAVE_TO_DRIVE = True\n",
-     "DRIVE_OUTPUT_ROOT = Path('/content/drive/MyDrive/SignSight/supsign_training')\n",
-     "if SAVE_TO_DRIVE:\n",
-     "    from google.colab import drive\n",
-     "    drive.mount('/content/drive')\n",
-     "    PERSIST = DRIVE_OUTPUT_ROOT\n",
-     "else:\n",
-     "    PERSIST = WORK / 'outputs'\n",
+     "PERSIST = WORK / 'outputs'\n",
      "DATASET_VERSION = 'supsign107-car35-v3'\n",
      "PREPARED_CACHE_URL = ''\n",
      "PREPARED_CACHE_SHA256 = ''\n",
@@ -530,10 +532,10 @@
     "source": [
      "## 2. Khôi phục đúng dataset đã EDA\n",
      "\n",
-     "Ưu tiên dataset local, sau đó CACHE_ZIP trên Drive; nếu không có thì dùng link cache chia sẻ.\n",
-     "Kiểm tra checksum, inventory ảnh/nhãn, lớp, recipe/code và manifest trước train.\n",
-     "Không cần GROUPS_CSV ở notebook này: manifest đã lưu nhóm/split từ bước EDA.\n",
-     "Nếu đổi code chuẩn bị hay scope lớp, quay lại EDA với DATASET_VERSION mới."
+     "Ưu tiên file local còn trong cùng runtime; nếu chưa có thì tải prepared cache bằng gdown + checksum.\n",
+     "Kiểm tra inventory ảnh/nhãn, recipe/code và manifest. Cache ZIP lớn khác ZIP báo cáo EDA nhỏ.\n",
+     "Không cần CSV capture groups ở notebook train vì manifest đã lưu nhóm/split.\n",
+     "Nếu đổi code chuẩn bị hay scope lớp, quay lại EDA và tạo DATASET_VERSION mới.\n"
     ]
    },
    {
@@ -571,14 +573,14 @@
     "source": [
      "## 4. Train YOLO11s\n",
      "\n",
-     "Tải pretrained **yolo11s.pt**, không tiếp tục model GTSRB cũ. Tắt lật ngang/dọc và xoay ảnh để giữ nghĩa biển.\n",
-     "Checkpoint, results.csv, cấu hình và plots được ghi vào RUN_DIR (Drive hoặc local theo SAVE_TO_DRIVE).\n",
-     "Ảnh train luôn ở local Colab. Nếu đổi tài khoản, thư mục run ở Drive cũ không tự xuất hiện trong Drive mới.\n",
-     "Best được chọn theo validation. Cell này **không đánh giá test**.\n",
+     "Dùng pretrained yolo11s.pt. Tắt lật ngang/dọc và xoay ảnh để giữ nghĩa biển.\n",
+     "Checkpoint, results.csv, cấu hình và plots đều ở RUN_DIR trong /content.\n",
+     "Best được chọn theo validation; cell train không chạy held-out test.\n",
      "\n",
-     "Nếu runtime ngắt giữa chừng: mở lại notebook, giữ RUN_NAME/EPOCHS/IMAGE_SIZE/BATCH,\n",
-     "đổi RESUME=True rồi chạy lại các cell. Checkpoint last.pt giữ trạng thái optimizer để resume;\n",
-     "run đã hoàn tất có thể không còn resume được. Run mới phải có tên mới."
+     "RESUME=True chỉ hoạt động khi RUN_DIR vẫn có last.pt + training_request.json đúng dataset/settings.\n",
+     "Nếu Colab chỉ ngắt kết nối nhưng runtime/file còn, có thể resume. Runtime bị xóa hoặc đổi tài khoản\n",
+     "không tự có lại checkpoint; notebook chưa tự tải/khôi phục backup run qua link.\n",
+     "Tải ZIP kết quả ở cell cuối khi train xong, trước khi đóng/xóa runtime.\n"
     ]
    },
    {

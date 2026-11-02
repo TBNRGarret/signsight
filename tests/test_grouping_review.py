@@ -218,3 +218,81 @@ def test_preview_selection_is_bounded_for_a_large_single_reason_group(tmp_path):
     inventory = render_review(root, output, summary, [stats], [], {'joined': rows}, edges, 1, 2)
     assert len(inventory[0]['edge_examples']) == 3
     assert len(comparisons) <= 3*len(edges)
+
+
+def render_fixture(tmp_path, *, second_group=False):
+    from training.data.grouping_render import render_review
+    root, manifest = prepared_review_fixture(tmp_path)
+    rows = [dict(r, group='a' if not second_group or i < 4 else 'b', classes=['No_entry'])
+            for i, r in enumerate(manifest['images'])]
+    members = {g: [r for r in rows if r['group'] == g] for g in sorted({r['group'] for r in rows})}
+    stats = [dict(group=g, split=rs[0]['split'], images=len(rs), boxes=2*len(rs),
+                  negative_images=0, source_namespaces=3) for g, rs in members.items()]
+    summary = dict(images=18, groups=len(stats), edge_count=0, partition_matches=True,
+                   limitations='Replayed forest only', warnings=[], manifest_sha256='fixture', splits={})
+    output = tmp_path/'render'; output.mkdir()
+    return render_review, root, rows, members, stats, summary, output
+
+
+def joining_edge(left, right, reason):
+    return dict(left=left['sha256'], right=right['sha256'], left_group=left['group'],
+                right_group=right['group'], reason=reason, distance=4 if reason == 'dhash' else None,
+                key='', left_alias=left['source_path'], right_alias=right['source_path'],
+                cross_split=False, namespace_collision=reason == 'filename')
+
+
+def test_dhash_example_cannot_be_crowded_out_by_filename_collisions(tmp_path):
+    render, root, rows, members, stats, summary, output = render_fixture(tmp_path)
+    edges = [joining_edge(row, rows[0], 'filename' if i < 3 else 'dhash')
+             for i, row in enumerate(rows[1:5])]
+    summary['edge_count'] = 4
+    inventory = render(root, output, summary, stats, [], members, edges, 1, 2)
+    assert {e['reason'] for e in inventory[0]['edge_examples']} == {'filename', 'dhash'}
+    assert len(inventory[0]['edge_examples']) <= 3
+
+
+def test_global_dhash_review_includes_groups_outside_largest_group_window(tmp_path):
+    render, root, rows, members, stats, summary, output = render_fixture(tmp_path, second_group=True)
+    edges = [joining_edge(rows[1], rows[0], 'filename'), joining_edge(rows[5], rows[4], 'dhash')]
+    inventory = render(root, output, summary, stats, [], members, edges, 1, 2)
+    assert len(inventory) == 1 and inventory[0]['group'] == 'a'
+    assert 'dhash_review' in summary, 'Missing global dHash review evidence'
+    evidence = summary['dhash_review']
+    assert evidence['available_edges'] == 1
+    assert evidence['edge_examples'][0]['left_group'] == 'b'
+    assert evidence['contact_sheets'] and all((output/p).is_file() for p in evidence['contact_sheets'])
+    assert len(csv_rows(output/'dhash_edges.csv')) == 1
+    page = (output/'index.html').read_text(encoding='utf-8')
+    assert evidence['contact_sheets'][0] in page
+
+
+def test_global_dhash_previews_remain_bounded_and_export_all_edges(tmp_path):
+    render, root, rows, members, stats, summary, output = render_fixture(tmp_path)
+    edges = [joining_edge(row, rows[0], 'dhash') for row in rows[1:]]
+    render(root, output, summary, stats, [], members, edges, 1, 2)
+    assert 'dhash_review' in summary, 'Missing global dHash review evidence'
+    evidence = summary['dhash_review']
+    assert evidence['available_edges'] == 17
+    assert len(evidence['edge_examples']) == 12
+    assert len(evidence['contact_sheets']) == 3
+    assert len(csv_rows(output/'dhash_edges.csv')) == 17
+
+
+def test_dhash_review_reserves_an_outside_group_when_preview_groups_fill_all_slots(tmp_path):
+    from training.data.grouping_render import render_review
+    root, manifest = prepared_review_fixture(tmp_path)
+    # Renderer-only identities reuse fixture image files; no inference or dataset
+    # preparation is involved in selecting evidence for these thirteen groups.
+    rows = [dict(manifest['images'][i % 18], sha256=f'{i:064x}', group=f'g{i//2:02d}',
+                 classes=['No_entry']) for i in range(26)]
+    members = {f'g{i:02d}': rows[2*i:2*i+2] for i in range(13)}
+    stats = [dict(group=g, split='train', images=2, boxes=4, negative_images=0, source_namespaces=1)
+             for g in members]
+    edges = [joining_edge(rs[1], rs[0], 'dhash') for rs in members.values()]
+    summary = dict(images=26, groups=13, edge_count=13, partition_matches=True,
+                   limitations='Replayed forest only', warnings=[], manifest_sha256='fixture', splits={})
+    output = tmp_path/'render'; output.mkdir()
+    inventory = render_review(root, output, summary, stats, [], members, edges, 12, 2)
+    assert 'g12' not in {r['group'] for r in inventory}
+    assert 'g12' in {e['left_group'] for e in summary['dhash_review']['edge_examples']}
+    assert len(summary['dhash_review']['edge_examples']) <= 12
