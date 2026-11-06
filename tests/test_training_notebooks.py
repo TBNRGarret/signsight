@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 
-def test_supported_notebooks_do_not_depend_on_combined_builder(monkeypatch):
+def test_legacy_notebooks_remain_reproducible_without_combined_builder(monkeypatch):
     import scripts.generate_supsign_notebook as generator
     def retired():
         raise AssertionError('Combined notebook builder has been retired')
@@ -13,7 +13,7 @@ def test_supported_notebooks_do_not_depend_on_combined_builder(monkeypatch):
         (generator.build_train_notebook, 'SignSight_SupSign_YOLO11s_Train_Colab.ipynb'),
     ):
         notebook = builder()
-        assert notebook == json.loads((Path(__file__).parents[1]/'notebooks'/name).read_text(encoding='utf-8'))
+        assert notebook == json.loads((Path(__file__).parents[1]/'notebooks/legacy'/name).read_text(encoding='utf-8'))
 
 
 def test_embedded_notebooks_are_stable_across_filesystem_enumeration_order(monkeypatch):

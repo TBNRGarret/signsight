@@ -1,0 +1,12 @@
+{
+  "zip_sha256": "78ff592aaf49d9539a92fd02334f6394a22ac1a592c32008a1416e4fe481e872",
+  "manifest_sha256": "7d89760a0e83628a40895ee6a6367315aebb79b908a0101f50b66801479b1901",
+  "images": 36980,
+  "boxes": 40528,
+  "classes": 35,
+  "split_images": {
+    "train": 25886,
+    "val": 5547,
+    "test": 5547
+  }
+}

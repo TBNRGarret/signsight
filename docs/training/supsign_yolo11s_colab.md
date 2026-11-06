@@ -1,11 +1,13 @@
 # SupSign → YOLO11s trên Colab
 
+Historical V3 workflow. For the prepared CAR35 V4 ZIP, use [the active CAR35 Colab guide](car35_colab.md).
+
 ## Luồng hai notebook: EDA trước, train sau
 
-1. Upload [SignSight_SupSign_EDA_Colab.ipynb](../../notebooks/SignSight_SupSign_EDA_Colab.ipynb) lên Colab, dùng **CPU runtime**. Chỉ tải dataset bằng **gdown**, không mount Drive hoặc ghi vào tài khoản. Nếu đã có cache, điền `PREPARED_CACHE_URL` và checksum; nếu chưa có, điền `SOURCE_URL` bằng link ZIP SupSign gốc.
+1. Upload [SignSight_SupSign_EDA_Colab.ipynb](../../notebooks/legacy/SignSight_SupSign_EDA_Colab.ipynb) lên Colab, dùng **CPU runtime**. Chỉ tải dataset bằng **gdown**, không mount Drive hoặc ghi vào tài khoản. Nếu đã có cache, điền `PREPARED_CACHE_URL` và checksum; nếu chưa có, điền `SOURCE_URL` bằng link ZIP SupSign gốc.
 2. Chạy hết notebook EDA. Cell cuối tải `DATASET_VERSION_eda_TIMESTAMP.zip`: **gửi ZIP báo cáo này để rà soát trước**, không cần gửi cache dataset lớn. Báo cáo chứa thống kê subset CAR35, audit tổng quan nguồn, CSV, biểu đồ, ảnh bbox preview, manifest và `training_handoff.json`. Đây chưa phải đánh giá model.
 3. Mặc định `DOWNLOAD_PREPARED_CACHE=True` tải thêm cache ZIP lớn và `.zip.sha256` về máy, có thể cần cho phép nhiều lượt tải. Cache chứa dataset đã lọc/chia nhóm; ZIP báo cáo nhỏ không dùng để train. Nếu cache cũ đã được lưu an toàn, đặt False để chỉ tải báo cáo.
-4. Sau khi rà soát, upload [SignSight_SupSign_YOLO11s_Train_Colab.ipynb](../../notebooks/SignSight_SupSign_YOLO11s_Train_Colab.ipynb), chọn **GPU**. Runtime/tài khoản mới: tự lưu/chia sẻ cache thành file cho phép tải qua link, điền `PREPARED_CACHE_URL`, `PREPARED_CACHE_SHA256` từ handoff; notebook tải bằng gdown. Điền `EXPECTED_MANIFEST_SHA256` để khóa đúng dataset đã xem. Không có bước tự upload hoặc mount.
+4. Sau khi rà soát, upload [SignSight_SupSign_YOLO11s_Train_Colab.ipynb](../../notebooks/legacy/SignSight_SupSign_YOLO11s_Train_Colab.ipynb), chọn **GPU**. Runtime/tài khoản mới: tự lưu/chia sẻ cache thành file cho phép tải qua link, điền `PREPARED_CACHE_URL`, `PREPARED_CACHE_SHA256` từ handoff; notebook tải bằng gdown. Điền `EXPECTED_MANIFEST_SHA256` để khóa đúng dataset đã xem. Không có bước tự upload hoặc mount.
 5. Train chỉ khôi phục và xác minh cache, không audit ZIP thô/chia split lại. Không cần nhập lại CSV nhóm. Bật `LABEL_REVIEWED=True` sau khi kiểm tra nhãn. Nếu thay lớp/grouping/code chuẩn bị, quay lại EDA và tạo cache phiên bản mới.
 6. Train mặc định YOLO11s pretrained, 80 epochs, 640 px, batch 8; validation trước, held-out test chỉ chạy khi bật riêng. Cell cuối tải ZIP weights/metrics/config/manifest, không kèm toàn bộ dataset.
 

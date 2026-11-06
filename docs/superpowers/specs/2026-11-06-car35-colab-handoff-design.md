@@ -1,0 +1,9 @@
+# CAR35 archive and Colab handoff
+
+User requests deleting the original SupSign source, archiving the completed CAR35 dataset for manual Drive upload, and updating notebooks to train it. Package and fully validate CAR35 before deleting only the known parent train/, valid/, test/, data.yaml and rare_class_remap_report.json. Resolve every deletion path inside the workspace, reject redirected roots, retain CAR35, weights, runtime data, worklogs and EDA evidence. No upload, training, deployment or push is authorized/needed here.
+
+Keep two active notebooks named CAR35 EDA and CAR35 YOLO11s Train. Archive the two historical SupSign V3 notebooks under notebooks/legacy; their builder/import compatibility and recipe fingerprints remain available for historical tests. CAR35 notebooks run independently after upload, embedding only the helpers needed for CAR35. Download solely with gdown, use local /content, no Drive mount/account writes. User pastes the Drive file URL after manual upload.
+
+Bind the new ZIP and manifest through SHA-256. Safely restore flat ZIP contents, preserving existing splits and every CAR35 class ID; never audit/re-split the deleted source. Check every image/label hash, inventory, geometry, counts and group isolation. Preserve the known development-only scene-overlap limitation in reports.
+
+EDA uses CPU. Train uses official pretrained YOLO11s, 640, batch 8, 80 epochs with early stopping, no left/right or vertical flips, validation by default and a separate explicit final-test flag. Save last/best and periodic checkpoints locally. Resume must match dataset/settings and require last.pt; changing accounts requires downloading the dataset again and manually preserving run results. Export weights, settings, dataset identity and evaluation reports in a downloadable ZIP; do not claim the browser notebook file saves runtime data.

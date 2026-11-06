@@ -1,16 +1,14 @@
-# Supported notebooks
+# Supported CAR35 notebooks
 
-1. SignSight_SupSign_EDA_Colab.ipynb — CPU; gdown, source audit, CAR35 preparation, report ZIP and optional prepared-cache download.
-2. SignSight_SupSign_YOLO11s_Train_Colab.ipynb — GPU; gdown restores reviewed cache without resplitting, fine-tunes YOLO11s, validates and exports.
+1. [CAR35 EDA](SignSight_CAR35_EDA_Colab.ipynb) — CPU; gdown downloads the prepared V4 ZIP, verifies its fixed splits and produces a small report.
+2. [CAR35 YOLO11s Train](SignSight_CAR35_YOLO11s_Train_Colab.ipynb) — GPU; the same ZIP, official pretrained YOLO11s, validation, optional final test and downloadable results.
 
-Both notebooks use local `/content` storage and gdown ZIP links only for dataset transfer: no Drive mount or automatic account storage. Download outputs before deleting the runtime. EDA defaults to downloading its report plus the prepared dataset ZIP and checksum; set DOWNLOAD_PREPARED_CACHE=False only when the cache is already safely retained. A new account/runtime must receive the cache via a gdown-compatible link and checksum. Resume requires the original run files still present; restoring run backups is not automatic.
+Upload the supplied CAR35 ZIP to Drive unchanged, permit downloading through its link and paste that link into `SOURCE_URL`. Both checksums are already configured. The notebooks run standalone after upload; no repo clone, original SupSign folders, Drive mount or re-splitting is required.
 
-Upload the EDA notebook first. Keep dataset ZIP + checksum privately; send the EDA report for review. Training cache V1 with a known preparation signature remains readable; new caches use V2. Never overwrite an existing run or source dataset.
+All runtime files stay in `/content`. Download result ZIPs before ending the runtime; saving the notebook does not save weights. Resume needs the complete existing run and unchanged settings. A different account/runtime downloads the dataset again and does not automatically restore previous checkpoints.
 
-EDA now exports an offline grouping review. Extract the report ZIP and open the root `index.html` to follow the current grouping report: inspect split concentration, contact sheets of the 12 largest groups, direct filename/dHash/capture joins, and per-class group support. CSVs include all groups/members and a spanning forest of joining edges. The review does not change labels or splits; replay agreement does not establish independent trips. It decodes cached images on CPU for dHash without re-auditing the raw ZIP. Re-running the grouping cell preserves the old report; the root index/handoff identify the current timestamped folder.
+This is a development split with observed scene overlap and weak holdout support for some classes. Keep the limitations with any reported metrics; collect a separate car-view field test for independent claims.
 
-The global dHash section samples up to 12 joining pairs across all groups/distances, even outside the largest-group preview window. `dhash_edges.csv` exports all dHash forest edges. Per-group preview slots first cover available reasons so filename collisions cannot crowd out dHash.
+See the [Colab guide](../docs/training/car35_colab.md). Generate the active pair with `python -m training.notebooks.car35`.
 
-The embedded pipeline refreshes its own imported module set on rerun and uses a source-hash directory to avoid stale Python/bytecode imports. Pipeline/grouping/export print the same pipeline ID. The report handoff stores that ID and the exact current grouping link; open `index.html` at the ZIP root to follow it. Export rejects missing dHash evidence, a different pipeline ID or a changed manifest. Earlier grouping folders are retained but are not the current report entry point.
-
-Build both with `python -m scripts.generate_supsign_notebook`. Reusable code lives in `training/`; `scripts/` imports remain thin compatibility entry points. Old CNN/GTSRB, Kaggle and combined notebook artifacts are retained in Git history, not copied into an archive directory. Generic YOLO/VOC/COCO audit and local CLI remain available.
+The [legacy directory](legacy/) retains the two historical SupSign V3 notebook files for earlier evidence and cache compatibility. Those notebooks use a different bundle format and are not the entry point for CAR35 V4.

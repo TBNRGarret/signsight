@@ -299,7 +299,7 @@ def test_notebook_is_reproducible_self_contained_small_and_does_not_auto_run_tes
     from scripts.generate_supsign_notebook import build_eda_notebook, build_train_notebook
     root=Path(__file__).resolve().parents[1]
     notebook=build_train_notebook()
-    assert notebook==json.loads((root/'notebooks/SignSight_SupSign_YOLO11s_Train_Colab.ipynb').read_text(encoding='utf-8'))
+    assert notebook==json.loads((root/'notebooks/legacy/SignSight_SupSign_YOLO11s_Train_Colab.ipynb').read_text(encoding='utf-8'))
     for cell in notebook['cells']:
         if cell['cell_type']=='code':
             ast.parse(''.join(cell['source']));assert cell['outputs']==[] and cell['execution_count'] is None
