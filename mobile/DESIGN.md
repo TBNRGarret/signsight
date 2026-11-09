@@ -245,6 +245,14 @@ The path advances from photo to checking, then to ready-to-submit only when labe
 
 Quiet notices use the low container and supporting foreground with an information icon; errors use the error-container pair and error icon. Notices have a 16 dp inset, small rounded corners and a 12 dp icon/text gap. Loading uses native progress indicators. Preserve retry, photo replacement and draft-discard actions, and provide explanatory text when submission is unavailable.
 
+### Vector Basemap
+
+Familiar street hierarchy beneath the evidence. `SignMap` uses bundled `assets/maps/signsight-day.json` and `signsight-night.json`, selected by theme brightness. The day map uses warm pale land, white local streets, gold major roads, blue water and green parks. The night map has its own forest/slate ground, warm major roads and blue water. These cartographic roles belong to the map styles, not the Material control palette. Flat, quiet building footprints keep signs and routes prominent.
+
+Place and road names prefer `name:vi`, then the local `name`, then `name:latin`. Noto Sans Regular replaces italic labeling while inherited bold hierarchy remains. A 1.5 map-pixel halo separates labels from geometry; transit POIs appear from zoom 16. Changing theme retains the map host and camera, and reloads the matching style and annotations. Explicit caller styles remain available for deterministic fixtures.
+
+The styles derive from OpenFreeMap Liberty; vector tiles, fonts and sprites remain remote and require connectivity. Preserve visible attribution and the license/provenance files under `assets/maps/`. Regenerate only from reviewed upstream JSON with `scripts/build_mobile_basemap.py`. Real-provider visual evidence and its phone-only review are in `../.impeccable/map-review-host/` and `../.impeccable/map-review/finish-review.md`; host-GPU emulator evidence does not establish physical-device or iOS acceptance.
+
 ## Do's and Don'ts
 
 ### Do:
