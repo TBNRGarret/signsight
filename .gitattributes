@@ -21,6 +21,8 @@
 
 # Preserve exact renderer bytes and asset integrity across platforms.
 frontend/vendor/maplibre/* -text -whitespace
+# Approved SVG source checksums refer to original bytes, not normalized text.
+frontend/shared/signs/*.svg -text
 *.mjs text eol=lf
 
 .gitattributes text eol=lf

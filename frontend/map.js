@@ -1,6 +1,7 @@
 /* MapLibre renderer adapter. Application points are always [latitude, longitude]. */
 (function(root){
  'use strict';
+ const signIcons=typeof module!=='undefined'&&module.exports?require('./shared/sign_icons.js'):root.signSightSignIcons;
  const HOME=[106.7009,10.7769], STYLES=['liberty','bright','dark'];
  const url=id=>'https://tiles.openfreemap.org/styles/'+id;
  function mount({maplibregl=root.maplibregl,document,environment=root,idPrefix=''}){
@@ -10,7 +11,7 @@
   let style='liberty';
   try{const saved=environment.localStorage?.getItem(key);if(STYLES.includes(saved))style=saved;}catch(_){}
   select.value=style;
-  let native=null,disposed=false,failed=false,timer=null,frame=null,observer=null,popup=null,popupOwner=null,serial=0,styleReady=false;
+  let native=null,disposed=false,failed=false,timer=null,frame=null,observer=null,popup=null,popupOwner=null,popupDispose=null,popupObserver=null,serial=0,styleReady=false;
   const routes=new Map();
   function show(text){message.textContent=text;notice.hidden=false;}
   function clearTimer(){if(timer!==null)environment.clearTimeout(timer);timer=null;}
@@ -35,18 +36,37 @@
    invalidateSize(){native?.resize();},
    fitBounds(bounds,{padding=[40,40]}={}){native?.fitBounds(bounds,{padding:Math.max(...padding),maxZoom:18});},
    removeLayer(layer){layer?.remove();},
-   closePopup(){popup?.remove();popup=null;popupOwner=null;},
+   closePopup(){const current=popup,dispose=popupDispose;popup=null;popupOwner=null;popupDispose=null;popupObserver?.disconnect();popupObserver=null;dispose?.();current?.remove();},
    addMarker(point,options={}){
     if(!native||disposed)return null;
     const element=document.createElement('button');element.type='button';element.className='sign-map-marker';
     element.style.setProperty?.('--marker-color',options.fillColor||options.color||'#2563eb');
     element.style.width=element.style.height=((options.radius||9)*2)+'px';
+    if(options.sign){element.style.width=element.style.height='48px';signIcons.decorate(element,options.sign,document);}
     element.setAttribute('aria-label',options.label||'Vị trí biển báo');
     if(options.highlight){element.className+=' sign-map-highlight';element.tabIndex=-1;element.setAttribute('aria-hidden','true');}
     const marker=new maplibregl.Marker({element,draggable:!!options.draggable}).setLngLat(position(point)).addTo(native);
     if(options.popup)element.addEventListener('click',event=>{
      event.stopPropagation();map.closePopup();popupOwner=marker;
-     popup=new maplibregl.Popup({offset:14,maxWidth:'300px'}).setLngLat(marker.getLngLat()).setDOMContent(options.popup()).addTo(native);
+     const content=options.popup();popupDispose=content?.dispose;
+     const container=native.getContainer(),body=content?.element||content;
+     if(content?.element?.style){body.style.maxHeight=Math.max(100,container.clientHeight-(container.clientWidth<=760?160:60))+'px';body.style.overflowY='hidden';}
+     popup=new maplibregl.Popup({offset:26,maxWidth:'300px',className:'sign-map-popup'}).setLngLat(marker.getLngLat()).setDOMContent(body).addTo(native);
+     const current=popup;current.on?.('close',()=>{if(popup===current)map.closePopup();});
+     function fitPopup(){
+      if(popup!==current||!native.panBy)return;
+      const bounds=container.getBoundingClientRect?.(),popupRect=current.getElement?.()?.getBoundingClientRect();
+      const markerRect=element.getBoundingClientRect?.();
+      const rect=popupRect&&markerRect?{left:Math.min(popupRect.left,markerRect.left),right:Math.max(popupRect.right,markerRect.right),
+        top:Math.min(popupRect.top,markerRect.top),bottom:Math.max(popupRect.bottom,markerRect.bottom)}:popupRect;
+      if(!bounds||!rect)return;
+      const bottom=bounds.bottom-(container.clientWidth<=760?64:8);
+      const dx=rect.left<bounds.left+8?rect.left-bounds.left-8:Math.max(0,rect.right-bounds.right+8);
+      const dy=rect.top<bounds.top+8?rect.top-bounds.top-8:Math.max(0,rect.bottom-bottom);
+      if(Math.abs(dx)>1||Math.abs(dy)>1)native.panBy([dx,dy],{duration:0});
+     }
+     if(environment.ResizeObserver&&body?.nodeType){popupObserver=new environment.ResizeObserver(fitPopup);popupObserver.observe(body);}
+     environment.requestAnimationFrame?.(fitPopup);
     });
     return {on(name,fn){marker.on(name,fn);return this;},getLatLng(){const p=marker.getLngLat();return {lat:p.lat,lng:p.lng};},
      remove(){if(popupOwner===marker)map.closePopup();marker.remove();},native:marker};

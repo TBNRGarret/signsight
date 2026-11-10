@@ -1,5 +1,7 @@
 # App Flutter cho user
 
+Biển trên bản đồ dùng icon đã duyệt; chạm vào biển để xem ảnh đóng góp đã duyệt nếu có. Xem [catalogue và cách cập nhật icon](../runtime/sign_marker_images.md).
+
 Đã có MVP trong `mobile/`, dùng chung FastAPI và database với web quản trị. YOLO chạy ở backend, nên cập nhật checkpoint tương thích sẽ phục vụ cả web và app. Không đưa model/dataset vào app.
 
 ## Giao diện và phạm vi

@@ -21,6 +21,23 @@ class MapSurface extends MapLibrePlatform {
 }
 
 void main() {
+  testWidgets('traffic sign symbols are above their circle touch targets', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: SignMap(scene: MapScene(center: GeoPoint(10.7769, 106.7009))),
+      ),
+    );
+    final order = tester
+        .widget<MapLibreMap>(find.byType(MapLibreMap))
+        .annotationOrder;
+    expect(
+      order.indexOf(AnnotationType.symbol),
+      greaterThan(order.indexOf(AnnotationType.circle)),
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
   setUp(() {
     final factory = MapLibrePlatform.createInstance;
     MapLibrePlatform.createInstance = MapSurface.new;

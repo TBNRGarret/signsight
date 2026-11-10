@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SignSight - Nền Tảng Bản Đồ & Quản Lý Biển Báo Giao Thông Việt Nam</title>
   <script src="shared/theme.js?v=20261023-icons"></script>
+  <link rel="stylesheet" href="shared/sign_icons.css?v=20261109">
   <link rel="stylesheet" href="vendor/maplibre/maplibre-gl.css?v=6.15.0" integrity="sha256-qQeYoZUwF3kOWQ9+G9Nf8QOopCY5cstHKQt4rfhvjCA=" />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -363,7 +364,10 @@
   </main>
 
   <script src="vendor/maplibre/maplibre-gl.js?v=6.15.0" integrity="sha256-GjspOMZ2IS0Mxb/yYPkBu+Lz/g0fPeSeQrWq2t0Ov2U="></script>
-  <script src="map.js?v=20261023-ofm"></script>
+  <script src="shared/sign_registry.js?v=20261109"></script>
+  <script src="shared/sign_icons.js?v=20261109"></script>
+  <script src="shared/sign_popup.js?v=20261109"></script>
+  <script src="map.js?v=20261109-icons"></script>
   <script src="shared/auth.js?v=20261020-remember"></script>
   <script src="shared/catalog.js?v=20261030"></script>
   <script src="routing.js?v=20261023-ofm"></script>
@@ -436,6 +440,12 @@
     let authInitialized = false;
     function authChanged() {
       authInitialized = true;
+      map.closePopup();
+      markers.forEach(marker => map.removeLayer(marker)); markers = [];
+      document.getElementById('sign-list').replaceChildren();
+      for (const id of ['stat-total', 'stat-active', 'stat-dup']) document.getElementById(id).textContent = '0';
+      document.getElementById('signs-count-badge').textContent = '0 biển';
+      document.getElementById('nearby-count').textContent = '';
       if (canManage() && !staffInspection()) { window.location?.replace('management.html'); return; }
       document.body?.classList?.toggle('staff-inspection', staffInspection());
       authGeneration++;
@@ -445,13 +455,6 @@
         if(generation!==authGeneration)return;
         window.signSightCatalog.fill(filter,items,document,'','Tất cả');filter.disabled=false;
       }).catch(()=>{if(generation===authGeneration)filter.title='Chưa tải được danh mục. Tải lại trang để thử lại.';});
-      if (!api.user) {
-        markers.forEach(marker => map.removeLayer(marker)); markers = [];
-        document.getElementById('sign-list').replaceChildren();
-        for (const id of ['stat-total', 'stat-active', 'stat-dup']) document.getElementById(id).textContent = '0';
-        document.getElementById('signs-count-badge').textContent = '0 biển';
-        document.getElementById('nearby-count').textContent = '';
-      }
       updateAuthUI();
       loadSigns();
       loadNearby();
@@ -495,16 +498,8 @@
     const needsConfirmation = s => s.verification_status === 'needs_confirmation' || s.status === 'expired';
 
     function popupFor(s) {
-      const box = document.createElement('div'); box.className = 'popup-box';
-      const title = document.createElement('h3'); title.textContent = s.qcvn_code;
-      const name = document.createElement('p'); name.textContent = s.name_vi;
-      const state = document.createElement('p');
-      state.textContent = `${STATUS_LABELS[s.status] || s.status}${needsConfirmation(s) ? ' · cần xác nhận lại' : ''}${s.is_uncertain ? ' · nhãn cần kiểm tra' : ''}`;
-      const open = document.createElement('button'); open.className = 'btn-reval'; open.textContent = 'Chi tiết & báo cáo';
-      open.onclick = () => { map.closePopup(); signReports.select(s.id); };
-      const group = document.createElement('div'); group.className = 'btn-group'; group.append(open);
-      box.append(title, name, state, group);
-      return box;
+      return window.signSightSignPopup.create({api,document,sign:s,
+        onDetails:()=>{map.closePopup();signReports.select(s.id);}});
     }
 
     function clampedBounds() {
@@ -530,7 +525,7 @@
         if (generation !== signsGeneration || auth !== authGeneration || !api.user) return;
         markers.forEach(m => map.removeLayer(m));
         markers = page.items.map(s => map.addMarker([s.latitude, s.longitude], {
-          radius: 10, color: markerColor(s), label: s.qcvn_code + ' · ' + s.name_vi, popup: () => popupFor(s)
+          sign:s, radius: 10, color: markerColor(s), label: s.qcvn_code + ' · ' + s.name_vi, popup: () => popupFor(s)
         }));
         document.getElementById('stat-total').textContent = page.total;
         document.getElementById('stat-active').textContent = page.items.filter(s => s.status === 'active').length;

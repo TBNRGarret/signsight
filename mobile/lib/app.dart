@@ -10,6 +10,7 @@ import 'map_canvas.dart';
 import 'models.dart';
 import 'app_theme.dart';
 import 'ui_components.dart';
+import 'reviewed_sign_photo.dart';
 
 part 'app/auth_sheet.dart';
 part 'app/user_shell.dart';

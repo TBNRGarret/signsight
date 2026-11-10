@@ -16,6 +16,7 @@ class MapScene {
     this.onIdle,
     this.onSign,
     this.pinOnly = false,
+    this.selectedSignId,
   });
   final GeoPoint center;
   final List<Sign> signs;
@@ -24,6 +25,7 @@ class MapScene {
   final ValueChanged<GeoPoint>? onTap, onIdle;
   final ValueChanged<Sign>? onSign;
   final bool pinOnly;
+  final String? selectedSignId;
 }
 
 typedef MapBuilder = Widget Function(BuildContext context, MapScene scene);
@@ -154,6 +156,11 @@ class _SignMapState extends State<SignMap> {
         await controller.clearCircles();
         await controller.clearSymbols();
         await controller.clearLines();
+        await controller.setSymbolIconAllowOverlap(true);
+        final catalog = await SignIconCatalog.load();
+        if (!mounted || generation != _generation || !_loaded) return;
+        final selectedColor =
+            '#${Theme.of(context).colorScheme.primary.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
         if (scene.route.length > 1) {
           await controller.addLine(
             LineOptions(
@@ -168,26 +175,49 @@ class _SignMapState extends State<SignMap> {
           await controller.addCircle(
             CircleOptions(
               geometry: point(sign.point),
-              circleRadius: 20,
-              circleColor: sign.needsConfirmation ? '#d97706' : '#2563eb',
-              circleStrokeColor: '#ffffff',
-              circleStrokeWidth: 2,
+              circleRadius: 24,
+              circleColor: '#ffffff',
+              circleStrokeColor: sign.id == scene.selectedSignId
+                  ? selectedColor
+                  : '#d4ddd1',
+              circleStrokeWidth: sign.id == scene.selectedSignId ? 3 : 1.5,
             ),
             {'id': sign.id},
           );
-          final key = 'sign:${sign.code}';
+          final key = 'sign:${catalog.resolve(sign.code, name: sign.name)}';
           if (!_icons.contains(key)) {
-            await controller.addImage(key, await renderSignIcon(sign.code));
+            await controller.addImage(
+              key,
+              await renderSignIcon(sign.code, name: sign.name),
+            );
+            if (!mounted || generation != _generation || !_loaded) return;
             _icons.add(key);
           }
           await controller.addSymbol(
             SymbolOptions(
               geometry: point(sign.point),
               iconImage: key,
-              iconSize: .38,
+              iconSize: .1875,
             ),
             {'id': sign.id},
           );
+          if (sign.needsConfirmation) {
+            const badge = 'marker-revalidation';
+            if (!_icons.contains(badge)) {
+              await controller.addImage(badge, await renderConfirmationBadge());
+              if (!mounted || generation != _generation || !_loaded) return;
+              _icons.add(badge);
+            }
+            await controller.addSymbol(
+              SymbolOptions(
+                geometry: point(sign.point),
+                iconImage: badge,
+                iconSize: 1,
+                iconOffset: const Offset(14, -14),
+              ),
+              {'id': sign.id},
+            );
+          }
         }
         if (scene.pin != null) {
           await controller.addCircle(
@@ -227,8 +257,8 @@ class _SignMapState extends State<SignMap> {
             ? const []
             : const [
                 AnnotationType.line,
-                AnnotationType.symbol,
                 AnnotationType.circle,
+                AnnotationType.symbol,
                 AnnotationType.fill,
               ],
         initialCameraPosition: CameraPosition(

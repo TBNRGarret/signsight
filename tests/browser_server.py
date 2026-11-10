@@ -43,6 +43,9 @@ if __name__ == "__main__":
                                         password="Browser-test-password-123"), role="manager")
             create_user(db, UserRegister(username="browser_admin", email="admin@example.com",
                                         password="Browser-test-password-123"), role="admin")
+            for username in ("browser_marker", "browser_marker_b"):
+                create_user(db, UserRegister(username=username, email=username+"@example.com",
+                                            password="Browser-test-password-123"), role="user")
             info = CLASS_MAPPING[0]
             for index in range(65):
                 db.add(SignRecord(id=str(uuid.uuid5(uuid.NAMESPACE_DNS, f"browser-sign-{index}")),

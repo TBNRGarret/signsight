@@ -17,7 +17,7 @@ function setup(store=new Map(),{fail=false}={}){
    setLngLat(p){this.point=p;return this;}addTo(){return this;}getLngLat(){return {lng:this.point[0],lat:this.point[1]};}
    on(n,f){this.events[n]=f;return this;}remove(){this.removed=true;}},
   Popup:class{constructor(){popups.push(this);}setDOMContent(){return this;}setLngLat(){return this;}addTo(){return this;}remove(){this.removed=true;} }};
- const document={getElementById:id=>elements[id],createElement(){return {style:{},dataset:{},events:{},setAttribute(){},addEventListener(n,f){this.events[n]=f;}};}};
+ const document={getElementById:id=>elements[id],createElement(){return {style:{},dataset:{},events:{},children:[],setAttribute(){},append(...nodes){this.children.push(...nodes);},addEventListener(n,f){this.events[n]=f;}};}};
  const environment={localStorage:{getItem:k=>store.get(k)??null,setItem:(k,v)=>store.set(k,v)},
   ResizeObserver:class{constructor(fn){observer=fn;}observe(){}disconnect(){disconnected=true;}},
   requestAnimationFrame(fn){frames.set(++serial,fn);return serial;},cancelAnimationFrame:id=>frames.delete(id),
@@ -98,4 +98,13 @@ test('removing a private sign marker closes its popup without closing a differen
  assert.equal(a.popups.length,1);
  highlight.remove();assert.equal(a.popups[0].removed,undefined);
  marker.remove();assert.equal(a.popups[0].removed,true);
+});
+
+test('sign markers contain a local icon and popup cleanup runs on removal',()=>{
+ const a=setup();let disposed=0;
+ const marker=a.map.addMarker([10,106],{sign:{qcvn_code:'DS.SS.06',name_vi:'Cấm ô tô'},popup:()=>({element:{},dispose(){disposed++;}})});
+ const element=a.markers[0].options.element;
+ assert.equal(element.style.width,'48px');assert.match(element.className,/sign-map-icon-marker/);
+ assert.equal(element.children[0].src,'shared/signs/no_cars.svg');
+ element.events.click({stopPropagation(){}});marker.remove();assert.equal(disposed,1);
 });

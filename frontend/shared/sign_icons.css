@@ -1,0 +1,21 @@
+.sign-map-marker.sign-map-icon-marker{display:grid;place-items:center;padding:0;border:2px solid #d4ddd1;background:#fff;border-radius:50%;box-shadow:0 3px 6px #0002;cursor:pointer}
+.sign-marker-image{display:block;width:36px;height:36px;object-fit:contain;pointer-events:none}
+.sign-marker-revalidation{position:absolute;right:-4px;top:-5px;display:grid;place-items:center;width:20px;height:20px;background:#ffc85b;color:#422f00;border-radius:50%;font-weight:700;font-size:13px;pointer-events:none}
+.sign-map-icon-marker:focus-visible{outline:3px solid var(--primary);outline-offset:3px}
+.sign-popup-heading{display:flex;gap:12px;align-items:center;margin-bottom:10px}
+.sign-popup-icon{width:44px;height:44px;object-fit:contain;flex:none}
+.sign-popup-titles{min-width:0;overflow-wrap:anywhere}
+.sign-popup-photo{display:block;width:100%;max-height:180px;object-fit:contain;border-radius:8px;background:var(--panel);margin:10px 0}
+.sign-popup-photo[hidden],.sign-popup-photo-status[hidden],.sign-popup-photo-retry[hidden]{display:none}
+.sign-photo-popup{min-width:190px;max-width:260px;display:flex;flex-direction:column}
+.sign-popup-content{min-height:0;overflow-y:auto}
+.sign-photo-popup>.btn-reval{flex-shrink:0}
+.popup-box.sign-photo-popup button{min-height:44px;margin-top:8px}
+.sign-map-popup .maplibregl-popup-close-button{width:44px;height:44px;font-size:20px}
+.sign-popup-heading{padding-right:22px}
+@media(max-width:760px){
+ .sign-popup-photo{max-height:80px;margin:6px 0}
+ .sign-popup-icon{width:32px;height:32px}
+ .sign-popup-heading{margin-bottom:6px;gap:8px}
+ .popup-box.sign-photo-popup button{margin-top:4px}
+}

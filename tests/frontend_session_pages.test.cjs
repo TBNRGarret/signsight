@@ -26,7 +26,7 @@ function app(request) {
     get:id=>document.getElementById(id), run:name=>{if(name==='observations.js')vm.runInContext(read('contribution_history.js'),context);return vm.runInContext(read(name),context);}};
 }
 function mapApp(request) {
-  const a=app(request), map={on(){},removeLayer(){},getBounds:()=>({getSouth:()=>10.7,getNorth:()=>10.9,getWest:()=>106.6,getEast:()=>106.8})};
+  const a=app(request), map={on(){},closePopup(){},removeLayer(){},getBounds:()=>({getSouth:()=>10.7,getNorth:()=>10.9,getWest:()=>106.6,getEast:()=>106.8})};
   a.window.signSightMap={mount:()=>({map})};
   a.window.signSightReports={mount:()=>({refreshPin(){},select(){}})};
   a.get('nearby-radius').value='1000';

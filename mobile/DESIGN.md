@@ -255,6 +255,10 @@ The styles derive from OpenFreeMap Liberty; vector tiles, fonts and sprites rema
 
 ## Do's and Don'ts
 
+### Sign imagery
+
+Use the approved local catalogue in `assets/signs/` for road-sign markers, retaining original colours and proportions. A 48 dp white marker target contains the sign; selected markers have a theme-primary border. Keep the yellow revalidation badge separate from the artwork. Unknown or ambiguous legacy aliases use a neutral question mark. The selected panel loads reviewed evidence through authenticated API transport, with empty, retry and loading states; an icon never substitutes for a missing contribution photo. See `../docs/runtime/sign_marker_images.md` for provenance and device-verification limits.
+
 ### Do:
 - **Do** apply paired Material color roles for the active light or dark scheme.
 - **Do** preserve the three Vietnamese destination labels and native icon-plus-label navigation.

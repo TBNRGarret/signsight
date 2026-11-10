@@ -17,6 +17,7 @@ extension _MapScreen on _UserShellState {
             MapScene(
               center: c.center,
               signs: signs,
+              selectedSignId: selected?.id,
               route: c.route?.geometry ?? const [],
               onSign: c.selectSign,
               onIdle: (point) {
@@ -197,6 +198,12 @@ extension _MapScreen on _UserShellState {
                                     ],
                                   ),
                                   Text(c.selectedSign!.name),
+                                  ReviewedSignPhoto(
+                                    api: c.api,
+                                    signId: c.selectedSign!.id,
+                                    sessionKey:
+                                        '${c.user?.id}:${identityHashCode(c.user)}',
+                                  ),
                                   Text(
                                     c.selectedSign!.needsConfirmation
                                         ? 'Cần xác nhận lại'

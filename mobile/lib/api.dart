@@ -31,7 +31,9 @@ class SignSightApi {
   final http.Client _client;
   final bool browser;
   String? _token;
+  int _authGeneration = 0;
   void useToken(String? token) {
+    _authGeneration++;
     _token = browser ? null : token;
   }
 
@@ -155,6 +157,26 @@ class SignSightApi {
       jsonMap(await _json('GET', '/signs/${Uri.encodeComponent(id)}'))['sign'],
     ),
   );
+
+  /// Reads only server-approved evidence and never follows an external URL.
+  Future<Uint8List?> signPhoto(String id) async {
+    final generation = _authGeneration;
+    final detail = jsonMap(
+      await _json('GET', '/signs/${Uri.encodeComponent(id)}'),
+    );
+    if (generation != _authGeneration) return null;
+    final evidence = detail['evidence'] as List? ?? const [];
+    if (evidence.isEmpty) return null;
+    final content = jsonMap(evidence.first)['content_url'];
+    final match = RegExp(r'^/api/v1/images/([A-Za-z0-9_-]+)/content$')
+        .firstMatch(content is String ? content : '');
+    if (match == null) {
+      throw const FormatException('Invalid reviewed evidence URL');
+    }
+    final bytes = await photoContent(match.group(1)!);
+    return generation == _authGeneration ? bytes : null;
+  }
+
   Future<List<Place>> search(String query) async {
     final j = jsonMap(
       await _json('GET', '/places/search', query: {'q': query}),
