@@ -2,6 +2,8 @@
 
 Biển trên bản đồ dùng icon đã duyệt; chạm vào biển để xem ảnh đóng góp đã duyệt nếu có. Xem [catalogue và cách cập nhật icon](../runtime/sign_marker_images.md).
 
+Khi kéo map hoặc đổi bán kính lúc nearby đang tải, app bỏ kết quả sai khu vực và lấy khu vực mới nhất; các lượt kéo nhanh được gộp thay vì gửi đồng thời nhiều truy vấn. Kết quả nearby không ghi đè trạng thái tìm điểm đến/tuyến đường, và dữ liệu của phiên cũ bị bỏ khi đổi tài khoản.
+
 Đã có MVP trong `mobile/`, dùng chung FastAPI và database với web quản trị. YOLO chạy ở backend, nên cập nhật checkpoint tương thích sẽ phục vụ cả web và app. Không đưa model/dataset vào app.
 
 ## Giao diện và phạm vi

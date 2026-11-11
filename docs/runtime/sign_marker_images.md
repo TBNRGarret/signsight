@@ -19,6 +19,8 @@ After updating, reload the web page with Ctrl+F5. Restart/rebuild Flutter to inc
 
 ## Verification
 
+Viewport refreshes retain unchanged marker handles, including their selected photo popup. A changed/absent record or account change removes the old marker and disposes its photo. This prevents the popup's own automatic pan from immediately closing the selected evidence through a map refresh.
+
 Unit tests cover explicit aliases, fallback, source checksums, PNG proportions, authenticated evidence requests, retry and stale-result cleanup. Playwright uses a disposable database, local map fixture and synthetic photo, including desktop/phone layout and direct account switching when the new map request fails. Browser phone emulation does not establish Safari or native-device acceptance.
 
 Native map appearance, selection and style-reload restoration still need a device check. The attempted Android emulator check could not proceed because ADB reported the emulator as unauthorized; Flutter unit/widget tests and static analysis cover the code-level checks.

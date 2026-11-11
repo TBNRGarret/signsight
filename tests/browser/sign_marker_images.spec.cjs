@@ -10,7 +10,8 @@ test('local sign images open reviewed photo evidence on selection and clear it o
   status:'active',verification_status:'needs_confirmation',confidence:.95,expires_at:'2026-12-01T00:00:00'};
  const second={...first,id:'marker-two',qcvn_code:'P.102',name_vi:'Cấm đi ngược chiều',longitude:106.702,verification_status:'current'};
  let failMap=false;
- await page.route('**/api/v1/map/signs?*',route=>route.fulfill(failMap?{status:503,json:{detail:'Fixture map unavailable'}}:{json:{items:[first,second],total:2}}));
+ let mapItems=[first,second];
+ await page.route('**/api/v1/map/signs?*',route=>route.fulfill(failMap?{status:503,json:{detail:'Fixture map unavailable'}}:{json:{items:mapItems,total:mapItems.length}}));
  await page.addInitScript(()=>{window.photoUrlsRevoked=[];const revoke=URL.revokeObjectURL.bind(URL);URL.revokeObjectURL=url=>{photoUrlsRevoked.push(url);revoke(url);};});
  await page.route('**/api/v1/signs/marker-one',route=>route.fulfill({json:{sign:first,evidence:[{content_url:'/api/v1/images/reviewed-fixture/content'}]}}));
  await page.route('**/api/v1/signs/marker-two',route=>route.fulfill({json:{sign:second,evidence:[]}}));
@@ -29,6 +30,12 @@ test('local sign images open reviewed photo evidence on selection and clear it o
  await expect(marker.locator('.sign-marker-revalidation')).toBeVisible();
  await marker.click();await expect(page.locator('.sign-popup-photo')).toBeVisible();
  await expect.poll(()=>page.locator('.sign-popup-photo').evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
+ expect(photos).toBe(1);
+ const selectedPhoto=await page.locator('.sign-popup-photo').getAttribute('src');
+ // Auto-pan and viewport refresh must not destroy an unchanged selected marker.
+ await page.evaluate(()=>loadSigns());
+ await expect(page.locator('.sign-popup-photo')).toBeVisible();
+ expect(await page.locator('.sign-popup-photo').getAttribute('src')).toBe(selectedPhoto);
  expect(photos).toBe(1);
  const bounds=await page.evaluate(()=>({popup:document.querySelector('.maplibregl-popup').getBoundingClientRect().toJSON(),map:document.getElementById('map').getBoundingClientRect().toJSON()}));
  expect(bounds.popup.top).toBeGreaterThanOrEqual(bounds.map.top);
@@ -53,6 +60,13 @@ test('local sign images open reviewed photo evidence on selection and clear it o
  const viewport=await page.evaluate(()=>({width:document.documentElement.scrollWidth,viewport:innerWidth}));
  expect(viewport.width).toBeLessThanOrEqual(viewport.viewport);
  await page.locator('.maplibregl-popup-close-button').click();
+ await marker.click();await expect(page.locator('.sign-popup-photo')).toBeVisible();
+ const removedPhoto=await page.locator('.sign-popup-photo').getAttribute('src');
+ mapItems=[second];await page.evaluate(()=>loadSigns());
+ await expect(page.locator('.sign-popup-photo')).toHaveCount(0);
+ await expect(marker).toHaveCount(0);
+ expect(await page.evaluate(url=>photoUrlsRevoked.includes(url),removedPhoto)).toBe(true);
+ mapItems=[first,second];await page.evaluate(()=>loadSigns());
  await marker.click();await expect(page.locator('.sign-popup-photo')).toBeVisible();
  await page.locator('#logout-button').click();
  await expect(page.locator('.sign-popup-photo')).toHaveCount(0);

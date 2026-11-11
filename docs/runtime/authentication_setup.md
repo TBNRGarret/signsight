@@ -85,6 +85,10 @@ Trước khi nâng revision của SQLite đã có bảng dữ liệu, migration 
 
 ## Kiểm tra
 
+Hai API đọc tương thích cũ `GET /api/v1/signs` và `POST /api/v1/navigation/route-signs` cũng yêu cầu phiên hợp lệ, giống API map hiện tại. User, manager và admin đều được đọc; quyền đọc không cấp quyền duyệt. Phiên hết hạn, thu hồi hoặc tài khoản bị khóa bị chặn trước khi chạy truy vấn/lifecycle. Cấu trúc phản hồi và bộ lọc cho client đã đăng nhập giữ nguyên.
+
+API raw route-signs giới hạn 20 yêu cầu/phút/IP trong tiến trình hiện tại; vượt giới hạn trả 429 kèm `Retry-After` trước bước tính khoảng cách. Đây không phải giới hạn phân tán cho nhiều worker. Phân trang và tối ưu truy vấn của danh sách cũ vẫn là hạng mục riêng trong audit A12.
+
 ```powershell
 python -m pytest tests -q
 node --test tests/frontend_auth.test.cjs

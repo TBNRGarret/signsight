@@ -377,6 +377,7 @@
     const { map } = window.signSightMap.mount({document});
 
     let markers = [];
+    let markerCache = new Map();
     let selectedCoords = [10.7769, 106.7009];
 
     function setOrigin(latitude, longitude) {
@@ -442,6 +443,7 @@
       authInitialized = true;
       map.closePopup();
       markers.forEach(marker => map.removeLayer(marker)); markers = [];
+      markerCache.clear();
       document.getElementById('sign-list').replaceChildren();
       for (const id of ['stat-total', 'stat-active', 'stat-dup']) document.getElementById(id).textContent = '0';
       document.getElementById('signs-count-badge').textContent = '0 biển';
@@ -523,10 +525,18 @@
       try {
         const page = await api.request(`/map/signs?${params}`);
         if (generation !== signsGeneration || auth !== authGeneration || !api.user) return;
-        markers.forEach(m => map.removeLayer(m));
-        markers = page.items.map(s => map.addMarker([s.latitude, s.longitude], {
-          sign:s, radius: 10, color: markerColor(s), label: s.qcvn_code + ' · ' + s.name_vi, popup: () => popupFor(s)
-        }));
+        const next = new Map();
+        for (const s of page.items) {
+          const signature = JSON.stringify(s), previous = markerCache.get(s.id);
+          if (previous?.signature === signature) { next.set(s.id, previous); continue; }
+          if (previous) map.removeLayer(previous.marker);
+          next.set(s.id, { signature, marker: map.addMarker([s.latitude, s.longitude], {
+            sign:s, radius: 10, color: markerColor(s), label: s.qcvn_code + ' · ' + s.name_vi, popup: () => popupFor(s)
+          }) });
+        }
+        for (const [id, entry] of markerCache) if (!next.has(id)) map.removeLayer(entry.marker);
+        markerCache = next;
+        markers = [...next.values()].map(entry => entry.marker);
         document.getElementById('stat-total').textContent = page.total;
         document.getElementById('stat-active').textContent = page.items.filter(s => s.status === 'active').length;
         document.getElementById('stat-dup').textContent = page.items.filter(needsConfirmation).length;

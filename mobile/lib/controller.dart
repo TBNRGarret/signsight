@@ -35,7 +35,7 @@ class AppController extends ChangeNotifier {
   final _mapState = _MapState();
   String? get mapError => _mapState.mapError;
   set mapError(String? value) => _mapState.mapError = value;
-  bool get mapBusy => _mapState.mapBusy;
+  bool get mapBusy => _mapState.mapBusy || _mapState.nearbyJob != null;
   set mapBusy(bool value) => _mapState.mapBusy = value;
   GeoPoint get center => _mapState.center;
   set center(GeoPoint value) => _mapState.center = value;
@@ -152,6 +152,8 @@ class AppController extends ChangeNotifier {
     captureTypesError = null;
     nearbySigns = [];
     nearbyTotal = 0;
+    _mapState.nearbyJob = null;
+    _mapState.loadedNearby = null;
     places = [];
     route = null;
     selectedSign = null;
