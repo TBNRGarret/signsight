@@ -77,9 +77,9 @@ def test_route_provider_failure_is_an_error_not_a_straight_line(client,applicati
     assert result.status_code==502 and 'geometry' not in result.json()
 
 
-def test_route_geometry_input_is_bounded_and_validated(client):
+def test_route_geometry_input_is_bounded_and_validated(client,auth):
     for points in ([],[{'latitude':0,'longitude':0}],[{'latitude':99,'longitude':0},{'latitude':0,'longitude':0}]):
-        assert client.post('/api/v1/navigation/route-signs',json={'waypoints':points,'buffer_meters':50}).status_code==422
+        assert client.post('/api/v1/navigation/route-signs',headers=auth,json={'waypoints':points,'buffer_meters':50}).status_code==422
 
 
 def test_places_search_submits_explicit_query_and_caches_provider_results(client,application,auth):

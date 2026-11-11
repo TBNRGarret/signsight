@@ -73,7 +73,8 @@ def list_sign_records(
     status: Optional[str] = Query(None, description="Filter by status ('active', 'expired', 'removed')"),
     is_uncertain: Optional[bool] = Query(None, description="Filter by uncertainty flag"),
     qcvn_code: Optional[str] = Query(None, description="Filter by QCVN code"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Returns traffic sign records with optional filters.

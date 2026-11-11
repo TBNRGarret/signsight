@@ -10,7 +10,8 @@ router=APIRouter()
 
 
 @router.post('/route-signs',response_model=NavigationResponse)
-def get_signs_along_route(payload:NavigationQuery,db:Session=Depends(get_db)):
+def get_signs_along_route(payload:NavigationQuery,request:Request,user=Depends(get_current_user),db:Session=Depends(get_db)):
+    request.app.state.auth_limiter.check(request,'route-signs',20)
     check_and_update_lifecycle_status(db)
     matched=route_signs(db,payload.waypoints,payload.buffer_meters)
     return NavigationResponse(route_points_count=len(payload.waypoints),buffer_meters=payload.buffer_meters,total_signs=len(matched),
