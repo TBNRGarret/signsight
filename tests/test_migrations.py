@@ -32,7 +32,7 @@ def test_catalog_provenance_upgrade_keeps_existing_inference_ids_and_labels(tmp_
     from alembic import command
     from backend.app.db.migrations import migration_config
     from sqlalchemy import MetaData, Table
-    from backend.app.db.models import InferenceRun, ImageDetection
+    from backend.app.db.models import InferenceRun, ImageDetection, UploadedImage
     engine=make_engine(f'sqlite:///{tmp_path / "previous.db"}')
     config=migration_config()
     with engine.begin() as connection:
@@ -57,6 +57,9 @@ def test_catalog_provenance_upgrade_keeps_existing_inference_ids_and_labels(tmp_
             assert run.image_id=='image' and run.model_version=='old-checkpoint'
             assert run.mapping_sha256 is None and run.catalog_sha256 is None
             assert detection.predicted_class==5 and detection.model_class_id is None
+            image = db.get(UploadedImage, 'image')
+            assert image.sha256 == '0' * 64 and image.storage_key == 'fixture.jpg'
+            assert image.uploaded_by == 'u' and (image.width, image.height) == (32, 32)
         assert len(list((tmp_path/'backups').glob('*.sqlite3')))==1
     finally:
         engine.dispose()

@@ -24,6 +24,8 @@ Chạm biển → **Báo cáo / xác nhận** để gửi ảnh hiện trạng v
 
 Native lưu một bản nháp đóng góp trong thư mục riêng của app, tách theo API origin và tài khoản. Ảnh chưa upload do mất mạng được giữ để thử lại; ảnh đã upload dùng lại ID. Mở lại sau đăng nhập để khôi phục, kiểm tra nhãn/ghim rồi gửi. Logout/phiên hết hạn, bỏ nháp hoặc gửi thành công sẽ yêu cầu xóa nháp. Web preview dùng nháp RAM; form báo cáo cũng chỉ giữ ảnh/nhận xét khi trang còn mở. Đây chưa phải đồng bộ offline, hàng đợi nhiều ảnh hay tự gửi nền.
 
+Mã upload và nội dung lần gửi đóng góp được lưu vào nháp **trước khi gửi**. Nếu mất phản hồi sau khi server đã lưu, thử lại dùng cùng mã để nhận đúng kết quả cũ. Khi chưa rõ kết quả đóng góp, nhãn/ghim được khóa và nút đổi thành **Kiểm tra kết quả gửi**; chỉ xóa nháp khớp khi nhận được xác nhận thành công. Lỗi validation rõ ràng cho phép chỉnh lại. Nếu thiết bị không lưu được nháp, thao tác ghi chưa được gửi. Native khôi phục mã sau khi mở lại; web preview chỉ giữ trong tab đang mở, reload/đóng tab vẫn mất nháp RAM. Cơ chế này áp dụng upload/đóng góp, chưa bao gồm báo cáo hiện trạng hoặc quyết định duyệt của staff. Không tự retry POST trong nền.
+
 ## Xem ngay trên laptop
 
 Từ `signsight/mobile` (Flutter stable 3.47.7, Dart 3.13.5):

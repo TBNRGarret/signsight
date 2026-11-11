@@ -81,8 +81,10 @@ class SignSightApi {
     String path, {
     Object? body,
     Map<String, String>? query,
+    String? requestKey,
   }) async {
     final request = http.Request(method, _url(path, query));
+    if (requestKey != null) request.headers['Idempotency-Key'] = requestKey;
     if (body != null) {
       request.headers['Content-Type'] = 'application/json';
       request.body = jsonEncode(body);
@@ -201,7 +203,11 @@ class SignSightApi {
       ),
     ),
   );
-  Future<UploadedPhoto> upload(Uint8List bytes, String name) async {
+  Future<UploadedPhoto> upload(
+    Uint8List bytes,
+    String name, {
+    String? requestKey,
+  }) async {
     final mime =
         lookupMimeType(name, headerBytes: bytes) ?? 'application/octet-stream';
     if (!['image/jpeg', 'image/png', 'image/webp'].contains(mime)) {
@@ -216,6 +222,7 @@ class SignSightApi {
           contentType: MediaType.parse(mime),
         ),
       );
+    if (requestKey != null) request.headers['Idempotency-Key'] = requestKey;
     return UploadedPhoto.fromJson(
       jsonMap(jsonDecode(utf8.decode((await _send(request)).bodyBytes))),
     );
@@ -239,10 +246,12 @@ class SignSightApi {
     GeoPoint point, {
     int? proposedClass,
     String? correctionReason,
+    String? requestKey,
   }) async {
     await _json(
       'POST',
       '/observations',
+      requestKey: requestKey,
       body: {
         'image_id': imageId,
         'items': [

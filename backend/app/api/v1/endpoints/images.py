@@ -1,8 +1,9 @@
 import io
+import hashlib
 import uuid
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response
 from PIL import Image
 from sqlalchemy.exc import IntegrityError
@@ -18,8 +19,23 @@ from backend.app.services.observation_service import authorized_image, persist_r
 from backend.app.services.policy_service import confirmation_days
 from backend.app.services.evidence_service import sign_evidence
 from backend.app.core.catalog import require_catalog_id
+from backend.app.services import write_receipts
 
 router = APIRouter()
+
+request_key_header = Header(default=None, alias="Idempotency-Key", min_length=8,
+                            max_length=128, pattern=r"^[A-Za-z0-9._:-]+$")
+
+
+def replay_image(db, ids, user):
+    return image_response(authorized_image(db, ids[0], user, owner_only=True), user)
+
+
+def replay_observations(db, ids, user, catalog):
+    rows = [db.get(Observation, value) for value in ids]
+    if any(row is None or row.created_by != user.id for row in rows):
+        raise HTTPException(409, "Original contribution is no longer available")
+    return [observation_response(row, catalog) for row in rows]
 
 
 def image_response(image, user):
@@ -32,32 +48,50 @@ def image_response(image, user):
 
 
 @router.post("/images", response_model=ImageResponse, status_code=201)
-async def upload_image(request: Request, file: UploadFile = File(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def upload_image(request: Request, file: UploadFile = File(...), user: User = Depends(get_current_user),
+                 db: Session = Depends(get_db), request_key: str | None = request_key_header):
     settings = request.app.state.settings
     chunks, size = [], 0
     try:
-        while chunk := await file.read(64 * 1024):
+        while chunk := file.file.read(64 * 1024):
             size += len(chunk)
             if size > settings.max_upload_bytes:
                 raise HTTPException(413, "Image exceeds upload size limit")
             chunks.append(chunk)
-        sanitized = sanitize_image(b"".join(chunks), file.content_type, settings.max_image_pixels)
+        data = b"".join(chunks)
+        identity = write_receipts.fingerprint({"sha256": hashlib.sha256(data).hexdigest(),
+                                               "media_type": file.content_type})
+        owner_id = user.id
+        prior = write_receipts.lookup(db, owner_id, "upload", request_key, identity)
+        if prior is not None:
+            return replay_image(db, prior, user)
+        db.rollback()  # Decoder must not hold the auth/receipt read snapshot.
+        sanitized = sanitize_image(data, file.content_type, settings.max_image_pixels)
     finally:
-        await file.close()
+        file.file.close()
     image_id = str(uuid.uuid4())
     key = image_id + ".jpg"
     store = request.app.state.image_store
-    image = UploadedImage(id=image_id, uploaded_by=user.id, storage_key=key,
+    image = UploadedImage(id=image_id, uploaded_by=owner_id, storage_key=key,
                           sha256=sanitized.sha256, size_bytes=len(sanitized.data),
                           width=sanitized.width, height=sanitized.height,
                           exif_latitude=sanitized.latitude, exif_longitude=sanitized.longitude)
     db.rollback()  # Release auth reads before the file/DB write transaction.
     saved = False
     try:
+        write_receipts.claim(db, owner_id, "upload", request_key, identity, [image_id])
         store.save(key, sanitized.data)
         saved = True
         db.add(image)
         db.commit()
+    except IntegrityError:
+        db.rollback()
+        if saved:
+            store.remove(key)
+        prior = write_receipts.lookup(db, owner_id, "upload", request_key, identity)
+        if prior is None:
+            raise
+        return replay_image(db, prior, user)
     except Exception:
         db.rollback()
         if saved:
@@ -133,7 +167,13 @@ def get_run(run_id: str, request: Request, user: User = Depends(get_current_user
 
 
 @router.post("/observations", response_model=list[ObservationResponse], status_code=201)
-def submit(payload: ObservationBatch, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def submit(payload: ObservationBatch, request: Request, user: User = Depends(get_current_user),
+           db: Session = Depends(get_db), request_key: str | None = request_key_header):
+    owner_id = user.id
+    identity = write_receipts.fingerprint(payload.model_dump(mode="json"))
+    prior = write_receipts.lookup(db, owner_id, "observations", request_key, identity)
+    if prior is not None:
+        return replay_observations(db, prior, user, request.app.state.catalog)
     image = authorized_image(db, payload.image_id, user, owner_only=True)
     rows = []
     for item in payload.items:
@@ -143,13 +183,17 @@ def submit(payload: ObservationBatch, request: Request, user: User = Depends(get
             raise HTTPException(404, "Detection does not belong to this image")
         if item.proposed_class is not None and item.proposed_class != detection.predicted_class and not (item.correction_reason or "").strip():
             raise HTTPException(422, "A class correction requires a reason")
-        rows.append(Observation(created_by=user.id, **item.model_dump()))
+        rows.append(Observation(id=str(uuid.uuid4()), created_by=owner_id, **item.model_dump()))
     try:
         db.rollback()  # End validation reads before the atomic insertion.
+        write_receipts.claim(db, owner_id, "observations", request_key, identity, [row.id for row in rows])
         db.add_all(rows)
         db.commit()
     except IntegrityError as error:
         db.rollback()
+        prior = write_receipts.lookup(db, owner_id, "observations", request_key, identity)
+        if prior is not None:
+            return replay_observations(db, prior, user, request.app.state.catalog)
         raise HTTPException(409, "A detection has already been submitted") from error
     return [observation_response(row,request.app.state.catalog) for row in rows]
 

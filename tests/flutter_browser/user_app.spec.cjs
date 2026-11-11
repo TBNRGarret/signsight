@@ -32,6 +32,54 @@ test('compact guest shell requires login for contribution',async({page})=>{
  await expect(page.getByRole('button',{name:'Gửi đóng góp',exact:true})).toHaveCount(0);
 });
 
+test('lost committed responses recover in the open preview without duplicate contribution',async({page},testInfo)=>{
+ await registerAndLogin(page);
+ const uploads=[],submissions=[];
+ await page.route('**/api/v1/images',async route=>{
+  if(route.request().method()!=='POST')return route.continue();
+  const result=await route.fetch();expect(result.status()).toBe(201);
+  uploads.push({key:route.request().headers()['idempotency-key'],id:(await result.json()).id});
+  if(uploads.length===1)return route.abort('failed');
+  await route.fulfill({response:result});
+ });
+ await page.route('**/api/v1/observations',async route=>{
+  if(route.request().method()!=='POST')return route.continue();
+  const result=await route.fetch();expect(result.status()).toBe(201);
+  submissions.push({key:route.request().headers()['idempotency-key'],body:route.request().postData(),ids:(await result.json()).map(r=>r.id)});
+  if(submissions.length===1)return route.abort('failed');
+  await route.fulfill({response:result});
+ });
+ await page.getByRole('tab',{name:'Đóng góp',exact:true}).click();
+ const chooser=page.waitForEvent('filechooser');
+ await page.getByRole('button',{name:'Chọn từ thư viện',exact:true}).click();
+ await (await chooser).setFiles(photo);
+ await page.getByRole('button',{name:'Thử nhận diện lại',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Gửi đóng góp',exact:true})).toBeVisible();
+ expect(uploads).toHaveLength(2);expect(uploads[0].key).toBeTruthy();expect(uploads[1]).toEqual(uploads[0]);
+ await page.getByRole('checkbox',{name:'Đúng biển tôi muốn đóng góp',exact:true}).click();
+ await page.getByRole('button',{name:'Chọn',exact:true}).click();
+ await page.getByRole('region',{name:'Map',exact:true}).click({position:{x:150,y:160}});
+ await page.getByRole('button',{name:'Xác nhận vị trí',exact:true}).click();
+ await page.getByRole('button',{name:'Gửi đóng góp',exact:true}).click();
+ const recovery=page.getByRole('button',{name:'Kiểm tra kết quả gửi',exact:true});
+ await expect(recovery).toBeVisible();await expect(recovery).toBeEnabled();
+ await expect(page.getByRole('checkbox',{name:'Đúng biển tôi muốn đóng góp',exact:true})).toBeDisabled();
+ if(process.env.SIGNSIGHT_SCREENSHOT_DIR){
+  const fs=require('node:fs');fs.mkdirSync(process.env.SIGNSIGHT_SCREENSHOT_DIR,{recursive:true});
+  const viewport=page.viewportSize();await page.mouse.move(viewport.width/2,viewport.height/2);
+  for(let i=0;i<3;i++){
+   await page.mouse.wheel(0,1500);
+   await page.waitForTimeout(250); // Settle Flutter scrolling for visual evidence only.
+  }
+  await page.screenshot({path:path.join(process.env.SIGNSIGHT_SCREENSHOT_DIR,'flutter-recovery-'+testInfo.project.name+'.png')});
+ }
+ await page.getByRole('button',{name:'Kiểm tra kết quả gửi',exact:true}).click();
+ await expect(page.getByText('Đã gửi đóng góp, đang chờ duyệt.',{exact:true})).toBeVisible();
+ expect(submissions).toHaveLength(2);expect(submissions[0].key).toBeTruthy();expect(submissions[1]).toEqual(submissions[0]);
+ const history=await (await page.request.get('/api/v1/me/observations')).json();
+ expect(history.total).toBe(1);expect(history.items[0].id).toBe(submissions[0].ids[0]);
+});
+
 test('upload, verify label and pin, approval and exact map record',async({page,browser},testInfo)=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await registerAndLogin(page);

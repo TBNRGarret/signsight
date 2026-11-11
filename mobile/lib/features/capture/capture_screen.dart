@@ -5,6 +5,8 @@ extension _CaptureScreen on _UserShellState {
     if (!c.signedIn) return _gate('Đăng nhập để đóng góp');
     final draft = c.draft;
     final busy = c.captureBusy || _picking;
+    final pending = draft?.pendingContribution != null;
+    final locked = busy || pending;
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
       children: [
@@ -116,7 +118,7 @@ extension _CaptureScreen on _UserShellState {
                     ),
                   )
                   .toList(),
-              onChanged: busy
+              onChanged: locked
                   ? null
                   : (value) {
                       if (value != null) c.selectDetection(value);
@@ -171,7 +173,7 @@ extension _CaptureScreen on _UserShellState {
                           ),
                         )
                         .toList(),
-                    onChanged: busy ? null : c.proposeClass,
+                    onChanged: locked ? null : c.proposeClass,
                   ),
                   if (draft.proposedClass != null) ...[
                     const SizedBox(height: 12),
@@ -180,7 +182,7 @@ extension _CaptureScreen on _UserShellState {
                         'capture-reason-${draft.selectedId}-${draft.proposedClass}',
                       ),
                       initialValue: draft.correctionReason,
-                      enabled: !busy,
+                      enabled: !locked,
                       maxLength: 1000,
                       minLines: 1,
                       maxLines: 3,
@@ -195,7 +197,7 @@ extension _CaptureScreen on _UserShellState {
                     Align(
                       alignment: Alignment.centerLeft,
                       child: TextButton(
-                        onPressed: busy ? null : () => c.proposeClass(null),
+                        onPressed: locked ? null : () => c.proposeClass(null),
                         child: const Text('Dùng lại nhãn AI'),
                       ),
                     ),
@@ -211,7 +213,7 @@ extension _CaptureScreen on _UserShellState {
                     : 'Tôi đã kiểm tra nhãn vừa sửa',
               ),
               value: draft.labelConfirmed,
-              onChanged: busy
+              onChanged: locked
                   ? null
                   : (value) => c.confirmLabel(value ?? false),
               controlAffinity: ListTileControlAffinity.leading,
@@ -235,7 +237,7 @@ extension _CaptureScreen on _UserShellState {
                     : '${draft.confirmedLocation!.latitude.toStringAsFixed(5)}, ${draft.confirmedLocation!.longitude.toStringAsFixed(5)}',
               ),
               trailing: TextButton(
-                onPressed: busy ? null : _pickLocation,
+                onPressed: locked ? null : _pickLocation,
                 child: const Text('Chọn'),
               ),
             ),
@@ -254,11 +256,15 @@ extension _CaptureScreen on _UserShellState {
             FilledButton.icon(
               onPressed: c.canSubmit ? c.submitContribution : null,
               icon: const Icon(Icons.send_outlined),
-              label: const Text('Gửi đóng góp'),
+              label: Text(pending ? 'Kiểm tra kết quả gửi' : 'Gửi đóng góp'),
             ),
+            if (pending)
+              const AppNotice(
+                message: 'Nội dung lần gửi trước đang được giữ nguyên. Bấm kiểm tra kết quả gửi trước khi chỉnh sửa hoặc tạo đóng góp khác.',
+              ),
           ],
           TextButton.icon(
-            onPressed: busy ? null : () => _pick(false),
+            onPressed: locked ? null : () => _pick(false),
             icon: const Icon(Icons.photo_outlined),
             label: const Text('Chọn ảnh khác'),
           ),
@@ -281,7 +287,7 @@ extension _CaptureScreen on _UserShellState {
           ),
         if (c.captureError != null) ...[
           AppNotice(message: c.captureError!, error: true),
-          if (draft != null)
+          if (draft != null && !pending)
             TextButton.icon(
               onPressed: busy ? null : c.retryDetection,
               icon: const Icon(Icons.refresh),

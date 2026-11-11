@@ -12,7 +12,15 @@ A02's implementation gives nearby requests independent account-scoped ownership 
 
 TDD observed the original API and map failures and the additional review findings before their fixes. Verification and remaining device limits are recorded in [the implementation plan](../superpowers/plans/2026-11-11-api-auth-nearby.md). Dataset V4, checkpoint selection and private runtime data were not changed. The findings below remain the historical audit evidence at `368a15b`; this section records their disposition rather than rewriting that evidence.
 
-## Evidence and limits
+## Implementation follow-up — A03 and A04
+
+The next implementation adds optional account/operation-scoped `Idempotency-Key` receipts for image uploads and observation batches, committed atomically with their result IDs. Same-key/same-content retries return the original resources; changed content conflicts. Concurrent retries, transaction/storage failures, restart and later moderation are covered using disposable data. Legacy unkeyed callers retain their old behavior.
+
+Flutter saves an upload key and a frozen pending contribution before sending. Unknown submission outcomes retain the draft and expose a result-check action; retry uses the original intent, and stale account responses cannot clear a new draft. Native file drafts survive reopening; the existing web preview remains RAM-only, so closing/reloading it loses that draft. Report submissions and staff decisions do not yet use this contract. A05 remains outstanding and must not add blind POST retries.
+
+Upload now runs as a synchronous worker handler, including bounded file reads, sanitization and database work with its request-scoped session used sequentially. A blocking-decoder concurrency test confirms the API event loop can continue; no phone-image p95 or load capacity is claimed. Migration `0007_write_receipts` is additive and was exercised only against temporary databases; personal runtime migration is still a deployment step. No model/dataset or private runtime files changed. Full evidence is recorded in [the recovery plan](../superpowers/plans/2026-11-11-contribution-recovery.md).
+
+## Original audit evidence and limits
 
 All runtime probes used disposable SQLite, temporary managed images and synthetic inference. No personal database, uploads, credentials or actual checkpoint were used. Local evidence lives in ignored `.cache/system_audit_2026-11-11/`; the native controller probe is under `mobile/.cache/system_audit_2026-11-11/`.
 

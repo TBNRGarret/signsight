@@ -105,15 +105,18 @@ class AppController extends ChangeNotifier {
   bool get canSubmit =>
       signedIn &&
       !captureBusy &&
-      draft?.photo != null &&
-      draft?.previewReady == true &&
-      draft?.selected != null &&
-      draft!.labelConfirmed &&
-      (draft!.proposedClass == null ||
-          (captureTypes.any((type) => type.id == draft!.proposedClass) &&
-              draft!.correctionReason.trim().length >= 3 &&
-              draft!.correctionReason.length <= 1000)) &&
-      draft!.confirmedLocation?.valid == true;
+      (draft?.pendingContribution != null ||
+          (draft?.photo != null &&
+              draft?.previewReady == true &&
+              draft?.selected != null &&
+              draft!.labelConfirmed &&
+              (draft!.proposedClass == null ||
+                  (captureTypes.any(
+                        (type) => type.id == draft!.proposedClass,
+                      ) &&
+                      draft!.correctionReason.trim().length >= 3 &&
+                      draft!.correctionReason.length <= 1000)) &&
+              draft!.confirmedLocation?.valid == true));
   void _notify() {
     if (!_disposed) notifyListeners();
   }

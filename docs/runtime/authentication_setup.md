@@ -85,6 +85,12 @@ Trước khi nâng revision của SQLite đã có bảng dữ liệu, migration 
 
 ## Kiểm tra
 
+Migration `0007_write_receipts` thêm bảng biên nhận gửi lại; không sửa ID ảnh, nhãn hoặc đóng góp cũ. Trước khi chạy phiên bản mới trên runtime riêng, dừng server và chạy `python -m backend.manage migrate` bằng môi trường Python của dự án. Cơ chế migration hiện có tạo backup trước khi nâng schema SQLite cũ. Thay đổi này chỉ được kiểm thử trên database tạm; chưa chạy migration trên dữ liệu cá nhân.
+
+`POST /api/v1/images` và `POST /api/v1/observations` nhận header tùy chọn `Idempotency-Key` (8–128 ký tự ASCII: chữ, số, `.`, `_`, `:`, `-`). Lưu một mã cho mỗi thao tác trước khi gửi. Gửi lại cùng mã/nội dung trả 201 với cùng resource ID; đổi nội dung trả 409. Mã được tách theo tài khoản và loại thao tác; filename không thuộc danh tính upload, nhưng byte ảnh gốc và media type có. Biên nhận và resource được commit cùng transaction, nên retry đồng thời không tạo thêm ảnh/đóng góp. Client không dùng mã vẫn giữ hành vi cũ. Biên nhận chưa tự hết hạn; không xóa tùy ý vì sẽ mất khả năng đối chiếu retry. Replay đóng góp trả trạng thái hiện tại, kể cả quyết định duyệt sau đó.
+
+Upload dùng worker đồng bộ cho đọc file, giải mã/làm sạch ảnh và transaction database; không chạy decoder trực tiếp trên event loop. Giới hạn byte/pixel, loại ảnh và cleanup khi transaction lỗi được giữ nguyên. Đây chưa phải benchmark tải thật hoặc giới hạn hàng đợi inference.
+
 Hai API đọc tương thích cũ `GET /api/v1/signs` và `POST /api/v1/navigation/route-signs` cũng yêu cầu phiên hợp lệ, giống API map hiện tại. User, manager và admin đều được đọc; quyền đọc không cấp quyền duyệt. Phiên hết hạn, thu hồi hoặc tài khoản bị khóa bị chặn trước khi chạy truy vấn/lifecycle. Cấu trúc phản hồi và bộ lọc cho client đã đăng nhập giữ nguyên.
 
 API raw route-signs giới hạn 20 yêu cầu/phút/IP trong tiến trình hiện tại; vượt giới hạn trả 429 kèm `Retry-After` trước bước tính khoảng cách. Đây không phải giới hạn phân tán cho nhiều worker. Phân trang và tối ưu truy vấn của danh sách cũ vẫn là hạng mục riêng trong audit A12.

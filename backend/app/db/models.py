@@ -5,6 +5,16 @@ from sqlalchemy.orm import relationship, declarative_base
 
 Base = declarative_base()
 
+
+class WriteReceipt(Base):
+    __tablename__ = "write_receipts"
+    owner_id = Column(String(36), ForeignKey("users.id"), primary_key=True)
+    operation = Column(String(30), primary_key=True)
+    request_key = Column(String(128), primary_key=True)
+    fingerprint = Column(String(64), nullable=False)
+    result_ids = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
 class SignCatalogEntry(Base):
     __tablename__ = 'sign_catalog_entries'
 

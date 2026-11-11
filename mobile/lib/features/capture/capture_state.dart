@@ -11,6 +11,39 @@ class _CaptureState {
 }
 
 extension _CaptureActions on AppController {
+  bool get _captureLocked => captureBusy || draft?.pendingContribution != null;
+
+  Future<bool> _checkpointDraft(
+    CaptureDraft current,
+    int version,
+    int operation,
+  ) async {
+    final owner = user!.id, value = current.toJson();
+    var saved = false;
+    _draftWrites = _draftWrites
+        .catchError((_) {})
+        .then((_) async {
+          if (!_current(version) ||
+              operation != _photoVersion ||
+              !identical(draft, current)) {
+            return;
+          }
+          await drafts.save(owner, value);
+          saved = true;
+        })
+        .catchError((Object error) {
+          if (_current(version) && operation == _photoVersion) {
+            captureError = 'Chưa lưu được bản nháp trên thiết bị. Kiểm tra dung lượng rồi thử lại.';
+            _notify();
+          }
+        });
+    await _draftWrites;
+    return saved &&
+        _current(version) &&
+        operation == _photoVersion &&
+        identical(draft, current);
+  }
+
   Future<void> _restoreDraft(int version) async {
     if (user == null || draft != null) return;
     final operation = _photoVersion, owner = user!.id;
@@ -57,7 +90,7 @@ extension _CaptureActions on AppController {
   }
 
   Future<void> _actionChoosePhoto(Uint8List bytes, String name) async {
-    if (!signedIn || captureBusy) return;
+    if (!signedIn || _captureLocked) return;
     if (bytes.length > 10 * 1024 * 1024) {
       captureError = 'Ảnh tối đa 10 MB. Chọn ảnh nhỏ hơn.';
       _notify();
@@ -68,10 +101,15 @@ extension _CaptureActions on AppController {
     captureError = null;
     captureMessage = null;
     draft = CaptureDraft(photo: null, bytes: bytes, name: name);
-    _saveDraft();
     _notify();
     try {
-      final photo = await api.upload(bytes, name);
+      final current = draft!;
+      if (!await _checkpointDraft(current, version, operation)) return;
+      final photo = await api.upload(
+        bytes,
+        name,
+        requestKey: current.uploadRequestKey,
+      );
       if (!_current(version) || operation != _photoVersion) return;
       draft!.photo = photo;
       draft!.suggestion = photo.exif;
@@ -151,7 +189,7 @@ extension _CaptureActions on AppController {
   }
 
   Future<void> _actionRetryDetection() async {
-    if (draft == null || captureBusy || !signedIn) return;
+    if (draft == null || _captureLocked || !signedIn) return;
     final version = _authVersion, operation = ++_photoVersion;
     captureBusy = true;
     captureError = null;
@@ -159,7 +197,13 @@ extension _CaptureActions on AppController {
     _notify();
     try {
       if (draft!.photo == null) {
-        final photo = await api.upload(draft!.bytes, draft!.name);
+        final current = draft!;
+        if (!await _checkpointDraft(current, version, operation)) return;
+        final photo = await api.upload(
+          current.bytes,
+          current.name,
+          requestKey: current.uploadRequestKey,
+        );
         if (!_current(version) || operation != _photoVersion) return;
         draft!.photo = photo;
         draft!.suggestion = photo.exif;
@@ -197,6 +241,7 @@ extension _CaptureActions on AppController {
   }
 
   void _actionSelectDetection(String id) {
+    if (_captureLocked) return;
     if (draft?.selectedId == id) return;
     if (draft?.detections.any((d) => d.id == id) != true) return;
     draft!.selectedId = id;
@@ -239,7 +284,7 @@ extension _CaptureActions on AppController {
   }
 
   void _actionProposeClass(int? id) {
-    if (draft?.selected == null || captureBusy) return;
+    if (draft?.selected == null || _captureLocked) return;
     if (id != null && !captureTypes.any((type) => type.id == id)) return;
     draft!.proposedClass = id == draft!.selected!.classId ? null : id;
     draft!.correctionReason = '';
@@ -249,7 +294,7 @@ extension _CaptureActions on AppController {
   }
 
   void _actionSetCorrectionReason(String reason) {
-    if (draft == null || captureBusy) return;
+    if (draft == null || _captureLocked) return;
     draft!.correctionReason = reason;
     draft!.labelConfirmed = false;
     _saveDraft();
@@ -257,12 +302,14 @@ extension _CaptureActions on AppController {
   }
 
   void _actionConfirmLabel(bool value) {
+    if (_captureLocked) return;
     draft?.labelConfirmed = value;
     _saveDraft();
     _notify();
   }
 
   void _actionSuggestLocation(GeoPoint point) {
+    if (_captureLocked) return;
     if (point.valid && draft?.confirmedLocation == null) {
       draft?.suggestion = point;
       _saveDraft();
@@ -271,6 +318,7 @@ extension _CaptureActions on AppController {
   }
 
   void _actionConfirmLocation(GeoPoint point) {
+    if (_captureLocked) return;
     if (point.valid && draft != null) {
       draft!.suggestion = point;
       draft!.confirmedLocation = point;
@@ -283,24 +331,52 @@ extension _CaptureActions on AppController {
     if (!canSubmit) return;
     final version = _authVersion, operation = ++_photoVersion;
     final current = draft!;
+    final intent = current.pendingContribution ??= PendingContribution(
+      imageId: current.photo!.id,
+      detectionId: current.selected!.id,
+      point: current.confirmedLocation!,
+      proposedClass: current.proposedClass,
+      correctionReason: current.proposedClass == null
+          ? null
+          : current.correctionReason.trim(),
+    );
     captureBusy = true;
     captureError = null;
     _notify();
     try {
+      if (!await _checkpointDraft(current, version, operation)) return;
       await api.contribute(
-        current.photo!.id,
-        current.selected!.id,
-        current.confirmedLocation!,
-        proposedClass: current.proposedClass,
-        correctionReason: current.correctionReason.trim(),
+        intent.imageId,
+        intent.detectionId,
+        intent.point,
+        proposedClass: intent.proposedClass,
+        correctionReason: intent.correctionReason,
+        requestKey: intent.key,
       );
-      if (!_current(version) || operation != _photoVersion) return;
+      if (!_current(version) ||
+          operation != _photoVersion ||
+          !identical(draft, current)) {
+        return;
+      }
       draft = null;
       _saveDraft();
       captureMessage = 'Đã gửi đóng góp, đang chờ duyệt.';
     } catch (error) {
       if (operation == _photoVersion) {
-        await _failure(error, version, (m) => captureError = m);
+        if (_current(version) &&
+            error is ApiFailure &&
+            [400, 404, 422].contains(error.status)) {
+          current.pendingContribution = null;
+          _saveDraft();
+        }
+        await _failure(
+          error,
+          version,
+          (m) => captureError =
+              error is ApiFailure && (error.status == 0 || error.status >= 500)
+              ? 'Chưa xác nhận được kết quả gửi. Giữ nguyên bản nháp và bấm kiểm tra lại; nội dung sẽ không được gửi trùng.'
+              : m,
+        );
       }
     } finally {
       if (_current(version) && operation == _photoVersion) {

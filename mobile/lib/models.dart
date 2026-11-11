@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'dart:convert';
+import 'dart:math';
 
 Map<String, dynamic> jsonMap(Object? value) =>
     Map<String, dynamic>.from(value as Map);
@@ -158,6 +159,46 @@ class Detection {
   }
 }
 
+String newRequestKey() {
+  final random = Random.secure();
+  return List.generate(
+    24,
+    (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+  ).join();
+}
+
+class PendingContribution {
+  PendingContribution({
+    required this.imageId,
+    required this.detectionId,
+    required this.point,
+    this.proposedClass,
+    this.correctionReason,
+    String? key,
+  }) : key = key ?? newRequestKey();
+  final String key, imageId, detectionId;
+  final GeoPoint point;
+  final int? proposedClass;
+  final String? correctionReason;
+  Map<String, dynamic> toJson() => {
+    'key': key,
+    'image_id': imageId,
+    'detection_id': detectionId,
+    'point': point.toJson(),
+    'proposed_class': proposedClass,
+    'correction_reason': correctionReason,
+  };
+  factory PendingContribution.fromJson(Map<String, dynamic> j) =>
+      PendingContribution(
+        key: j['key'] as String,
+        imageId: j['image_id'] as String,
+        detectionId: j['detection_id'] as String,
+        point: GeoPoint.fromJson(jsonMap(j['point'])),
+        proposedClass: j['proposed_class'] as int?,
+        correctionReason: j['correction_reason'] as String?,
+      );
+}
+
 class CaptureDraft {
   CaptureDraft({
     required this.photo,
@@ -165,7 +206,10 @@ class CaptureDraft {
     this.detections = const [],
     this.selectedId,
     this.name = 'capture.jpg',
-  });
+    String? uploadRequestKey,
+  }) : uploadRequestKey = uploadRequestKey ?? newRequestKey();
+  final String uploadRequestKey;
+  PendingContribution? pendingContribution;
   UploadedPhoto? photo;
   final String name;
   Uint8List bytes;
@@ -181,6 +225,8 @@ class CaptureDraft {
 
   Map<String, dynamic> toJson() => {
     'version': 1,
+    'upload_request_key': uploadRequestKey,
+    'pending_contribution': pendingContribution?.toJson(),
     'name': name,
     'bytes': base64Encode(bytes),
     if (photo != null)
@@ -226,7 +272,11 @@ class CaptureDraft {
             .map((d) => Detection.fromJson(jsonMap(d)))
             .toList(),
         selectedId: j['selected_id'] as String?,
+        uploadRequestKey: j['upload_request_key'] as String?,
       )
+      ..pendingContribution = j['pending_contribution'] == null
+          ? null
+          : PendingContribution.fromJson(jsonMap(j['pending_contribution']))
       ..previewReady = j['preview_ready'] == true
       ..labelConfirmed = j['label_confirmed'] == true
       ..proposedClass = j['proposed_class'] as int?
