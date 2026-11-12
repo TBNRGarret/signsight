@@ -13,6 +13,7 @@ if __name__ == "__main__":
     from backend.app.core.settings import Settings
     from backend.app.db.database import make_engine, init_db
     from backend.app.main import create_app
+    from backend.app.core.security import AuthRateLimiter
     from backend.app.schemas.auth import UserRegister
     from backend.app.services.auth_service import create_user
     from ai_engine.detection import DetectionResult, Prediction
@@ -27,12 +28,20 @@ if __name__ == "__main__":
                 Prediction(5, 0.99, (image.width*.2, image.height*.2, image.width*.8, image.height*.8)),
             ])
 
+    class BrowserWorkloadLimiter(AuthRateLimiter):
+        # All desktop/phone scenarios share one loopback peer. Preserve bounded
+        # limiting, with headroom for independent fixtures in this synthetic server.
+        # Exact production quotas are exercised by the Python API tests.
+        def check(self, request, action, limit):
+            return super().check(request, action, limit * 10)
+
     with tempfile.TemporaryDirectory(prefix="signsight-browser-") as temporary:
         directory = Path(temporary)
         engine = make_engine("sqlite:///" + str(directory / "test.db"))
         init_db(engine)
         app = create_app(engine, Settings(storage_root=directory / "images"))
         app.state.detector = FixtureDetector()
+        app.state.auth_limiter = BrowserWorkloadLimiter()
         @app.get('/test-map.json')
         def test_map():
             return {'version': 8, 'sources': {},

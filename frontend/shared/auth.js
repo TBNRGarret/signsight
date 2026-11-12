@@ -3,11 +3,14 @@ window.signSightAuth = (() => {
   const STATE_KEY = 'signsight.auth-state';
   let user = null, generation = 0, mutationCount = 0;
   let mutations = Promise.resolve();
+  const reads = new Set(), readSlots = new Map();
+  function cancelReads(except) { for (const job of reads) if (job !== except) job.cancel('cancel'); }
 
   function notify() { window.dispatchEvent(new CustomEvent('signsight-auth-changed')); }
-  function setUser(profile, announce = true) {
+  function setUser(profile, announce = true, except = null) {
     const changed = JSON.stringify(user) !== JSON.stringify(profile);
     user = profile;
+    if (changed) cancelReads(except);
     for (const link of window.document?.querySelectorAll('[data-staff-only]') || []) {
       link.hidden = !['admin', 'manager'].includes(user?.role);
     }
@@ -21,25 +24,49 @@ window.signSightAuth = (() => {
     try { window.localStorage.setItem(STATE_KEY, JSON.stringify({state, nonce: `${Date.now()}-${Math.random()}`})); }
     catch (_) { /* Cookies still restore across pages when web storage is disabled. */ }
   }
-  function clear(announce = true) { generation++; setUser(null, announce); }
+  function clear(announce = true, except = null) { generation++; cancelReads(except); setUser(null, announce, except); }
 
   async function request(path, options = {}) {
     if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//') || path.includes('\\')) {
       throw new Error('Invalid API path');
     }
-    const { responseType, ...fetchOptions } = options;
+    const { responseType, timeoutMs, signal, cancelKey, ...fetchOptions } = options;
+    const read = ['GET', 'HEAD'].includes((options.method || 'GET').toUpperCase());
+    const deadline = timeoutMs ?? (read ? 15000 : 90000);
+    if (!Number.isInteger(deadline) || deadline < 1 || deadline > 90000) throw new Error('Invalid request deadline');
+    if (cancelKey !== undefined && (!read || typeof cancelKey !== 'string' || !cancelKey)) throw new Error('Cancel slots require a named read');
     const headers = new Headers(options.headers || {});
     headers.delete('Authorization');
     headers.set('X-SignSight-Web', '1');
     const version = generation;
-    const response = await fetch(`/api/v1${path}`, { ...fetchOptions, headers, credentials: 'same-origin' });
+    const controller = new AbortController();
+    let cancellation, rejectCancelled;
+    const cancelled = new Promise((_, reject) => { rejectCancelled = reject; });
+    const job = { cancel(kind) {
+      if (cancellation) return;
+      const error = new Error(kind === 'timeout'
+        ? read ? 'Kết nối quá lâu. Bấm tải lại để thử lại.' : 'Chưa xác nhận được kết quả thao tác. Kiểm tra trạng thái trước khi thử lại.'
+        : 'Đã hủy yêu cầu cũ.');
+      Object.assign(error, {status: 0, code: kind === 'timeout' ? 'REQUEST_TIMEOUT' : 'REQUEST_CANCELLED', outcomeUnknown: !read});
+      cancellation = error; controller.abort(); rejectCancelled(error);
+    }};
+    const abort = () => job.cancel('cancel');
+    if (read) reads.add(job);
+    if (cancelKey !== undefined) { readSlots.get(cancelKey)?.cancel('cancel'); readSlots.set(cancelKey, job); }
+    signal?.addEventListener('abort', abort, {once: true});
+    if (signal?.aborted) abort();
+    const timer = setTimeout(() => job.cancel('timeout'), deadline);
+    const work = async () => {
+    if (cancellation) throw cancellation;
+    const response = await fetch(`/api/v1${path}`, { ...fetchOptions, headers, credentials: 'same-origin', signal: controller.signal });
+    if (cancellation) throw cancellation;
     if (response.status === 401 && version === generation && !['/auth/login', '/auth/register'].includes(path)) {
-      clear();
+      clear(true, job);
     }
     if (response.status === 403 && user && version === generation && path !== '/auth/me') {
       try {
-        const profile = await request('/auth/me');
-        if (version === generation) setUser(profile);
+        const profile = await request('/auth/me', {signal: controller.signal});
+        if (version === generation && !cancellation) setUser(profile, true, job);
       } catch (_) { /* Preserve the original operation error. */ }
     }
     if (!response.ok) {
@@ -49,9 +76,21 @@ window.signSightAuth = (() => {
         if (typeof body.detail === 'string') message = body.detail;
         else if (Array.isArray(body.detail)) message = body.detail.map(item => `${item.loc.join('.')}: ${item.msg}`).join('; ');
       } catch (_) { /* Keep the status when an upstream error is not JSON. */ }
-      const error = new Error(message); error.status = response.status; throw error;
+      const error = new Error(message); error.status = response.status; error.outcomeUnknown = !read && response.status >= 500; throw error;
     }
-    return response.status === 204 ? null : responseType === 'blob' ? response.blob() : response.json();
+    const result = response.status === 204 ? null : await (responseType === 'blob' ? response.blob() : response.json());
+    if (cancellation) throw cancellation;
+    return result;
+    };
+    try { return await Promise.race([work(), cancelled]); }
+    catch (error) {
+      if (cancellation) throw cancellation;
+      if (error.status === undefined) Object.assign(error, {status: 0, code: 'NETWORK_ERROR', outcomeUnknown: !read});
+      throw error;
+    } finally {
+      clearTimeout(timer); signal?.removeEventListener('abort', abort); reads.delete(job);
+      if (cancelKey !== undefined && readSlots.get(cancelKey) === job) readSlots.delete(cancelKey);
+    }
   }
 
   async function restore(announce = true) {
@@ -81,6 +120,7 @@ window.signSightAuth = (() => {
   }
   async function signIn(username, password, rememberMe = false) {
     const version = ++generation;
+    cancelReads();
     const result = await request('/auth/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password, remember_me: rememberMe === true }),

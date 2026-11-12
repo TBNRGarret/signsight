@@ -11,6 +11,7 @@ from backend.app.db.models import (
 )
 from backend.app.schemas.images import BoundingBox, DetectionResponse, RunResponse, ObservationResponse
 from backend.app.services.duplicate_service import check_and_create_duplicate_candidates
+from backend.app.services import write_receipts
 
 
 def authorized_image(db, image_id, user, owner_only=False):
@@ -115,9 +116,16 @@ def persist_run(db, image, engine, result, catalog=DEFAULT_CATALOG):
     return run
 
 
-def review_observation(db: Session, observation_id, payload, reviewer, confirmation_days, catalog=DEFAULT_CATALOG):
+def review_observation(db: Session, observation_id, payload, reviewer, confirmation_days, catalog=DEFAULT_CATALOG, *, request_key=None):
     reviewer_id = reviewer.id
     db.rollback()  # SQLite writers must not upgrade a stale auth/read snapshot.
+    prior = write_receipts.begin_review(db, reviewer_id, "review_observation", request_key,
+                                       {"id": observation_id, **payload.model_dump()}, observation_id)
+    if prior is not None:
+        result = db.get(Observation, prior[0])
+        if result is None:
+            raise HTTPException(409, "Original review is no longer available")
+        return result
     now = datetime.utcnow()
     status = "accepted" if payload.action == "accept" else "rejected"
     claimed = db.query(Observation).filter(Observation.id == observation_id, Observation.status == "pending").update(

@@ -10,6 +10,7 @@ from backend.app.services.observation_service import authorized_image
 from backend.app.services.report_service import review_report
 from datetime import datetime
 from backend.app.core.catalog import require_catalog_id
+from backend.app.services.write_receipts import request_key_header
 
 router=APIRouter()
 
@@ -51,8 +52,8 @@ def report_detail(report_id:str,user=Depends(get_current_user),db:Session=Depend
 
 
 @router.post('/manager/reports/{report_id}/review',response_model=ReportResponse)
-def review(report_id:str,payload:ObservationReview,request:Request,user=Depends(require_roles('manager','admin')),db:Session=Depends(get_db)):
-    return review_report(db,report_id,payload,user,request.app.state.image_store,request.app.state.catalog)
+def review(report_id:str,payload:ObservationReview,request:Request,user=Depends(require_roles('manager','admin')),db:Session=Depends(get_db),request_key:str|None=request_key_header):
+    return review_report(db,report_id,payload,user,request.app.state.image_store,request.app.state.catalog,request_key=request_key)
 
 
 @router.get('/policy')

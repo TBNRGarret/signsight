@@ -12,14 +12,90 @@ function setup(handler,ready){
  const elements=new Map(),events=new Map(),calls=[],redirects=[];
  const api={user:{username:'mod',role:'manager'},ready,async request(route,options){calls.push(route);if(route==='/taxonomy')return require('./catalog_fixture.cjs');return handler(route,options);}};
  const document={getElementById(id){if(!elements.has(id))elements.set(id,new Element());return elements.get(id);},createElement:tag=>new Element(tag)};
- const window={signSightAuth:api,location:{replace:url=>redirects.push(url)},addEventListener:(n,f)=>events.set(n,f)};
+ const window={signSightAuth:api,crypto:require('node:crypto').webcrypto,location:{replace:url=>redirects.push(url)},addEventListener:(n,f)=>events.set(n,f)};
  window.signSightCatalog=require('../frontend/shared/catalog.js');
- vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../frontend/staff/management.js'),'utf8'),{window,document,URLSearchParams,
+ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../frontend/staff/management.js'),'utf8'),{window,document,URLSearchParams,AbortController,
   createImageBitmap:async()=>({width:100,height:100,close(){}}),URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}}});
  return {api,elements,calls,redirects,get:document.getElementById,changed:events.get('signsight-auth-changed')};
 }
 const summary={contributions:2,reports:1,duplicates:0,signs:1000};
 const empty=async route=>route==='/manager/summary'?summary:page();
+const contributionRow=id=>({id,image_id:'i1',status:'pending',detection:{qcvn_code:'P.102',name_vi:'Cấm',confidence:.9,predicted_class:5},latitude:10,longitude:106});
+
+for(const type of ['contributions','reports','duplicates'])test('committed '+type+' retry remains reachable after item leaves pending queue',async()=>{
+ const sign={id:'s',qcvn_code:'P.102',latitude:10,longitude:106,status:'active',revision:0};
+ const row={...contributionRow('vanished'),status:type==='duplicates'?'pending_review':'pending',action:'confirm_existing',record_id:'s',base_revision:0,comment:'Road proof',new_record:sign,existing_record:sign,class_match:true,distance_meters:3};
+ let committed=false,posts=0;
+ const a=setup(async(route)=>{
+  if(route==='/manager/summary')return summary;
+  if(route.endsWith('/review')){posts++;committed=true;if(posts===1)throw Object.assign(Error('lost after commit'),{outcomeUnknown:true});return {status:'accepted'};}
+  if(route.startsWith('/manager/observations')||route.startsWith('/manager/reports')||route.startsWith('/manager/duplicates'))return page(committed?[]:[row]);
+  if(route==='/signs/s')return {sign,evidence:[]};return new Blob();
+ });a.changed();await tick();await tick();if(type!=='contributions')await a.get('tab-'+type).onclick();
+ a.get('review-comment').value='frozen note';await a.get('review-accept').onclick();await a.get('refresh-'+type).onclick();
+ assert.equal(a.get('review-detail').hidden,true);assert.equal(a.get('pending-review-list').hidden,false);
+ await a.get('pending-review-list').children[0].onclick();await tick();assert.equal(a.get('review-detail').hidden,false);
+ assert.equal(a.get('review-comment').value,'frozen note');await a.get('review-retry').onclick();assert.equal(posts,2);
+ assert.equal(a.get('pending-review-list').hidden,true);
+});
+
+test('conflict read for an unselected row remains authoritative when reopened',async()=>{
+ const items=[contributionRow('a'),contributionRow('b')];let fail;
+ const a=setup(async route=>{
+  if(route==='/manager/summary')return summary;if(route.endsWith('/review'))return new Promise((_,reject)=>fail=reject);
+  if(route==='/observations/a')return {...items[0],status:'accepted',review_comment:'Already handled'};
+  return route.startsWith('/manager/observations')?page(items):new Blob();
+ });a.changed();await tick();await tick();const pending=a.get('review-accept').onclick();await tick();
+ a.get('contributions').children[1].children[0].children[0].onclick();fail(Object.assign(Error('conflict'),{status:409}));await pending;
+ a.get('contributions').children[0].children[0].children[0].onclick();await tick();
+ assert.equal(a.get('review-actions').hidden,true);assert.match(a.get('detail-meta').textContent,/Already handled/);
+});
+
+test('policy network failure states that completion is unknown and keeps the edited value',async()=>{
+ const a=setup(async(route,options)=>{
+  if(options?.method==='PATCH')throw Object.assign(Error('Failed to fetch'),{outcomeUnknown:true});
+  if(route==='/policy')return {confirmation_days:30};return empty(route);
+ });a.api.user.role='admin';a.changed();await tick();await a.get('tab-policy').onclick();a.get('days').value='45';
+ const submitter=new Element('button');await a.get('policy-form').onsubmit({preventDefault(){},submitter});
+ assert.match(a.get('message').textContent,/Chưa xác nhận/);assert.equal(a.get('days').value,'45');assert.equal(submitter.disabled,false);
+});
+
+test('unknown review keeps immutable request and note through queue refresh until manual replay',async()=>{
+ const row=contributionRow('recovery'),attempts=[];let completed=false;
+ const a=setup(async(route,options)=>{
+  if(route==='/manager/summary')return summary;
+  if(route.endsWith('/review')){attempts.push(options);if(attempts.length===1)throw Object.assign(Error('lost'),{status:0,outcomeUnknown:true});completed=true;return {...row,status:'accepted'};}
+  return route.startsWith('/manager/observations')?page(completed?[]:[row]):new Blob();
+ });a.changed();await tick();await tick();a.get('review-comment').value='my note';
+ await a.get('review-accept').onclick();
+ assert.equal(a.get('review-retry').hidden,false);assert.equal(a.get('review-accept').disabled,true);assert.equal(a.get('review-reject').disabled,true);
+ await a.get('refresh-contributions').onclick();await tick();
+ assert.equal(a.get('review-comment').value,'my note');assert.equal(a.get('review-comment').readOnly,true);
+ a.get('review-comment').value='accidental change';await a.get('review-reject').onclick();assert.equal(attempts.length,1);
+ await a.get('review-retry').onclick();assert.equal(attempts.length,2);
+ assert.ok(attempts[0].headers['Idempotency-Key']);assert.equal(attempts[1].headers['Idempotency-Key'],attempts[0].headers['Idempotency-Key']);assert.equal(attempts[1].body,attempts[0].body);
+ assert.equal(JSON.parse(attempts[1].body).comment,'my note');
+});
+test('row switching preserves separate comments and cancels obsolete evidence reads',async()=>{
+ const items=[contributionRow('a'),contributionRow('b')],signals=[];
+ const a=setup(async(route,options)=>{if(route==='/manager/summary')return summary;if(route.startsWith('/manager/observations'))return page(items);signals.push(options?.signal);return new Blob();});
+ a.changed();await tick();await tick();a.get('review-comment').value='note A';
+ a.get('contributions').children[1].children[0].children[0].onclick();await tick();a.get('review-comment').value='note B';
+ a.get('contributions').children[0].children[0].children[0].onclick();await tick();
+ assert.equal(a.get('review-comment').value,'note A');assert.equal(signals[0]?.aborted,true);
+ a.api.user=null;a.changed();assert.equal(a.get('review-comment').value,'');
+});
+test('conflict reads exact current decision and preserves scratch comment',async()=>{
+ const row=contributionRow('conflict');let reconciles=0;
+ const a=setup(async(route)=>{
+  if(route==='/manager/summary')return summary;
+  if(route.endsWith('/review'))throw Object.assign(Error('already reviewed'),{status:409});
+  if(route==='/observations/conflict'){reconciles++;return {...row,status:'accepted',review_comment:'Other moderator'};}
+  return route.startsWith('/manager/observations')?page([row]):new Blob();
+ });a.changed();await tick();await tick();a.get('review-comment').value='unsent note';await a.get('review-reject').onclick();await tick();
+ assert.equal(reconciles,1);assert.equal(a.get('review-comment').value,'unsent note');assert.equal(a.get('review-comment').readOnly,true);
+ assert.equal(a.get('review-actions').hidden,true);assert.match(a.get('detail-meta').textContent,/Other moderator/);
+});
 test('review shows the proposed extended catalog label rather than the original AI label',async()=>{
  const row={id:'extended',image_id:'photo',status:'pending',proposed_class:42,
   detection:{qcvn_code:'P.102',predicted_class:5,name_vi:'Original',confidence:.9},latitude:10,longitude:106};

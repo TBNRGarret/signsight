@@ -20,11 +20,44 @@ function context(fetch, {store = new Map(), initial = async () => response(401, 
     }
   };
   let first = true;
-  vm.runInNewContext(source, {window, Headers, CustomEvent: class {constructor(type){this.type=type;}},
+  vm.runInNewContext(source, {window, Headers, AbortController, setTimeout, clearTimeout, CustomEvent: class {constructor(type){this.type=type;}},
     fetch: (...args) => { if(first){first=false; assert.equal(args[0],'/api/v1/auth/me'); return initial(...args);} return fetch(...args); }});
   return {auth:window.signSightAuth,events,handlers,store};
 }
 async function setup(fetch, options) {const app=context(fetch,options);await app.auth.ready;return app;}
+async function bounded(promise){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('test watchdog: request did not settle')),200);})]);}finally{clearTimeout(timer);}}
+
+test('deadline settles an unresponsive fetch and aborts its owned signal',async()=>{
+ let signal;const app=await setup(async(_,options)=>{signal=options.signal;return new Promise(()=>{});});
+ await assert.rejects(bounded(app.auth.request('/manager/summary',{timeoutMs:10})),e=>e.code==='REQUEST_TIMEOUT'&&e.outcomeUnknown===false);
+ assert.equal(signal.aborted,true);
+});
+test('deadline includes JSON and blob decoding and marks unknown write completion',async()=>{
+ for(const responseType of [undefined,'blob']){
+  const app=await setup(async()=>({status:200,ok:true,json:()=>new Promise(()=>{}),blob:()=>new Promise(()=>{})}));
+  await assert.rejects(bounded(app.auth.request('/observations',{method:'POST',timeoutMs:10,responseType})),e=>e.code==='REQUEST_TIMEOUT'&&e.outcomeUnknown===true);
+ }
+});
+test('external cancellation and named read supersession settle even if fetch ignores abort',async()=>{
+ let oldSignal,finish;const app=await setup(async(_,options)=>{oldSignal??=options.signal;return new Promise(resolve=>finish=resolve);});
+ const external=new AbortController();const first=app.auth.request('/manager/signs',{signal:external.signal});
+ external.abort();await assert.rejects(bounded(first),e=>e.code==='REQUEST_CANCELLED');assert.equal(oldSignal.aborted,true);
+ const previous=app.auth.request('/manager/signs?q=a',{cancelKey:'sign-list'});const rejected=assert.rejects(bounded(previous),e=>e.code==='REQUEST_CANCELLED');
+ const next=app.auth.request('/manager/signs?q=b',{cancelKey:'sign-list'});finish(response(200,[]));await rejected;await next;
+ await assert.rejects(app.auth.request('/observations',{method:'POST',cancelKey:'write'}),/read/i);
+});
+test('logout cancels old-account reads and ignores their late body',async()=>{
+ let finish;const app=await setup(async url=>url.endsWith('/logout')?response(204):({status:200,ok:true,json:()=>new Promise(resolve=>finish=resolve)}),{initial:async()=>response(200,profile())});
+ const pending=app.auth.request('/manager/signs');await tick();
+ const rejected=assert.rejects(bounded(pending),e=>e.code==='REQUEST_CANCELLED');await app.auth.logout();finish([]);await rejected;
+ assert.equal(app.auth.user,null);
+});
+test('a late timed-out profile response cannot restore identity and HTTP 5xx writes are uncertain',async()=>{
+ let finish;const app=await setup(async url=>url.endsWith('/auth/me')?new Promise(resolve=>finish=resolve):response(503,{detail:'Unavailable'}));
+ const pending=app.auth.request('/auth/me',{timeoutMs:10});await assert.rejects(bounded(pending),e=>e.code==='REQUEST_TIMEOUT');
+ finish(response(200,profile()));await tick();assert.equal(app.auth.user,null);
+ await assert.rejects(app.auth.request('/observations',{method:'POST'}),e=>e.status===503&&e.outcomeUnknown===true);
+});
 
 test('browser login uses same-origin cookies; storage never contains a token or password', async () => {
   const calls=[];
@@ -102,9 +135,10 @@ test('late 401 from an old session cannot sign out a newer login',async()=>{
   const app=await setup(async url=>url.endsWith('/login')?response(200,session()):new Promise(resolve=>finish=resolve));
   await app.auth.login('owner','password');
   const pending=app.auth.request('/admin/users');
+  const rejected=assert.rejects(pending,error=>error.code==='REQUEST_CANCELLED');
   await app.auth.login('owner','new-password');
   finish(response(401,{detail:'Old session expired'}));
-  await assert.rejects(pending,/Old session expired/);
+  await rejected;
   assert.equal(app.auth.user.role,'admin');
 });
 

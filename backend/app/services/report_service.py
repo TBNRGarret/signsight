@@ -4,6 +4,7 @@ from datetime import datetime
 from fastapi import HTTPException
 from ai_engine.catalog import DEFAULT_CATALOG
 from backend.app.db.models import SignReport,SignRecord,UploadedImage,Evidence,ConfirmationEvent,SignAudit
+from backend.app.services import write_receipts
 
 
 def snapshot(record):
@@ -17,8 +18,13 @@ def audit(db,record,actor_id,action,before,report_id=None):
                     before_json=json.dumps(before,ensure_ascii=False),after_json=json.dumps(snapshot(record),ensure_ascii=False)))
 
 
-def review_report(db,report_id,payload,reviewer,store,catalog=DEFAULT_CATALOG):
+def review_report(db,report_id,payload,reviewer,store,catalog=DEFAULT_CATALOG,*,request_key=None):
     actor=reviewer.id; db.rollback()
+    prior=write_receipts.begin_review(db,actor,'review_report',request_key,{'id':report_id,**payload.model_dump()},report_id)
+    if prior is not None:
+        result=db.get(SignReport,prior[0])
+        if result is None: raise HTTPException(409,'Original review is no longer available')
+        return result
     status='accepted' if payload.action=='accept' else 'rejected'; now=datetime.utcnow()
     claimed=db.query(SignReport).filter(SignReport.id==report_id,SignReport.status=='pending').update(
         {'status':status,'reviewed_by':actor,'reviewed_at':now,'review_comment':payload.comment},synchronize_session=False)

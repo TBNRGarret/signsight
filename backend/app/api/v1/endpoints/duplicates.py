@@ -8,6 +8,7 @@ from backend.app.db.models import DuplicateCandidate,SignRecord
 from backend.app.schemas.sign import SignRecordResponse
 from backend.app.services.geo_service import haversine_distance_meters
 from backend.app.services.report_service import snapshot,audit
+from backend.app.services import write_receipts
 
 router=APIRouter()
 
@@ -27,8 +28,13 @@ def duplicates(offset:int=Query(0,ge=0),limit:int=Query(25,ge=1,le=100),user=Dep
 
 
 @router.post('/manager/duplicates/{candidate_id}/review')
-def review(candidate_id:str,payload:Review,user=Depends(require_roles('manager','admin')),db:Session=Depends(get_db)):
+def review(candidate_id:str,payload:Review,user=Depends(require_roles('manager','admin')),db:Session=Depends(get_db),request_key:str|None=write_receipts.request_key_header):
     actor=user.id; db.rollback()
+    prior=write_receipts.begin_review(db,actor,'review_duplicate',request_key,{'id':candidate_id,**payload.model_dump()},candidate_id)
+    if prior is not None:
+        pair=db.get(DuplicateCandidate,prior[0])
+        if pair is None: raise HTTPException(409,'Original review is no longer available')
+        return {'id':pair.id,'status':pair.status}
     claimed=db.query(DuplicateCandidate).filter(DuplicateCandidate.id==candidate_id,DuplicateCandidate.status=='pending_review').update(
         {DuplicateCandidate.status:'confirmed_duplicate' if payload.action=='merge' else 'dismissed'},synchronize_session=False)
     if claimed!=1:
@@ -47,3 +53,10 @@ def review(candidate_id:str,payload:Review,user=Depends(require_roles('manager',
         audit(db,target,actor,'merge_duplicate',before_target)
     db.commit()
     return {'id':candidate_id,'status':pair.status}
+
+
+@router.get('/manager/duplicates/{candidate_id}')
+def duplicate_detail(candidate_id:str,user=Depends(require_roles('manager','admin')),db:Session=Depends(get_db)):
+    pair=db.get(DuplicateCandidate,candidate_id)
+    if pair is None: raise HTTPException(404,'Candidate not found')
+    return {'id':pair.id,'status':pair.status}

@@ -15,6 +15,7 @@
 <form id="login" hidden><label for="username">Tên đăng nhập</label><input id="username" required autocomplete="username"><label for="password">Mật khẩu</label><input id="password" type="password" required autocomplete="current-password" maxlength="128"><button type="submit">Đăng nhập</button></form>
 <p id="message" role="status" aria-live="polite"></p>
 <div id="workspace" hidden>
+<div id="pending-review-list" hidden role="group" aria-label="Thao tác cần đối chiếu"></div>
 <nav class="staff-tabs" role="tablist" aria-label="Công việc quản trị">
 <button id="tab-contributions" role="tab" aria-controls="panel-contributions">Đóng góp <span id="count-contributions" class="count"></span></button>
 <button id="tab-reports" role="tab" aria-controls="panel-reports">Báo cáo <span id="count-reports" class="count"></span></button>
@@ -64,6 +65,7 @@
 <aside id="review-detail" hidden aria-label="Chi tiết mục đang chọn"><h2 id="detail-title"></h2><div id="detail-meta"></div><div id="detail-evidence"></div>
 <div id="review-note"><label for="review-comment">Ghi chú duyệt</label><textarea id="review-comment" maxlength="1000" rows="2" placeholder="Thêm nhận xét nếu cần"></textarea></div>
 <div id="review-actions" class="review-actions"><button id="review-accept">Chấp nhận</button><button id="review-reject" class="reject">Từ chối</button></div>
+<button id="review-retry" class="secondary" type="button" hidden>Kiểm tra kết quả</button>
 </aside>
 </div></div></main>
 <script src="shared/auth.js?v=20261020-remember"></script><script src="shared/catalog.js?v=20261030"></script><script src="staff/management.js?v=20261030-catalog"></script>

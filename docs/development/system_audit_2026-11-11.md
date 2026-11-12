@@ -20,7 +20,15 @@ Flutter saves an upload key and a frozen pending contribution before sending. Un
 
 Upload now runs as a synchronous worker handler, including bounded file reads, sanitization and database work with its request-scoped session used sequentially. A blocking-decoder concurrency test confirms the API event loop can continue; no phone-image p95 or load capacity is claimed. Migration `0007_write_receipts` is additive and was exercised only against temporary databases; personal runtime migration is still a deployment step. No model/dataset or private runtime files changed. Full evidence is recorded in [the recovery plan](../superpowers/plans/2026-11-11-contribution-recovery.md).
 
-## Original audit evidence and limits
+## Implementation follow-up — A05 (12 November 2026)
+
+Shared web requests now have owned 15-second read/90-second write deadlines through body decoding, external cancellation and named superseded read slots. Old-account reads are cancelled without letting late responses change a newer session. Mutations are never automatically retried; timeout/network/5xx failures carry an explicit unknown-outcome contract.
+
+Observation/report/duplicate review reuses atomic account-scoped receipts in the existing 0007 table. The staff workspace preserves frozen decisions and comments in RAM, supports manual same-key result checks, and keeps unresolved operations reachable even after they disappear from pending-only queues. Exact-record conflict reads remain authoritative after selecting another row. Account/policy edits show uncertainty and retain entered values, but keyed replay for those edits remains outside this change.
+
+TDD and fresh review identified the disappeared-item and background-conflict gaps before their fixes. Verification is recorded in [the web recovery plan](../superpowers/plans/2026-11-12-web-recovery.md). Notes/attempts still do not survive a page reload or session/role change; this is same-page recovery. No private runtime, weights, datasets or notebooks changed, and physical-device/network acceptance and remote CI are not claimed.
+
+## Original audit verification
 
 All runtime probes used disposable SQLite, temporary managed images and synthetic inference. No personal database, uploads, credentials or actual checkpoint were used. Local evidence lives in ignored `.cache/system_audit_2026-11-11/`; the native controller probe is under `mobile/.cache/system_audit_2026-11-11/`.
 

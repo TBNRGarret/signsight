@@ -85,6 +85,16 @@ Trước khi nâng revision của SQLite đã có bảng dữ liệu, migration 
 
 ## Kiểm tra
 
+### Web request và kết quả thao tác chưa rõ
+
+Lớp request dùng chung có deadline **15 giây cho GET/HEAD**, **90 giây cho thao tác ghi**, tính cả đọc JSON/blob. Caller có thể truyền `timeoutMs` (1–90.000 ms), `signal`, và `cancelKey` cho request đọc. Request đọc cùng `cancelKey` hủy lượt trước; đổi phiên/tài khoản/vai trò hủy các lượt đọc cũ. Hủy/timeout luôn kết thúc promise và dọn timer/listener, kể cả transport không phản hồi abort. Không tự retry POST/PATCH. Abort không chứng minh server đã dừng thao tác ghi.
+
+Error có `status`, `code` (`REQUEST_TIMEOUT`, `REQUEST_CANCELLED`, `NETWORK_ERROR` cho lỗi transport) và `outcomeUnknown`. Lỗi mạng/deadline/5xx khi ghi có thể xảy ra sau khi server đã commit. Web quản trị giữ ghi chú trong tab, khóa quyết định đối nghịch và cho bấm **Kiểm tra kết quả** để gửi lại đúng mã/nội dung. Nếu mục đã rời hàng chờ, nút **Chờ đối chiếu** phía trên các tab mở lại đúng thao tác đó. Sau 409, trang đọc đúng mục hiện tại thay vì suy đoán thành công. Kết quả đối chiếu vẫn được giữ khi chuyển qua hàng khác.
+
+Ba API `POST /manager/observations/{id}/review`, `/manager/reports/{id}/review`, `/manager/duplicates/{id}/review` nhận `Idempotency-Key` theo cùng quy tắc upload/đóng góp. Khóa gắn với tài khoản, loại thao tác, resource và body; biên nhận commit cùng quyết định. Replay cùng ý định trả 200 và cùng resource, không lặp bằng chứng/audit/gộp biển. Client cũ không gửi khóa vẫn nhận 409 khi duyệt lại. Dùng bảng `0007_write_receipts` đã có, không thêm migration cho phần này. `GET /manager/duplicates/{id}` chỉ dành cho manager/admin để đọc trạng thái đối chiếu.
+
+Ghi chú/ý định chờ đối chiếu chỉ nằm trong RAM của trang: reload/đóng tab hoặc đổi phiên/vai trò sẽ xóa chúng. Client không lưu cookie/token/password vào web storage. Sửa tài khoản/cấu hình có deadline và thông báo kết quả chưa rõ; chưa có replay bằng khóa cho hai loại sửa này, nên đọc lại trạng thái trước khi thử lại. Kiểm thử browser dùng database/inference giả lập và hạn mức riêng cao hơn cho workload localhost; hạn mức production vẫn được kiểm tra bằng test Python.
+
 Migration `0007_write_receipts` thêm bảng biên nhận gửi lại; không sửa ID ảnh, nhãn hoặc đóng góp cũ. Trước khi chạy phiên bản mới trên runtime riêng, dừng server và chạy `python -m backend.manage migrate` bằng môi trường Python của dự án. Cơ chế migration hiện có tạo backup trước khi nâng schema SQLite cũ. Thay đổi này chỉ được kiểm thử trên database tạm; chưa chạy migration trên dữ liệu cá nhân.
 
 `POST /api/v1/images` và `POST /api/v1/observations` nhận header tùy chọn `Idempotency-Key` (8–128 ký tự ASCII: chữ, số, `.`, `_`, `:`, `-`). Lưu một mã cho mỗi thao tác trước khi gửi. Gửi lại cùng mã/nội dung trả 201 với cùng resource ID; đổi nội dung trả 409. Mã được tách theo tài khoản và loại thao tác; filename không thuộc danh tính upload, nhưng byte ảnh gốc và media type có. Biên nhận và resource được commit cùng transaction, nên retry đồng thời không tạo thêm ảnh/đóng góp. Client không dùng mã vẫn giữ hành vi cũ. Biên nhận chưa tự hết hạn; không xóa tùy ý vì sẽ mất khả năng đối chiếu retry. Replay đóng góp trả trạng thái hiện tại, kể cả quyết định duyệt sau đó.

@@ -21,6 +21,7 @@
 }
 
 #message:empty{display:none}.staff-tabs{padding-top:12px;margin-bottom:12px}.filters{margin:8px 0}.section-heading{margin-bottom:12px}#signs-count{margin:8px 0}th,td{padding:7px 9px}td .row-open{min-height:28px}
+#pending-review-list{flex:none;display:flex;flex-wrap:wrap;gap:8px;max-height:120px;overflow:auto;margin:8px 0}
 
 @media(max-width:1000px){
  #review-detail{overflow:visible}

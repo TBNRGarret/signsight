@@ -3,7 +3,7 @@ import hashlib
 import uuid
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response
 from PIL import Image
 from sqlalchemy.exc import IntegrityError
@@ -23,8 +23,7 @@ from backend.app.services import write_receipts
 
 router = APIRouter()
 
-request_key_header = Header(default=None, alias="Idempotency-Key", min_length=8,
-                            max_length=128, pattern=r"^[A-Za-z0-9._:-]+$")
+request_key_header = write_receipts.request_key_header
 
 
 def replay_image(db, ids, user):
@@ -229,9 +228,10 @@ def get_observation(observation_id: str, request: Request, user: User = Depends(
 
 @router.post("/manager/observations/{observation_id}/review", response_model=ObservationResponse)
 def review(observation_id: str, payload: ObservationReview, request: Request,
-           user: User = Depends(require_roles("manager", "admin")), db: Session = Depends(get_db)):
+           user: User = Depends(require_roles("manager", "admin")), db: Session = Depends(get_db),
+           request_key: str | None = request_key_header):
     days=confirmation_days(db,request.app.state.settings.confirmation_days)
-    return observation_response(review_observation(db, observation_id, payload, user, days,request.app.state.catalog),request.app.state.catalog)
+    return observation_response(review_observation(db, observation_id, payload, user, days,request.app.state.catalog, request_key=request_key),request.app.state.catalog)
 
 
 @router.get("/signs/{record_id}/evidence")
