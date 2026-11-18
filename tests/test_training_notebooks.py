@@ -24,6 +24,18 @@ def test_embedded_notebooks_are_stable_across_filesystem_enumeration_order(monke
     assert build_eda_notebook()==expected
 
 
+def test_legacy_notebooks_exclude_unrelated_future_training_modules(monkeypatch):
+    from training.notebooks import builder
+    expected = builder.build_eda_notebook()
+    unrelated = builder.ROOT/'training/data/unrelated_new_pipeline.py'
+    original = Path.rglob
+    def with_unrelated(path, pattern):
+        return iter([*original(path, pattern), unrelated])
+    monkeypatch.setattr(Path, 'rglob', with_unrelated)
+    # An unrelated module must neither be read nor change the embedded artifact.
+    assert builder.build_eda_notebook() == expected
+
+
 def test_rerunning_pipeline_replaces_previously_imported_renderer(tmp_path, monkeypatch):
     """Uploading new notebook code must replace old Python module objects too."""
     import ast

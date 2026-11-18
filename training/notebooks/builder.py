@@ -6,11 +6,22 @@ ROOT = Path(__file__).resolve().parents[2]
 EDA_TARGET = ROOT / 'notebooks/legacy/SignSight_SupSign_EDA_Colab.ipynb'
 TRAIN_TARGET = ROOT / 'notebooks/legacy/SignSight_SupSign_YOLO11s_Train_Colab.ipynb'
 
+# Archived notebooks retain their original dependency closure. New, independent
+# training pipelines must not silently alter cache fingerprints or artifacts.
+LEGACY_MODULES = (
+    'training/__init__.py', 'training/compatibility.py',
+    'training/data/__init__.py', 'training/data/audit.py', 'training/data/cache.py',
+    'training/data/common.py', 'training/data/downloads.py', 'training/data/drive_source.py',
+    'training/data/grouping_render.py', 'training/data/grouping_review.py', 'training/data/supsign.py',
+    'training/experiments/__init__.py', 'training/experiments/evaluate.py',
+    'training/experiments/local_pipeline.py', 'training/experiments/train.py',
+)
+
 def _build(stage):
     notebook = json.loads(Path(__file__).with_name('cells.json').read_text(encoding='utf-8'))[stage]
     embedded = {name: (ROOT/name).read_text(encoding='utf-8') for name in
                 ('scripts/dataset_eda.py', 'scripts/supsign_training.py', 'scripts/colab_downloads.py')}
-    embedded.update({p.relative_to(ROOT).as_posix():p.read_text(encoding='utf-8') for p in sorted((ROOT/'training').rglob('*.py')) if 'notebooks' not in p.parts and 'legacy_baseline' not in p.parts and p.name not in {'folder_dataset.py', 'folder_splits.py', 'car35_bundle.py', 'car35.py'}})
+    embedded.update({name: (ROOT/name).read_text(encoding='utf-8') for name in LEGACY_MODULES})
     for cell in notebook['cells']:
         if cell['id'] == 'pipeline':
             cell['source'] = ''.join(cell['source']).replace('__EMBEDDED_FILES__', repr(embedded)).splitlines(keepends=True)
