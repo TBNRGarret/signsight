@@ -1,6 +1,19 @@
 /* Shared route orchestration: stale responses cannot restore a cleared route. */
 (function(root){
   'use strict';
+  function visibleSigns({nearby=[],route=[],center,radius}){
+    const selected=new Map(route.map(sign=>[sign.id,sign]));
+    const valid=p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite)&&Math.abs(p[0])<=90&&Math.abs(p[1])<=180;
+    if(!valid(center)||!Number.isFinite(radius)||radius<0)return [...selected.values()];
+    const rad=value=>value*Math.PI/180;
+    for(const sign of nearby){
+      const point=[sign.latitude,sign.longitude];if(!valid(point))continue;
+      const a=Math.sin(rad(point[0]-center[0])/2)**2+Math.cos(rad(center[0]))*Math.cos(rad(point[0]))*Math.sin(rad(point[1]-center[1])/2)**2;
+      const distance=6371000*2*Math.asin(Math.sqrt(Math.max(0,Math.min(1,a))));
+      if(distance<=radius&&!selected.has(sign.id))selected.set(sign.id,sign);
+    }
+    return [...selected.values()];
+  }
   class RouteController {
     constructor(api,view){this.api=api;this.view=view;this.generation=0;}
     reset(){this.generation++;this.view.clear();}
@@ -18,12 +31,13 @@
       }catch(error){if(generation!==this.generation)return null;throw error;}
     }
   }
-  function mount({api,map,getOrigin,document}){
+  function mount({api,map,getOrigin,document,onRouteChange=()=>{}}){
     const $=id=>document.getElementById(id);
     let destination=null,line=null,searchGeneration=0;
     const controller=new RouteController(api,{
-      clear(){if(line){map.removeLayer(line);line=null;}$('nav-summary').textContent='';$('route-signs').replaceChildren();},
+      clear(){if(line){map.removeLayer(line);line=null;}$('nav-summary').textContent='';$('route-signs').replaceChildren();onRouteChange(null);},
       draw(data){line=map.addRoute(data.geometry);
+        onRouteChange(data);
         map.fitBounds(line.getBounds(),{padding:[40,40]});
         $('nav-summary').textContent=`${(data.distance_meters/1000).toFixed(1)} km · ${Math.ceil(data.duration_seconds/60)} phút · ${data.signs.length} biển gần tuyến`;
         for(const row of data.signs){const item=document.createElement('button');item.className='btn btn-secondary';
@@ -62,6 +76,6 @@
     };
     update();return controller;
   }
-  if(typeof module!=='undefined'&&module.exports)module.exports={RouteController,mount};
-  else root.signSightRouting={RouteController,mount};
+  if(typeof module!=='undefined'&&module.exports)module.exports={RouteController,mount,visibleSigns};
+  else root.signSightRouting={RouteController,mount,visibleSigns};
 })(typeof window==='undefined'?globalThis:window);

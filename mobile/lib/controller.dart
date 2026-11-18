@@ -41,6 +41,20 @@ class AppController extends ChangeNotifier {
   set center(GeoPoint value) => _mapState.center = value;
   List<Sign> get nearbySigns => _mapState.nearbySigns;
   set nearbySigns(List<Sign> value) => _mapState.nearbySigns = value;
+  List<Sign> get mapSigns {
+    final scoped = {for (final sign in route?.signs ?? <Sign>[]) sign.id: sign};
+    for (final sign in nearbySigns) {
+      if (center.distanceTo(sign.point) <= radius) {
+        scoped.putIfAbsent(sign.id, () => sign);
+      }
+    }
+    final selected = selectedSign;
+    if (selected != null && center.distanceTo(selected.point) <= radius) {
+      scoped.putIfAbsent(selected.id, () => selected);
+    }
+    return scoped.values.toList();
+  }
+
   int get nearbyTotal => _mapState.nearbyTotal;
   set nearbyTotal(int value) => _mapState.nearbyTotal = value;
   int get radius => _mapState.radius;

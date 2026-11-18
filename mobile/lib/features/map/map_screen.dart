@@ -2,13 +2,10 @@ part of '../../app.dart';
 
 extension _MapScreen on _UserShellState {
   Widget _map(BuildContext context) {
-    final visible = c.route?.signs ?? c.nearbySigns;
-    final selected = c.selectedSign;
-    final signs = [
-      ...visible,
-      if (selected != null && !visible.any((s) => s.id == selected.id))
-        selected,
-    ];
+    final signs = c.mapSigns;
+    final selected = signs.any((s) => s.id == c.selectedSign?.id)
+        ? c.selectedSign
+        : null;
     return Stack(
       children: [
         Positioned.fill(
@@ -24,7 +21,7 @@ extension _MapScreen on _UserShellState {
                 if ((point.latitude - c.center.latitude).abs() > .0001 ||
                     (point.longitude - c.center.longitude).abs() > .0001) {
                   c.moveCenter(point);
-                  if (c.route == null) unawaited(c.refreshNearby());
+                  unawaited(c.refreshNearby());
                 }
               },
             ),
@@ -175,7 +172,7 @@ extension _MapScreen on _UserShellState {
                                   ),
                                 ],
                               )
-                            : c.selectedSign != null
+                            : selected != null
                             ? Column(
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -294,9 +291,7 @@ extension _MapScreen on _UserShellState {
                     ),
                   ),
                 ),
-                if (c.signedIn &&
-                    c.route == null &&
-                    c.selectedSign == null) ...[
+                if (c.signedIn && c.route == null && selected == null) ...[
                   const SizedBox(height: 8),
                   FilledButton.icon(
                     onPressed: _signList,

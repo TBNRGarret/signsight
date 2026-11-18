@@ -12,6 +12,15 @@ DateTime utcDate(String value) => DateTime.parse(
 class GeoPoint {
   const GeoPoint(this.latitude, this.longitude);
   final double latitude, longitude;
+  double distanceTo(GeoPoint other) {
+    if (!valid || !other.valid) return double.infinity;
+    final lat1 = latitude * pi / 180, lat2 = other.latitude * pi / 180;
+    final dlat = lat2 - lat1, dlon = (other.longitude - longitude) * pi / 180;
+    final a =
+        pow(sin(dlat / 2), 2) + cos(lat1) * cos(lat2) * pow(sin(dlon / 2), 2);
+    return 6371000 * 2 * asin(sqrt(a.clamp(0, 1)));
+  }
+
   bool get valid =>
       latitude.isFinite &&
       longitude.isFinite &&

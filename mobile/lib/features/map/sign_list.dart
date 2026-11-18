@@ -15,7 +15,7 @@ class _SignListState extends State<SignList> {
     listenable: widget.controller,
     builder: (context, _) {
       final c = widget.controller;
-      final all = c.route?.signs ?? c.nearbySigns;
+      final all = c.mapSigns;
       final signs = all
           .where(
             (s) =>

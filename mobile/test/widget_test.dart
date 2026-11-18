@@ -78,7 +78,7 @@ void main() {
       ),
     );
     c.selectSign(
-      const Sign('s', 'P.102', 'Cấm đi ngược chiều', GeoPoint(10.7, 106.7)),
+      const Sign('s', 'P.102', 'Cấm đi ngược chiều', GeoPoint(10.777, 106.701)),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Báo cáo / xác nhận'));
@@ -157,6 +157,7 @@ void main() {
           },
         ),
       );
+      c.moveCenter(const GeoPoint(10.8, 106.8));
       c.selectSign(
         const Sign(
           'approved',

@@ -6,7 +6,7 @@ from backend.app.db.database import get_db
 from backend.app.db.models import SignRecord,SignAudit
 from backend.app.schemas.sign import SignRecordResponse
 from backend.app.services.lifecycle_service import check_and_update_lifecycle_status
-from backend.app.services.map_service import VISIBLE,nearby_signs
+from backend.app.services.map_service import VISIBLE,nearby_signs,signs_in_radius
 import json
 from backend.app.services.evidence_service import sign_evidence
 from backend.app.core.catalog import require_catalog_id
@@ -27,6 +27,8 @@ def page(query,offset,limit):
 @router.get('/map/signs')
 def map_signs(request:Request,min_lat:float|None=Query(None,ge=-90,le=90,allow_inf_nan=False),max_lat:float|None=Query(None,ge=-90,le=90,allow_inf_nan=False),
               min_lon:float|None=Query(None,ge=-180,le=180,allow_inf_nan=False),max_lon:float|None=Query(None,ge=-180,le=180,allow_inf_nan=False),
+              latitude:float|None=Query(None,ge=-90,le=90,allow_inf_nan=False),longitude:float|None=Query(None,ge=-180,le=180,allow_inf_nan=False),
+              radius_meters:float|None=Query(None,ge=100,le=1000,allow_inf_nan=False),
               class_id:int|None=Query(None,ge=0),status:Literal['active','expired','pending_revalidation','removed']|None=None,
               offset:int=Query(0,ge=0),limit:int=Query(50,ge=1,le=100),user=Depends(get_current_user),db:Session=Depends(get_db)):
     check_and_update_lifecycle_status(db)
@@ -38,6 +40,13 @@ def map_signs(request:Request,min_lat:float|None=Query(None,ge=-90,le=90,allow_i
     if class_id is not None:
         require_catalog_id(request.app.state.catalog,class_id)
         query=query.filter(SignRecord.predicted_class==class_id)
+    scope=(latitude,longitude,radius_meters)
+    if any(value is not None for value in scope):
+        if any(value is None for value in scope):
+            raise HTTPException(422,'Provide latitude, longitude and radius_meters together')
+        matched=sorted((row for row,_ in signs_in_radius(query,*scope)),key=lambda row:row.id)
+        return {'items':[SignRecordResponse.model_validate(row) for row in matched[offset:offset+limit]],
+                'total':len(matched),'offset':offset,'limit':limit}
     return page(query,offset,limit)
 
 

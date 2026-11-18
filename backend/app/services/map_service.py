@@ -9,14 +9,22 @@ from backend.app.services.geo_service import radius_bounds,haversine_distance_me
 VISIBLE=('active','pending_revalidation','expired')
 
 
-def nearby_signs(db,latitude,longitude,radius):
+def signs_in_radius(query,latitude,longitude,radius):
+    """Filter actual distance before callers count or paginate the candidates."""
     low,high,ranges=radius_bounds(latitude,longitude,radius)
-    candidates=db.query(SignRecord).filter(SignRecord.status.in_(VISIBLE),SignRecord.latitude.between(low,high),
+    candidates=query.filter(SignRecord.latitude.between(low,high),
         or_(*[SignRecord.longitude.between(left,right) for left,right in ranges])).all()
     matched=[]
     for record in candidates:
         distance=haversine_distance_meters(latitude,longitude,record.latitude,record.longitude)
-        if distance<=radius: matched.append({'sign':SignRecordResponse.model_validate(record),'distance_meters':round(distance,1)})
+        if distance<=radius: matched.append((record,distance))
+    return matched
+
+
+def nearby_signs(db,latitude,longitude,radius):
+    query=db.query(SignRecord).filter(SignRecord.status.in_(VISIBLE))
+    matched=[{'sign':SignRecordResponse.model_validate(record),'distance_meters':round(distance,1)}
+             for record,distance in signs_in_radius(query,latitude,longitude,radius)]
     return sorted(matched,key=lambda row:(row['distance_meters'],row['sign'].id))
 
 
