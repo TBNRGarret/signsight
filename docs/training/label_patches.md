@@ -15,7 +15,9 @@ patch = create_label_patch(
 )
 ```
 
-The function verifies the source manifest, affected image/label hashes, class token, bbox and safe paths before publishing. Repeated edits for one line, unreviewed entries, stale labels and source/output overlap are rejected. Only the class token is replaced; bbox text, line endings and other objects remain intact.
+The function verifies the source manifest, affected image/label hashes, class token, bbox and safe paths before publishing. Repeated edits for one line, unreviewed entries, stale labels and source/output overlap are rejected. Class replacements preserve bbox text, line endings and other objects.
+
+For a reviewed contradictory duplicate, set `action='remove_duplicate'` and `retained_line_index` to the unchanged existing box to keep; `to_class` is that retained box's class. The retained line must have an identical numeric bbox and cannot itself be edited/removed in the same patch. This removes the redundant line instead of relabeling it into a second duplicate. Schema version 2 records separate `removed_boxes` and `relabeled_boxes` totals. A default `replace_class` edit changes only the class token.
 
 Output contains corrected files under `labels/{split}/`, `patch.json` binding each old/new label hash, `corrections.csv`, and instructions. It contains no images, model weights or credentials. Keep the exported artifact in private storage, outside the public source checkout.
 

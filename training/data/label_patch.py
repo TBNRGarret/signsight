@@ -14,9 +14,10 @@ from training.data.common import CAR35, digest_file, write_json
 def create_label_patch(root, output, edits, *, expected_manifest_sha256):
     """Hash-bound label replacements, without images or a standalone training YAML.
 
-    line_index refers to a physical, zero-based source label line. Only its class
-    token changes; bounding-box text, whitespace, line endings and other labels
-    remain intact. An applying tool must create a new dataset identity and verify
+    line_index refers to a physical, zero-based source label line. Replace its
+    class token, or remove a reviewed duplicate with an unchanged retained box.
+    Bounding-box text, whitespace and line endings of other labels remain intact.
+    An applying tool must create a new dataset identity and verify
     the source hashes; copying these labels into V4 in place is not supported.
     """
     root, output = Path(root).resolve(), Path(output).resolve()
@@ -40,14 +41,17 @@ def create_label_patch(root, output, edits, *, expected_manifest_sha256):
     for edit in edits:
         sha, index = edit.get('image_sha256', ''), edit.get('line_index')
         before, after = edit.get('from_class'), edit.get('to_class')
+        action = edit.get('action', 'replace_class')
         if (not re.fullmatch('[a-f0-9]{64}', sha) or sha not in rows or
                 type(index) is not int or index < 0 or edit.get('reviewed') is not True or
-                any(type(c) is not int or not 0 <= c < 35 for c in (before, after)) or before == after or
+                any(type(c) is not int or not 0 <= c < 35 for c in (before, after)) or
+                action not in ('replace_class', 'remove_duplicate') or
+                action == 'replace_class' and before == after or
                 not isinstance(edit.get('reason'), str) or not edit['reason'].strip()):
             raise ValueError('Invalid, unreviewed or unsupported CAR35 edit')
         if (sha, index) in seen:
             raise ValueError('Duplicate edit for one label line')
-        seen.add((sha, index)); grouped[sha].append(dict(edit))
+        seen.add((sha, index)); grouped[sha].append(dict(edit, action=action))
     changed, content_by_path = [], {}
     for sha, changes in sorted(grouped.items()):
         row = rows[sha]; split = row['split']
@@ -64,25 +68,39 @@ def create_label_patch(root, output, edits, *, expected_manifest_sha256):
         if digest_file(image) != sha:
             raise ValueError('Source image changed')
         lines = raw.decode('utf-8').splitlines(keepends=True)
+        original_lines, removed = lines.copy(), set()
         for edit in changes:
             index = edit['line_index']
             if index >= len(lines):
                 raise ValueError('Label line no longer exists')
-            fields = lines[index].split()
+            fields = original_lines[index].split()
             if len(fields) != 5 or fields[0] != str(edit['from_class']):
                 raise ValueError('Source class/label line differs from reviewed edit')
             x, y, w, h = map(float, fields[1:])
             if (not all(math.isfinite(v) for v in (x, y, w, h)) or min(w, h) <= 0 or
                     min(x-w/2, y-h/2) < -1e-6 or max(x+w/2, y+h/2) > 1+1e-6):
                 raise ValueError('Source bbox requires separate review')
-            lines[index] = re.sub(r'^(\s*)\d+', lambda m: m[1]+str(edit['to_class']), lines[index], count=1)
-        updated = ''.join(lines).encode('utf-8')
+            if edit['action'] == 'remove_duplicate':
+                retained = edit.get('retained_line_index')
+                if (type(retained) is not int or not 0 <= retained < len(original_lines) or
+                        retained == index or (sha, retained) in seen):
+                    raise ValueError('Duplicate removal requires an unchanged retained label line')
+                other = original_lines[retained].split()
+                if (len(other) != 5 or other[0] != str(edit['to_class']) or
+                        tuple(map(float, other[1:])) != (x, y, w, h)):
+                    raise ValueError('Retained duplicate must have the reviewed class and identical bbox')
+                removed.add(index)
+            else:
+                lines[index] = re.sub(r'^(\s*)\d+', lambda m: m[1]+str(edit['to_class']), lines[index], count=1)
+        updated = ''.join(line for i, line in enumerate(lines) if i not in removed).encode('utf-8')
         content_by_path[row['label']] = updated
         changed.append(dict(image_sha256=sha, split=split, label=row['label'],
                             old_sha256=row['label_sha256'], new_sha256=hashlib.sha256(updated).hexdigest(),
                             edits=changes))
-    result = dict(schema_version=1, kind='car35_reviewed_label_patch', source_manifest_sha256=expected_manifest_sha256,
+    removed_boxes = sum(e['action'] == 'remove_duplicate' for changes in grouped.values() for e in changes)
+    result = dict(schema_version=2, kind='car35_reviewed_label_patch', source_manifest_sha256=expected_manifest_sha256,
                   names=list(CAR35), changed_images=len(changed), changed_boxes=len(edits), changes=changed,
+                  removed_boxes=removed_boxes, relabeled_boxes=len(edits)-removed_boxes,
                   standalone_training_dataset=False, independent_field_test=False,
                   source_modified=False, split_changed=False,
                   usage='Review overlay only. Materialize a separately identified dataset on a writable copy before training; '
@@ -95,11 +113,12 @@ def create_label_patch(root, output, edits, *, expected_manifest_sha256):
             target.write_bytes(content)
         write_json(stage/'patch.json', result)
         with (stage/'corrections.csv').open('w', newline='', encoding='utf-8-sig') as stream:
-            fields = ['image_sha256', 'split', 'line_index', 'from_class', 'from_name', 'to_class', 'to_name', 'reason']
+            fields = ['image_sha256', 'split', 'action', 'line_index', 'retained_line_index', 'from_class', 'from_name', 'to_class', 'to_name', 'reason']
             writer = csv.DictWriter(stream, fieldnames=fields); writer.writeheader()
             for row in changed:
                 for edit in row['edits']:
                     writer.writerow(dict(image_sha256=row['image_sha256'], split=row['split'],
+                                         action=edit['action'], retained_line_index=edit.get('retained_line_index', ''),
                                          line_index=edit['line_index'], from_class=edit['from_class'],
                                          from_name=CAR35[edit['from_class']], to_class=edit['to_class'],
                                          to_name=CAR35[edit['to_class']], reason=edit['reason']))

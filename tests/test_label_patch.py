@@ -68,3 +68,31 @@ def test_patch_rejects_changed_manifest_labels_images_and_source_overwrite(tmp_p
     (root/m['images'][0]['image']).write_bytes(b'changed')
     with pytest.raises(ValueError, match='image changed'):
         create_label_patch(root, tmp_path/'patch', [edit], expected_manifest_sha256=expected)
+
+
+def test_patch_removes_reviewed_duplicate_only_when_a_matching_retained_box_exists(tmp_path):
+    from training.data.label_patch import create_label_patch
+    root, m, edit = dataset(tmp_path)
+    row = m['images'][0]; label = root/row['label']
+    label.write_bytes(b'2 .5 .5 .2 .2\r\n4 .5 .5 .2 .2\r\n9 .3 .3 .1 .1\r\n')
+    m['images'][0]['label_sha256'] = digest_file(label)
+    (root/'manifest.json').write_text(json.dumps(m))
+    edit.update(action='remove_duplicate', to_class=4, retained_line_index=1,
+                reason='Same physical sign has an existing correct class 80 box; remove contradictory duplicate 60.')
+    before = label.read_bytes()
+    result = create_label_patch(root, tmp_path/'patch', [edit],
+                                expected_manifest_sha256=digest_file(root/'manifest.json'))
+    assert (tmp_path/'patch'/row['label']).read_bytes() == b'4 .5 .5 .2 .2\r\n9 .3 .3 .1 .1\r\n'
+    assert label.read_bytes() == before
+    assert result['removed_boxes'] == 1
+    assert result['relabeled_boxes'] == 0
+
+
+@pytest.mark.parametrize('retained_index', [0, 1, -1])
+def test_duplicate_removal_cannot_drop_the_only_box_or_point_at_an_unrelated_box(tmp_path, retained_index):
+    from training.data.label_patch import create_label_patch
+    root, _, edit = dataset(tmp_path)
+    edit.update(action='remove_duplicate', to_class=9, retained_line_index=retained_index)
+    with pytest.raises(ValueError):
+        create_label_patch(root, tmp_path/'patch', [edit],
+                           expected_manifest_sha256=digest_file(root/'manifest.json'))
