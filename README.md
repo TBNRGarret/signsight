@@ -79,6 +79,8 @@ Baseline dùng GTSRB ROI để kiểm tra pipeline, chưa chứng minh chất l�
 
 Train dữ liệu Việt Nam: [hai notebook CAR35 V4 EDA và YOLO11s trên Colab](docs/training/car35_colab.md). Tải ZIP đã chia sẵn bằng gdown, không mount Drive; tải kết quả về trước khi ngắt runtime. Sau khi train, [rà mapping và tích hợp model trên runtime thử](docs/runtime/model_activation.md). Danh mục lớp trên API/web/Flutter lấy từ catalog đã cấu hình; model mới cần mapping được rà và đánh giá thực địa.
 
+Audit nguồn ViTSD bổ sung: [notebook rà dữ liệu ZIP có sẵn trên Drive](docs/training/vitsd_cleaning_review.md). Notebook này dùng Drive mount, đọc ZIP qua bản local và xuất báo cáo để duyệt; không tự chia lại dữ liệu hoặc train.
+
 ## Cấu hình và lưu trữ
 
 Mặc định SQLite ở `backend/signsight.db`, ảnh ở `backend/uploads/images`. Thay đổi bằng `DATABASE_URL` và `SIGNSIGHT_STORAGE_ROOT`; xem [.env.example](.env.example) để biết các giá trị mẫu. **Ứng dụng đọc biến môi trường của process, không tự nạp file `.env`.** Ví dụ PowerShell, đặt trước lệnh migrate và chạy server:
