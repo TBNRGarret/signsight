@@ -34,6 +34,7 @@ http.Response taxonomy() => http.Response(
   jsonEncode({
     'items': [
       {'new_id': 5, 'qcvn_code': 'P.102', 'name_vi': 'Original label'},
+      {'new_id': 1000000, 'qcvn_code': 'OTHER', 'name_vi': 'Khác / Others'},
       {
         'new_id': 42,
         'qcvn_code': 'FIXTURE.42',
@@ -42,9 +43,19 @@ http.Response taxonomy() => http.Response(
     ],
   }),
   200,
+  headers: {'content-type': 'application/json; charset=utf-8'},
 );
 
 void main() {
+  test(
+    'taxonomy transports the Vietnamese Others name and stable manual ID',
+    () async {
+      final c = fixture((_) async => taxonomy());
+      final types = await c.api.taxonomy();
+      expect(types.singleWhere((t) => t.id == 1000000).name, 'Khác / Others');
+      c.dispose();
+    },
+  );
   test('history displays the proposed label while original detection stays available', () {
     final row = Contribution.fromJson({
       'id': 'o',

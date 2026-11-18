@@ -7,6 +7,13 @@ from types import MappingProxyType
 
 from ai_engine.config import TAXONOMY
 
+# Application-only correction identity, never a checkpoint output. Keep it out
+# of the supplied catalog's digest so existing hash-bound model bundles remain
+# valid. This fixed identity is registered/persisted just like other app labels.
+OTHER_SIGN_ID = 1_000_000
+OTHER_SIGN = MappingProxyType({'new_id': OTHER_SIGN_ID, 'qcvn_code': 'OTHER',
+                             'name_vi': 'Khác / Others'})
+
 
 def json_hash(value):
     return hashlib.sha256(json.dumps(value,ensure_ascii=False,sort_keys=True,
@@ -20,6 +27,8 @@ class SignCatalog:
             raise ValueError('Catalog requires 1..1000 entries')
         by_id={};codes=set()
         for item in items:
+            if isinstance(item, dict) and (item.get('new_id') == OTHER_SIGN_ID or item.get('qcvn_code') == 'OTHER'):
+                raise ValueError('Others is a reserved manual application identity')
             if (not isinstance(item,dict) or type(item.get('new_id')) is not int or
                 not 0 <= item['new_id'] <= 1000000 or
                 any(not isinstance(item.get(k),str) or not item[k].strip() or len(item[k])>limit
@@ -33,7 +42,7 @@ class SignCatalog:
             if existing is None or any(existing[k]!=legacy[k] for k in ('qcvn_code','name_vi')):
                 raise ValueError('Catalog must preserve legacy IDs, codes and names; use an explicit data migration to revise them')
         self.items=tuple(MappingProxyType(by_id[key]) for key in sorted(by_id))
-        self.by_id=MappingProxyType({item['new_id']:item for item in self.items})
+        self.by_id=MappingProxyType({**{item['new_id']:item for item in self.items}, OTHER_SIGN_ID: OTHER_SIGN})
         self.sha256=json_hash([dict(item) for item in self.items])
 
     @classmethod
@@ -41,7 +50,7 @@ class SignCatalog:
         return cls() if path is None else cls(json.loads(Path(path).read_text(encoding='utf-8-sig')))
 
     def public_items(self):
-        return [{key:item[key] for key in ('new_id','qcvn_code','name_vi')} for item in self.items]
+        return [{key:item[key] for key in ('new_id','qcvn_code','name_vi')} for item in (*self.items, OTHER_SIGN)]
 
 
 DEFAULT_CATALOG=SignCatalog()
@@ -62,6 +71,8 @@ class ModelClassMapping:
             raise ValueError('Mapping requires an entry for every model class')
         names=[];targets=[]
         for index,item in enumerate(entries):
+            if isinstance(item, dict) and item.get('catalog_id') == OTHER_SIGN_ID:
+                raise ValueError('Others is manual only; a model output cannot target it')
             if (not isinstance(item,dict) or type(item.get('model_class_id')) is not int or
                 item['model_class_id']!=index or item.get('reviewed') is not True or
                 not isinstance(item.get('model_name'),str) or not item['model_name'].strip() or

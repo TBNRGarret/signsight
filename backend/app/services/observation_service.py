@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from ai_engine.config import CONFIDENCE_THRESHOLD
-from ai_engine.catalog import DEFAULT_CATALOG
+from ai_engine.catalog import DEFAULT_CATALOG, OTHER_SIGN_ID
 from backend.app.db.models import (
     UploadedImage, InferenceRun, ImageDetection, Observation, SignRecord, Evidence, ConfirmationEvent, SignReport,
 )
@@ -83,7 +83,7 @@ def persist_run(db, image, engine, result, catalog=DEFAULT_CATALOG):
         raise HTTPException(503, "Invalid inference result")
     rows = []
     for ordinal, prediction in enumerate(result.predictions):
-        if type(prediction.predicted_class) is not int or prediction.predicted_class not in catalog.by_id or not math.isfinite(prediction.confidence) or not 0 <= prediction.confidence <= 1:
+        if type(prediction.predicted_class) is not int or prediction.predicted_class == OTHER_SIGN_ID or prediction.predicted_class not in catalog.by_id or not math.isfinite(prediction.confidence) or not 0 <= prediction.confidence <= 1:
             raise HTTPException(503, "Invalid inference result")
         coordinates = dict(x1=None, y1=None, x2=None, y2=None)
         if engine == "yolo":

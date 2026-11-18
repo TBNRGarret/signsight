@@ -4,6 +4,7 @@ Updated 30 October 2026. Runtime supports checkpoint-specific output order throu
 
 ## Identity and compatibility
 
+- `/taxonomy` also publishes the fixed application-only correction `OTHER` (ID `1000000`, `Khác / Others`). It requires an existing detection and the usual correction reason/confirmation; accepted corrections keep the original AI result and have zero model confidence. It is not a YOLO output. Do not append it to a supplied model catalog or target it in a checkpoint mapping. The supplied catalog digest/class order remain unchanged, so reviewed model bundles do not need rebinding for this option. The application registry records this fixed identity separately from the checkpoint-bound entries.
 - `model_class_id` is the index emitted by one checkpoint. `predicted_class` is the stable application catalog ID stored on detections/signs. They can differ.
 - Keep catalog IDs 0–9, their codes and Vietnamese names exactly as supplied in `data/taxonomy.json`. Extend the JSON list with new, unique IDs/codes; never reorder model outputs to fit old IDs or repurpose an ID.
 - Migration `0006_model_catalog` adds nullable provenance fields and a catalog registry. It does not renumber existing records. Old runs retain null provenance; their hashes cannot be reconstructed reliably after the fact.

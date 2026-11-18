@@ -3,7 +3,7 @@
   'use strict';
   async function load(api){
     const result=await api.request('/taxonomy'),items=result?.items,ids=new Set();
-    if(!Array.isArray(items)||!items.length||items.length>1000)throw new Error('Chưa tải được danh mục biển. Thử lại.');
+    if(!Array.isArray(items)||!items.length||items.length>1001)throw new Error('Chưa tải được danh mục biển. Thử lại.');
     for(const item of items){
       if(!Number.isSafeInteger(item.new_id)||item.new_id<0||ids.has(item.new_id)||
          typeof item.qcvn_code!=='string'||!item.qcvn_code.trim()||typeof item.name_vi!=='string'||!item.name_vi.trim())

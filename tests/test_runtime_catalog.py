@@ -35,7 +35,8 @@ def test_extended_catalog_flows_through_inference_correction_review_and_map(runt
     legacy_id=add_sign(app)
     register(client);auth=headers(login(client)['access_token'])
     catalog=client.get('/api/v1/taxonomy',headers=auth).json()
-    assert len(catalog['items'])==11 and catalog['items'][-1]['new_id']==10
+    assert len(catalog['items'])==12
+    assert {row['new_id'] for row in catalog['items']} == {*range(11), 1000000}
     data=io.BytesIO();Image.new('RGB',(64,64),'red').save(data,format='PNG')
     image=client.post('/api/v1/images',headers=auth,files={'file':('test.png',data.getvalue(),'image/png')}).json()
     detected=client.post(f"/api/v1/images/{image['id']}/detect",headers=auth)

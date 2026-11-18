@@ -19,7 +19,7 @@ def require_database_catalog(session_factory, catalog):
         if not unknown:
             # Remember every published catalog identity, including classes without observations yet.
             from sqlalchemy.dialects.sqlite import insert
-            for item in catalog.items:
+            for item in catalog.public_items():
                 db.execute(insert(SignCatalogEntry).values(id=item['new_id'],qcvn_code=item['qcvn_code'],name_vi=item['name_vi'])
                            .on_conflict_do_nothing())
             # A second worker may have registered a different configuration concurrently.

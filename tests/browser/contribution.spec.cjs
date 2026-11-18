@@ -66,6 +66,24 @@ test('a pin is explicitly confirmed before submitting the observation',async({pa
   expect(history.items[0].location_source).toBe('user_confirmed');
 });
 
+test('Others corrects an existing detection and preserves its original AI label',async({page},testInfo)=>{
+  await setup(page);await choose(page);
+  await expect(page.locator('#capture-stage')).toContainText('Tìm thấy 1 biển');
+  await page.locator('#detections select.class').selectOption('1000000');
+  await page.locator('#detections input.reason').fill('Loại biển chưa có trong danh mục');
+  await page.locator('#location-map').click({position:{x:150,y:110}});
+  await page.locator('#location-confirm').click();
+  await expect(page.locator('#submit')).toBeEnabled();
+  await page.screenshot({path:testInfo.outputPath('others-correction.png'),fullPage:true});
+  await page.locator('#submit').click();
+  await expect(page.locator('#status')).toContainText('Đã gửi đóng góp');
+  const rows=(await (await page.request.get('/api/v1/me/observations')).json()).items;
+  expect(rows).toHaveLength(1);
+  expect(rows[0].proposed_class).toBe(1000000);
+  expect(rows[0].proposed_name_vi).toBe('Khác / Others');
+  expect(rows[0].detection.predicted_class).toBe(5);
+});
+
 test('approved contribution shows a private thumbnail then opens its exact map record',async({page,browser},testInfo)=>{
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await setup(page);await choose(page);

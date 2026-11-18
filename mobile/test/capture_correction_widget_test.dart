@@ -7,6 +7,40 @@ import 'package:signsight_user/app.dart';
 import 'capture_correction_test.dart' show fixture, taxonomy;
 
 void main() {
+  testWidgets(
+    'Others is available for an existing detection and requires explanation',
+    (tester) async {
+      final c = fixture((_) async => taxonomy());
+      c.draft!.bytes = File('../tests/browser/fixtures/sign.png')
+          .readAsBytesSync();
+      await tester.pumpWidget(
+        SignSightApp(
+          controller: c,
+          mapBuilder: (_, scene) => const SizedBox.expand(),
+        ),
+      );
+      await tester.tap(find.text('Đóng góp').last);
+      await tester.pumpAndSettle();
+      final edit = find.text('Sửa loại biển nếu AI nhận sai');
+      await tester.scrollUntilVisible(edit, 160);
+      await tester.tap(edit);
+      await tester.pumpAndSettle();
+      final select = find.byType(DropdownButtonFormField<int>);
+      await tester.ensureVisible(select);
+      await tester.tap(select);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OTHER · Khác / Others').last);
+      await tester.pumpAndSettle();
+      expect(c.draft!.proposedClass, 1000000);
+      expect(c.canSubmit, false);
+      c.setCorrectionReason('Loại biển chưa có trong danh mục');
+      c.confirmLabel(true);
+      expect(c.canSubmit, true);
+      expect(c.draft!.selected!.classId, 5);
+      await tester.pumpWidget(const SizedBox.shrink());
+      c.dispose();
+    },
+  );
   for (final scale in [1.0, 1.3]) {
     testWidgets(
       'optional correction uses the server catalog on a narrow phone at text scale $scale',
