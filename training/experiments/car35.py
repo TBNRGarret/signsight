@@ -1,4 +1,4 @@
-"""Train/export a prepared CAR35 V4 dataset; never changes application serving."""
+"""Train/export prepared CAR35 development data; never changes application serving."""
 import json
 import math
 from pathlib import Path
@@ -83,12 +83,14 @@ def export_car35_run(run_dir,root,target):
     if request['dataset']['manifest_sha256']!=dataset['manifest_sha256']:raise ValueError('Export dataset changed')
     handoff=dict(schema_version=1,dataset=dataset,settings=request['settings'],independent_field_test=False,
         checkpoints={n:digest_file(run_dir/'weights'/n) for n in ('best.pt','last.pt') if (run_dir/'weights'/n).is_file()},
-        limitations='Development CAR35 V4; scene overlap and rare holdout classes remain. Review before activation.')
+        limitations=dataset['limitations'])
     target.parent.mkdir(parents=True,exist_ok=True)
     with zipfile.ZipFile(target,'x',compression=zipfile.ZIP_DEFLATED,allowZip64=True) as archive:
         for path in sorted(run_dir.rglob('*')):
             if path.is_file() and not path.is_symlink():archive.write(path,'run/'+path.relative_to(run_dir).as_posix())
         for name in ('manifest.json','data.yaml','dataset_report.json','class_counts.csv','README.md'):
             if (root/name).is_file():archive.write(root/name,'dataset/'+name)
+        for name in ('v4_manifest.json','label_patch.json'):
+            if (root/'provenance'/name).is_file():archive.write(root/'provenance'/name,'dataset/provenance/'+name)
         archive.writestr('handoff.json',json.dumps(handoff,ensure_ascii=False,indent=2))
     return target

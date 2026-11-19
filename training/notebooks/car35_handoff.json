@@ -8,5 +8,15 @@
     "train": 25886,
     "val": 5547,
     "test": 5547
+  },
+  "reviewed_revision": {
+    "dataset_version": "car35_v4_reviewed_r3_2026-11-19",
+    "patch_sha256": "9f0a96250b345cf0d324d8b23c628e203260551d801c39b25555c4bcd1e2632a",
+    "manifest_sha256": "a62a286e5ce45a508d158423ec3efa559a857d385326f19c53280fc667f4f66c",
+    "images": 36980,
+    "boxes": 40522,
+    "changed_images": 23,
+    "relabeled_boxes": 19,
+    "removed_boxes": 6
   }
 }

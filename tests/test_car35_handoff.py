@@ -142,7 +142,7 @@ def test_car35_notebook_runs_standalone_on_prepared_zip(tmp_path,monkeypatch,sta
     cells={c['id']:''.join(c['source']) for c in notebook['cells'] if c['cell_type']=='code'}
     code=cells['config'].replace("Path('/content/signsight_car35')",f'Path({str(work)!r})')
     exec(code,context)
-    context.update(SOURCE_URL='synthetic-file-id',DATASET_SHA256=checksum,
+    context.update(SOURCE_URL='synthetic-file-id',DATASET_SHA256=checksum,APPLY_REVIEWED_PATCH=False,
                    EXPECTED_MANIFEST_SHA256=manifest_sha,DOWNLOAD_RESULTS=False,EPOCHS=2,BATCH=4,DEVICE='cpu')
     exec(cells['pipeline'],context)
     def local_transport(source,target,**kwargs):

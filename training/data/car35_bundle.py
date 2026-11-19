@@ -1,4 +1,4 @@
-"""Restore and verify a prepared CAR35 V4 ZIP without source data or re-splitting."""
+"""Restore/verify CAR35 V4 or a reviewed revision, without raw data or re-splitting."""
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
@@ -19,8 +19,11 @@ def verify_car35(root, *, expected_manifest_sha256='', workers=8):
     if expected_manifest_sha256 and digest_file(manifest_file)!=expected_manifest_sha256:
         raise ValueError('CAR35 manifest SHA-256 mismatch')
     manifest=json.loads(manifest_file.read_text(encoding='utf-8'))
-    if manifest.get('kind')!='car35_folder_development_v4' or manifest.get('names')!=CAR35:
+    if manifest.get('kind') not in ('car35_folder_development_v4','car35_reviewed_development_v1') or manifest.get('names')!=CAR35:
         raise ValueError('Expected prepared CAR35 V4 taxonomy, not raw SupSign or a V3 cache')
+    if manifest['kind']=='car35_reviewed_development_v1':
+        from training.data.car35_revision import validate_revision_provenance
+        validate_revision_provenance(root,manifest)
     config=yaml.safe_load((root/'data.yaml').read_text(encoding='utf-8'))
     if config!=dict(train='images/train',val='images/val',test='images/test',names=CAR35):
         raise ValueError('Unsafe or changed CAR35 data.yaml')
@@ -69,7 +72,8 @@ def verify_car35(root, *, expected_manifest_sha256='', workers=8):
         recorded={int(k):v for k,v in manifest['class_counts'][split].items() if v}
         if recorded!=dict(counts[split]):raise ValueError('CAR35 class counts changed')
     if any(not counts['train'][c] for c in range(35)):raise ValueError('Missing CAR35 train class')
-    return dict(images=len(images),boxes=sum(sum(c.values()) for c in counts.values()),names=list(CAR35),
+    return dict(kind=manifest['kind'],dataset_version=manifest.get('dataset_version','car35_v4'),
+                images=len(images),boxes=sum(sum(c.values()) for c in counts.values()),names=list(CAR35),
                 split_images=dict(sizes),split_groups=dict(Counter(groups.values())),
                 class_counts={s:dict(counts[s]) for s in SPLITS},groups=len(groups),
                 manifest_sha256=digest_file(manifest_file),independent_field_test=False,

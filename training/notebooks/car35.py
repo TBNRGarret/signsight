@@ -16,14 +16,17 @@ def _cell(kind,name,source):
 
 def _build(stage):
     handoff=json.loads(Path(__file__).with_name('car35_handoff.json').read_text(encoding='utf-8'))
+    review=handoff.get('reviewed_revision',{})
     names=['training/__init__.py','training/data/__init__.py','training/experiments/__init__.py',
            'training/data/common.py','training/data/downloads.py','training/data/car35_bundle.py',
+           'training/data/label_patch.py','training/data/car35_revision.py',
            'training/experiments/car35.py']
     files={n:(ROOT/n).read_text(encoding='utf-8') for n in names}
-    title='EDA CAR35 V4' if stage=='eda' else 'Train CAR35 V4 với YOLO11s'
+    title='EDA CAR35 — nhãn đã rà R3' if stage=='eda' else 'Train CAR35 — nhãn đã rà R3 với YOLO11s'
     cells=[_cell('markdown','intro',f'''# SignSight — {title}
 
-Dùng ZIP **CAR35 V4 đã chia sẵn**, không cần SupSign gốc, không chia lại train/val/test.
+Dùng ZIP **CAR35 V4 đã chia sẵn** và ZIP patch R3; không cần SupSign gốc, không chia lại train/val/test.
+Mặc định tạo revision đã rà nhãn: 36.980 ảnh / 40.522 bbox. Không thêm 461 ảnh ViTSD chưa rà.
 Tải dataset bằng **gdown**; không mount Drive. Notebook chạy độc lập, không clone repo.
 Chọn {'CPU' if stage=='eda' else 'GPU'} runtime. Dữ liệu chỉ nằm trong `/content`; lưu notebook không lưu dataset hay checkpoint.
 Split: 25.886 train / 5.547 val / 5.547 test; 35 lớp. Có ảnh cùng cảnh giữa split và lớp hiếm ít mẫu holdout.
@@ -38,6 +41,10 @@ subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-q', *packages])
 
 Upload ZIP CAR35 đã được cung cấp lên Drive, chia sẻ file cho phép tải bằng link, rồi dán link vào SOURCE_URL.
 Giữ nguyên hai checksum để khóa đúng dữ liệu. Runtime/tài khoản mới chỉ cần notebook và link ZIP; gdown sẽ tải lại.
+APPLY_REVIEWED_PATCH=True mặc định: thêm PATCH_URL là link ZIP patch nhỏ. False dùng baseline V4.
+Checksum patch và manifest revision được điền sẵn; không đổi chúng cho một file khác.
+V4 được giải nén một lần vào staging rồi sửa nhãn trên bản mới; không đổi ảnh, nhóm hay split.
+Runtime mới cần tải V4 và patch lại. Giữ bản V4 để so sánh; không resume run V4 với nhãn revision.
 Không có DOWNLOAD=False để bỏ qua dataset ở runtime mới. Runtime cũ có dataset đã xác minh thì dùng lại.
 Kết quả không tự lưu lên Drive. Tải ZIP kết quả trước khi runtime bị xóa.
 '''),_cell('code','config',f'''from pathlib import Path
@@ -49,8 +56,14 @@ os.environ['YOLO_CONFIG_DIR'] = str(WORK / '.ultralytics')
 SOURCE_URL = ''  # Dán link file ZIP CAR35 trên Drive, không phải folder
 DATASET_SHA256 = {handoff['zip_sha256']!r}
 EXPECTED_MANIFEST_SHA256 = {handoff['manifest_sha256']!r}
+APPLY_REVIEWED_PATCH = True  # False chỉ khi cần chạy baseline V4 gốc
+PATCH_URL = ''  # Link ZIP patch R3, không phải dataset ZIP
+PATCH_SHA256 = {review.get('patch_sha256','')!r}
+REVISED_DATASET_VERSION = {review.get('dataset_version','car35_v4_reviewed_r3_2026-11-19')!r}
+EXPECTED_REVISED_MANIFEST_SHA256 = {review.get('manifest_sha256','')!r}
+EXPORT_REVISED_DATASET = False  # Chỉ dùng trong EDA; True sẽ tạo thêm ZIP dataset lớn
 DATASET_ROOT = WORK / 'dataset'
-RUN_NAME = 'yolo11s_car35_v4_640'
+RUN_NAME = 'yolo11s_car35_reviewed_r3_640' if APPLY_REVIEWED_PATCH else 'yolo11s_car35_v4_640'
 RUN_DIR = WORK / 'runs' / RUN_NAME
 EPOCHS = 80
 IMAGE_SIZE = 640
@@ -72,22 +85,46 @@ for relative, source in TRAINING_FILES.items():
     target.write_text(source, encoding='utf-8')
 for name in list(sys.modules):
     if name in ('training', 'training.data', 'training.experiments') or name in (
-        'training.data.common', 'training.data.downloads', 'training.data.car35_bundle', 'training.experiments.car35'):
+        'training.data.common', 'training.data.downloads', 'training.data.car35_bundle',
+        'training.data.label_patch', 'training.data.car35_revision', 'training.experiments.car35'):
         del sys.modules[name]
 sys.path.insert(0, str(CODE_ROOT))
 importlib.invalidate_caches()
 from training.data.downloads import download_drive_zip
 from training.data.car35_bundle import restore_car35_bundle, verify_car35
+from training.data.car35_revision import restore_car35_revision, pack_car35_revision
 from training.experiments.car35 import train_car35, evaluate_car35, export_car35_run
 print('Pipeline:', PIPELINE_ID[:16])
-'''),_cell('code','prepare','''if DATASET_ROOT.exists():
-    dataset_info = verify_car35(DATASET_ROOT, expected_manifest_sha256=EXPECTED_MANIFEST_SHA256)
+'''),_cell('code','prepare','''expected_manifest = EXPECTED_MANIFEST_SHA256
+DATASET_ROOT = WORK / 'dataset'
+if APPLY_REVIEWED_PATCH:
+    assert PATCH_SHA256 and EXPECTED_REVISED_MANIFEST_SHA256, 'Cần checksum patch và manifest revision đã rà.'
+    assert REVISED_DATASET_VERSION and Path(REVISED_DATASET_VERSION).name == REVISED_DATASET_VERSION and REVISED_DATASET_VERSION not in ('.','..'), 'Dataset version không hợp lệ.'
+    DATASET_ROOT = WORK / REVISED_DATASET_VERSION
+    expected_manifest = EXPECTED_REVISED_MANIFEST_SHA256
+if DATASET_ROOT.exists():
+    dataset_info = verify_car35(DATASET_ROOT, expected_manifest_sha256=expected_manifest)
 else:
     assert SOURCE_URL.strip(), 'Điền SOURCE_URL bằng link file ZIP CAR35 trên Drive.'
+    if APPLY_REVIEWED_PATCH:
+        assert PATCH_URL.strip(), 'Điền PATCH_URL bằng link ZIP patch R3 trước khi tải dataset.'
     archive = download_drive_zip(SOURCE_URL, WORK / 'downloads' / 'car35_v4.zip', expected_sha256=DATASET_SHA256)
-    dataset_info = restore_car35_bundle(archive, DATASET_ROOT,
-        expected_sha256=DATASET_SHA256, expected_manifest_sha256=EXPECTED_MANIFEST_SHA256)
+    if APPLY_REVIEWED_PATCH:
+        patch_archive = download_drive_zip(PATCH_URL, WORK / 'downloads' / ('patch_' + PATCH_SHA256[:12] + '.zip'),
+            expected_sha256=PATCH_SHA256)
+        print('Khôi phục V4, replay patch và kiểm tra revision; không tạo bản sao thứ hai của toàn bộ ảnh...', flush=True)
+        dataset_info = restore_car35_revision(archive, patch_archive, DATASET_ROOT,
+            expected_sha256=DATASET_SHA256, expected_source_manifest_sha256=EXPECTED_MANIFEST_SHA256,
+            expected_patch_sha256=PATCH_SHA256, dataset_version=REVISED_DATASET_VERSION,
+            expected_manifest_sha256=EXPECTED_REVISED_MANIFEST_SHA256)
+    else:
+        dataset_info = restore_car35_bundle(archive, DATASET_ROOT,
+            expected_sha256=DATASET_SHA256, expected_manifest_sha256=EXPECTED_MANIFEST_SHA256)
 manifest = json.loads((DATASET_ROOT / 'manifest.json').read_text(encoding='utf-8'))
+if APPLY_REVIEWED_PATCH:
+    assert manifest.get('dataset_version') == REVISED_DATASET_VERSION
+    assert manifest['label_revision']['patch_archive_sha256'] == PATCH_SHA256
+print('Dataset version:', dataset_info['dataset_version'], '| Manifest:', dataset_info['manifest_sha256'])
 print(f"CAR35: {dataset_info['images']:,} images | {dataset_info['boxes']:,} boxes | 35 classes")
 for split in ('train', 'val', 'test'):
     print(split, ':', dataset_info['split_images'][split], 'images')
@@ -98,7 +135,10 @@ print('Giữ nguyên split. Test thực địa độc lập:', dataset_info['ind
 
 Không đọc lại SupSign gốc hay đổi split. Biểu đồ dùng số bbox đã đối soát với nhãn thực tế.
 ZIP EDA chứa manifest, bảng lớp, biểu đồ và báo cáo/ảnh preview đi kèm dataset.
-Xem `report.html`: có ảnh cùng cảnh ở nhiều split; hai lớp hết cấm chỉ có một bbox test/lớp.
+Với revision, summary/biểu đồ/counts mới thay cho report V4 cũ; provenance giữ manifest V4 và patch để đối chiếu.
+Các report/preview V4 được giữ riêng trong dataset tại provenance/v4_reports, không trình bày như nhãn mới.
+Vẫn có ảnh cùng cảnh ở nhiều split; hai lớp hết cấm chỉ có một bbox test/lớp.
+EXPORT_REVISED_DATASET=True sẽ đóng gói thêm dataset lớn và checksum; mặc định False để tiết kiệm ổ đĩa.
 '''),_cell('code','eda','''import csv
 import matplotlib.pyplot as plt
 EDA_ROOT = WORK / 'eda'; EDA_ROOT.mkdir(exist_ok=True)
@@ -111,20 +151,32 @@ for split in ('train','val','test'):
     values = [r[split] for r in rows]
     ax.barh(range(35), values, left=left, label=split)
     left = [a+b for a,b in zip(left,values)]
-ax.set_yticks(range(35), dataset_info['names'], fontsize=8); ax.legend(); ax.set_title('CAR35 V4 boxes by split')
+ax.set_yticks(range(35), dataset_info['names'], fontsize=8); ax.legend(); ax.set_title(dataset_info['dataset_version'] + ' boxes by split')
 fig.tight_layout(); fig.savefig(EDA_ROOT / 'class_distribution.png', dpi=150); plt.close(fig)
 (EDA_ROOT / 'summary.json').write_text(json.dumps(dataset_info, ensure_ascii=False, indent=2), encoding='utf-8')
 for name in ('manifest.json','data.yaml','report.html','dataset_report.json','README.md'):
     if (DATASET_ROOT / name).is_file(): shutil.copy2(DATASET_ROOT / name, EDA_ROOT / name)
 if (DATASET_ROOT / 'previews').is_dir(): shutil.copytree(DATASET_ROOT / 'previews', EDA_ROOT / 'previews', dirs_exist_ok=True)
+for name in ('v4_manifest.json','label_patch.json'):
+    source = DATASET_ROOT / 'provenance' / name
+    if source.is_file():
+        (EDA_ROOT / 'provenance').mkdir(exist_ok=True)
+        shutil.copy2(source, EDA_ROOT / 'provenance' / name)
 print('EDA saved:', EDA_ROOT)
 '''),_cell('code','export','''from datetime import datetime, timezone
 name = 'car35_v4_eda_' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+if EXPORT_REVISED_DATASET:
+    PREPARED_ZIP = WORK / (dataset_info['dataset_version'] + '_prepared_' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ') + '.zip')
+    prepared_handoff = pack_car35_revision(DATASET_ROOT, PREPARED_ZIP)
+    (EDA_ROOT / 'prepared_handoff.json').write_text(json.dumps(prepared_handoff, ensure_ascii=False, indent=2), encoding='utf-8')
 RESULT_ZIP = Path(shutil.make_archive(str(WORK / name), 'zip', EDA_ROOT))
 print('EDA ZIP:', RESULT_ZIP)
 if DOWNLOAD_RESULTS:
     from google.colab import files
     files.download(str(RESULT_ZIP))
+    if EXPORT_REVISED_DATASET:
+        files.download(str(PREPARED_ZIP))
+        files.download(str(PREPARED_ZIP.with_suffix(PREPARED_ZIP.suffix + '.sha256')))
 ''')])
     else:
         cells.extend([_cell('markdown','train-guide','''## 2. Train YOLO11s
