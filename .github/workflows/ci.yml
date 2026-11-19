@@ -119,17 +119,30 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+          cache: gradle
+          cache-dependency-path: |
+            mobile/android/**/*.gradle*
+            mobile/android/gradle.properties
+            mobile/android/gradle/wrapper/gradle-wrapper.properties
+            mobile/pubspec.lock
+            .github/gradle/central-mirror.init.gradle
+            .github/workflows/ci.yml
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.47.7'
           channel: stable
           cache: true
       - run: flutter pub get --enforce-lockfile
+      - name: Configure CI dependency mirror for all Gradle builds
+        run: |
+          mkdir -p "$HOME/.gradle/init.d"
+          cp ../.github/gradle/central-mirror.init.gradle "$HOME/.gradle/init.d/signsight-central.init.gradle"
       - name: Build Android emulator debug APK
-        run: flutter build apk --debug --target-platform android-x64
+        run: python3 ../scripts/ci_android_build.py
       - name: Preserve Android test build
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: signsight-android-emulator-debug
           path: mobile/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
           retention-days: 7

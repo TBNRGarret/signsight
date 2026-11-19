@@ -1,0 +1,34 @@
+// CI only. Install under the runner's GRADLE_USER_HOME/init.d so Flutter's
+// included Gradle build receives the same repository policy as the Android app.
+// Mirror documentation: https://maven-central.storage.googleapis.com/index.html
+import org.gradle.api.artifacts.repositories.MavenArtifactRepository
+
+def centralMirror = 'https://maven-central.storage-download.googleapis.com/maven2/'
+def redirectCentral = { repository ->
+    if (repository instanceof MavenArtifactRepository &&
+        repository.url.toString().replaceAll('/+$', '') in [
+            'https://repo.maven.apache.org/maven2',
+            'https://repo1.maven.org/maven2'
+        ]) {
+        repository.setUrl(centralMirror)
+    }
+}
+
+beforeSettings { settings ->
+    // Kotlin plugin transitive dependencies otherwise go through the Plugin
+    // Portal's redirect to Maven Central before the app is even configured.
+    settings.pluginManagement.repositories {
+        maven { name = 'SignSightCentralMirror'; url = centralMirror }
+        google()
+        gradlePluginPortal()
+    }
+    settings.pluginManagement.repositories.all(redirectCentral)
+    settings.dependencyResolutionManagement.repositories.all(redirectCentral)
+}
+
+allprojects { project ->
+    // Observe repositories added by build scripts without introducing a project
+    // repository into included builds using FAIL_ON_PROJECT_REPOS.
+    project.buildscript.repositories.all(redirectCentral)
+    project.repositories.all(redirectCentral)
+}
