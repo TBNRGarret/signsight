@@ -16,6 +16,7 @@ extension _MapScreen on _UserShellState {
               signs: signs,
               selectedSignId: selected?.id,
               route: c.route?.geometry ?? const [],
+              routeFitRevision: c.routeFitRevision,
               onSign: c.selectSign,
               onIdle: (point) {
                 if ((point.latitude - c.center.latitude).abs() > .0001 ||
@@ -177,6 +178,17 @@ extension _MapScreen on _UserShellState {
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  if (c.route != null)
+                                    TextButton.icon(
+                                      onPressed: () {
+                                        c.selectSign(null);
+                                        c.showRoute();
+                                      },
+                                      icon: const Icon(Icons.route),
+                                      label: const Text(
+                                        'Quay lại tuyến đã chọn',
+                                      ),
+                                    ),
                                   Row(
                                     children: [
                                       Expanded(
@@ -217,41 +229,7 @@ extension _MapScreen on _UserShellState {
                                 ],
                               )
                             : c.route != null
-                            ? Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          '${(c.route!.distance / 1000).toStringAsFixed(1)} km · ${(c.route!.duration / 60).ceil()} phút',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleMedium,
-                                        ),
-                                        Text(
-                                          '${c.route!.signs.length} biển gần tuyến · hành lang ${c.corridor} m',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  IconButton(
-                                    tooltip: 'Danh sách biển trên tuyến',
-                                    onPressed: _signList,
-                                    icon: const Icon(Icons.list),
-                                  ),
-                                  IconButton(
-                                    tooltip: 'Xóa tuyến',
-                                    onPressed: c.clearRoute,
-                                    icon: const Icon(Icons.close),
-                                  ),
-                                ],
-                              )
+                            ? _routeSummary(context)
                             : Row(
                                 children: [
                                   Expanded(
@@ -305,4 +283,86 @@ extension _MapScreen on _UserShellState {
       ],
     );
   }
+
+  Widget _routeSummary(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          const Icon(Icons.directions_car, size: 28),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              c.routeDestination == null
+                  ? 'Tuyến đã chọn'
+                  : 'Đến ${c.routeDestination!.name}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          IconButton(
+            tooltip: 'Xóa tuyến',
+            onPressed: c.clearRoute,
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+      Text(
+        '${(c.route!.distance / 1000).toStringAsFixed(1)} km · ${(c.route!.duration / 60).ceil()} phút',
+        style: Theme.of(context).textTheme.titleMedium,
+      ),
+      const SizedBox(height: 6),
+      const Wrap(
+        spacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text('A · Xuất phát'),
+          Icon(Icons.arrow_forward, size: 16),
+          Text('B · Điểm đến'),
+        ],
+      ),
+      Text(
+        '${c.route!.signs.length} biển gần tuyến · hành lang ${c.routeAppliedCorridor ?? c.corridor} m',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      Text(
+        'Biển quanh điểm xem: ${c.radius} m',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      if (c.routeSignsBusy) ...[
+        const SizedBox(height: 8),
+        const LinearProgressIndicator(),
+        const Text('Đang cập nhật biển trên tuyến…'),
+      ],
+      if (c.routeSignsError != null) ...[
+        Text(
+          'Chưa cập nhật hành lang ${c.corridor} m: ${c.routeSignsError}',
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
+        ),
+        TextButton(
+          onPressed: c.refreshRouteSigns,
+          child: const Text('Thử lại biển trên tuyến'),
+        ),
+      ],
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          OutlinedButton.icon(
+            onPressed: c.showRoute,
+            icon: const Icon(Icons.zoom_out_map),
+            label: const Text('Xem toàn tuyến'),
+          ),
+          TextButton.icon(
+            onPressed: _signList,
+            icon: const Icon(Icons.list),
+            label: const Text('Biển trên tuyến'),
+          ),
+        ],
+      ),
+    ],
+  );
 }

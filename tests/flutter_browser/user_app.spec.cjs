@@ -23,6 +23,51 @@ async function registerAndLogin(page){
  await expect(page.getByRole('button',{name:'Danh sách biển',exact:true})).toBeVisible();
 }
 
+test('changing sign scope keeps the selected route and endpoints',async({page},testInfo)=>{
+ await page.emulateMedia({colorScheme:testInfo.project.name==='phone'?'dark':'light'});
+ await registerAndLogin(page);
+ const geometry=[{latitude:10.7769,longitude:106.7009},{latitude:10.7769,longitude:106.706},
+  {latitude:10.78,longitude:106.706},{latitude:10.78,longitude:106.71}];
+ let drivingRequests=0,scopeBody;
+ await page.route('**/api/v1/places/search?*',route=>route.fulfill({json:{items:[
+  {id:'destination',name:'Bến Bạch Đằng',latitude:10.78,longitude:106.71}]}}));
+ await page.route('**/api/v1/navigation/route',route=>{
+  drivingRequests++;return route.fulfill({json:{geometry,signs:[],distance_meters:1200,duration_seconds:180,buffer_meters:50}});
+ });
+ await page.route('**/api/v1/navigation/route-signs',async route=>{
+  scopeBody=route.request().postDataJSON();await route.continue();
+ });
+ // Inline semantics refresh can remove autocapitalize on an active editor.
+ // Verify the real submitted query instead of using the modal-input marker.
+ const searchField=page.getByRole('textbox',{name:'Bạn muốn đi đâu?',exact:true});
+ await searchField.click();await expect(searchField).toBeFocused();
+ await searchField.fill('Bach Dang');await expect(searchField).toHaveValue('Bach Dang');
+ const searched=page.waitForRequest(r=>r.url().includes('/places/search?'));
+ await page.getByRole('button',{name:'Tìm điểm đến',exact:true}).click();
+ expect(new URL((await searched).url()).searchParams.get('q')).toBe('Bach Dang');
+ await page.getByText('Bến Bạch Đằng',{exact:true}).click();
+ await expect(page.getByText('Đến Bến Bạch Đằng',{exact:true})).toBeVisible();
+ await expect(page.getByText('1.2 km · 3 phút',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Phạm vi tìm biển',exact:true}).click();
+ await page.getByRole('button',{name:/500 m/}).click();
+ await page.getByRole('menuitem',{name:'1000 m',exact:true}).click();
+ await page.getByRole('button',{name:/50 m/}).click();
+ await page.getByRole('menuitem',{name:'100 m',exact:true}).click();
+ const refreshed=page.waitForResponse(r=>r.request().method()==='POST'&&r.url().endsWith('/navigation/route-signs'));
+ await page.getByRole('button',{name:'Áp dụng',exact:true}).click();
+ expect((await refreshed).status()).toBe(200);
+ await expect(page.getByText('Đến Bến Bạch Đằng',{exact:true})).toBeVisible();
+ await expect(page.getByText('Biển quanh điểm xem: 1000 m',{exact:true})).toBeVisible();
+ await expect(page.getByText(/biển gần tuyến · hành lang 100 m/)).toBeVisible();
+ expect(scopeBody).toEqual({waypoints:geometry,buffer_meters:100});expect(drivingRequests).toBe(1);
+ await page.getByRole('button',{name:'Xem toàn tuyến',exact:true}).click();
+ await expect(page.getByText('Không thể cập nhật bản đồ. Thử tải lại.',{exact:true})).toHaveCount(0);
+ if(process.env.SIGNSIGHT_SCREENSHOT_DIR){
+  const fs=require('node:fs');fs.mkdirSync(process.env.SIGNSIGHT_SCREENSHOT_DIR,{recursive:true});
+  await page.screenshot({path:path.join(process.env.SIGNSIGHT_SCREENSHOT_DIR,'route-scope-'+testInfo.project.name+'.png')});
+ }
+});
+
 test('compact guest shell requires login for contribution',async({page})=>{
  await open(page);
  await expect(page.getByRole('region',{name:'Map',exact:true})).toBeVisible();

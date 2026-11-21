@@ -17,6 +17,7 @@ class MapScene {
     this.onSign,
     this.pinOnly = false,
     this.selectedSignId,
+    this.routeFitRevision = 0,
   });
   final GeoPoint center;
   final List<Sign> signs;
@@ -26,6 +27,7 @@ class MapScene {
   final ValueChanged<Sign>? onSign;
   final bool pinOnly;
   final String? selectedSignId;
+  final int routeFitRevision;
 }
 
 typedef MapBuilder = Widget Function(BuildContext context, MapScene scene);
@@ -52,6 +54,14 @@ class _SignMapState extends State<SignMap> {
   final _icons = <String>{};
   bool _pinSourceAdded = false;
   String _style = '';
+  List<GeoPoint>? _drawnRoute;
+  int? _lastFitRevision;
+  bool _samePoint(GeoPoint a, GeoPoint b) =>
+      a.latitude == b.latitude && a.longitude == b.longitude;
+  bool _sameRoute(List<GeoPoint>? a, List<GeoPoint> b) =>
+      a != null &&
+      a.length == b.length &&
+      Iterable<int>.generate(b.length).every((i) => _samePoint(a[i], b[i]));
   LatLng point(GeoPoint p) => LatLng(p.latitude, p.longitude);
   @override
   void didChangeDependencies() {
@@ -91,6 +101,7 @@ class _SignMapState extends State<SignMap> {
     final current = _controller?.cameraPosition?.target;
     final wanted = widget.scene.center;
     if (current != null &&
+        !_samePoint(old.scene.center, wanted) &&
         ((current.latitude - wanted.latitude).abs() > 0.00001 ||
             (current.longitude - wanted.longitude).abs() > 0.00001)) {
       unawaited(
@@ -155,20 +166,65 @@ class _SignMapState extends State<SignMap> {
         }
         await controller.clearCircles();
         await controller.clearSymbols();
-        await controller.clearLines();
         await controller.setSymbolIconAllowOverlap(true);
         final catalog = await SignIconCatalog.load();
         if (!mounted || generation != _generation || !_loaded) return;
         final selectedColor =
             '#${Theme.of(context).colorScheme.primary.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
+        if (!_sameRoute(_drawnRoute, scene.route)) {
+          _drawnRoute = null;
+          await controller.clearLines();
+          if (!mounted || generation != _generation || !_loaded) return;
+          if (scene.route.length > 1) {
+            final path = scene.route.map(point).toList();
+            await controller.addLine(
+              LineOptions(geometry: path, lineColor: '#ffffff', lineWidth: 11),
+            );
+            if (!mounted || generation != _generation || !_loaded) return;
+            await controller.addLine(
+              LineOptions(geometry: path, lineColor: '#2563eb', lineWidth: 7),
+            );
+            if (!mounted || generation != _generation || !_loaded) return;
+          }
+          _drawnRoute = List.of(scene.route);
+        }
         if (scene.route.length > 1) {
-          await controller.addLine(
-            LineOptions(
-              geometry: scene.route.map(point).toList(),
-              lineColor: '#2563eb',
-              lineWidth: 5,
-            ),
-          );
+          for (final endpoint in [
+            (scene.route.first, '#15803d', 'A'),
+            (scene.route.last, '#dc2626', 'B'),
+          ]) {
+            await controller.addCircle(
+              CircleOptions(
+                geometry: point(endpoint.$1),
+                circleRadius: 9,
+                circleColor: endpoint.$2,
+                circleStrokeColor: '#ffffff',
+                circleStrokeWidth: 3,
+              ),
+            );
+            final marker = 'route-endpoint-${endpoint.$3}';
+            if (!_icons.contains(marker)) {
+              await controller.addImage(
+                marker,
+                await renderRouteEndpoint(
+                  endpoint.$3,
+                  Color(
+                    0xff000000 | int.parse(endpoint.$2.substring(1), radix: 16),
+                  ),
+                ),
+              );
+              if (!mounted || generation != _generation || !_loaded) return;
+              _icons.add(marker);
+            }
+            await controller.addSymbol(
+              SymbolOptions(
+                geometry: point(endpoint.$1),
+                iconImage: marker,
+                iconSize: 1,
+              ),
+            );
+            if (!mounted || generation != _generation || !_loaded) return;
+          }
         }
         for (final sign in scene.signs) {
           if (!mounted || generation != _generation) return;
@@ -230,6 +286,36 @@ class _SignMapState extends State<SignMap> {
             ),
           );
         }
+        if (mounted &&
+            generation == _generation &&
+            scene.route.length > 1 &&
+            _lastFitRevision != scene.routeFitRevision) {
+          var minLat = scene.route.first.latitude, maxLat = minLat;
+          var minLon = scene.route.first.longitude, maxLon = minLon;
+          for (final p in scene.route) {
+            if (p.latitude < minLat) minLat = p.latitude;
+            if (p.latitude > maxLat) maxLat = p.latitude;
+            if (p.longitude < minLon) minLon = p.longitude;
+            if (p.longitude > maxLon) maxLon = p.longitude;
+          }
+          // Claim the fit before awaiting: camera idle can rebuild the scene
+          // while the animation is in flight, without requesting another fit.
+          _lastFitRevision = scene.routeFitRevision;
+          await controller.animateCamera(
+            CameraUpdate.newLatLngBounds(
+              LatLngBounds(
+                southwest: LatLng(minLat, minLon),
+                northeast: LatLng(maxLat, maxLon),
+              ),
+              left: 32,
+              right: 32,
+              top: 100,
+              bottom: (MediaQuery.sizeOf(context).height * .4 + 24)
+                  .clamp(144, 360)
+                  .toDouble(),
+            ),
+          );
+        }
       } catch (_) {
         if (mounted && generation == _generation) {
           setState(() => _error = 'Không thể cập nhật bản đồ. Thử tải lại.');
@@ -286,6 +372,7 @@ class _SignMapState extends State<SignMap> {
           if (!mounted) return;
           _loaded = true;
           _pinSourceAdded = false;
+          _drawnRoute = null;
           _icons.clear();
           if (!widget.scene.pinOnly) {
             unawaited(
@@ -331,6 +418,8 @@ class _SignMapState extends State<SignMap> {
                         setState(() {
                           _loaded = false;
                           _controller = null;
+                          _drawnRoute = null;
+                          _lastFitRevision = null;
                           _error = null;
                           _instance++;
                         });

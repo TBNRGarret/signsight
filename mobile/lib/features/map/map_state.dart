@@ -40,6 +40,12 @@ class _MapState {
   int radius = 500;
   List<Place> places = [];
   DrivingRoute? route;
+  Place? routeDestination;
+  GeoPoint? routeOrigin;
+  int? routeAppliedCorridor;
+  bool routeSignsBusy = false;
+  String? routeSignsError;
+  int routeSignsVersion = 0, routeFitRevision = 0;
   Sign? selectedSign;
   int corridor = 50;
   _NearbyJob? nearbyJob;
@@ -188,10 +194,20 @@ extension _MapActions on AppController {
     mapError = null;
     places = [];
     route = null;
+    _resetRouteDetails();
+    final origin = center, buffer = corridor;
+    _mapState.routeOrigin = origin;
+    _mapState.routeDestination = place;
     _notify();
     try {
-      final result = await api.route(center, place.point, buffer: corridor);
-      if (_current(version) && operation == _mapVersion) route = result;
+      final result = await api.route(origin, place.point, buffer: buffer);
+      if (_current(version) && operation == _mapVersion) {
+        route = result;
+        _mapState.routeAppliedCorridor = buffer;
+        _mapState.routeFitRevision++;
+        _notify();
+        if (corridor != buffer) await _actionRefreshRouteSigns();
+      }
     } catch (error) {
       if (operation == _mapVersion) {
         await _failure(error, version, (m) => mapError = m);
@@ -207,8 +223,75 @@ extension _MapActions on AppController {
   void _actionClearRoute() {
     _mapVersion++;
     route = null;
+    _resetRouteDetails();
     places = [];
     mapBusy = false;
+    _notify();
+  }
+
+  void _resetRouteDetails() {
+    _mapState.routeSignsVersion++;
+    _mapState.routeSignsBusy = false;
+    _mapState.routeSignsError = null;
+    _mapState.routeAppliedCorridor = null;
+    _mapState.routeOrigin = null;
+    _mapState.routeDestination = null;
+  }
+
+  Future<void> _actionChangeMapScope({
+    required int radius,
+    required int corridor,
+  }) async {
+    if (!signedIn) return;
+    if (![100, 300, 500, 1000].contains(radius) ||
+        ![20, 50, 100].contains(corridor)) {
+      throw ArgumentError('Invalid sign search scope');
+    }
+    final nearChanged = radius != this.radius,
+        corridorChanged = corridor != this.corridor;
+    this.radius = radius;
+    this.corridor = corridor;
+    _notify();
+    await Future.wait([
+      if (nearChanged) _actionRefreshNearby(),
+      if (corridorChanged && route != null) _actionRefreshRouteSigns(),
+    ]);
+  }
+
+  Future<void> _actionRefreshRouteSigns() async {
+    final snapshot = route;
+    if (!signedIn || snapshot == null || snapshot.geometry.length < 2) return;
+    final auth = _authVersion,
+        operation = ++_mapState.routeSignsVersion,
+        buffer = corridor;
+    bool owns() =>
+        _current(auth) &&
+        operation == _mapState.routeSignsVersion &&
+        identical(route, snapshot);
+    _mapState.routeSignsBusy = true;
+    _mapState.routeSignsError = null;
+    _notify();
+    try {
+      final signs = await api.routeSigns(snapshot.geometry, buffer: buffer);
+      if (owns()) {
+        route = snapshot.withSigns(signs);
+        _mapState.routeAppliedCorridor = buffer;
+      }
+    } catch (error) {
+      if (owns()) {
+        await _failure(error, auth, (m) => _mapState.routeSignsError = m);
+      }
+    } finally {
+      if (_current(auth) && operation == _mapState.routeSignsVersion) {
+        _mapState.routeSignsBusy = false;
+        _notify();
+      }
+    }
+  }
+
+  void _actionShowRoute() {
+    if (route == null || route!.geometry.length < 2) return;
+    _mapState.routeFitRevision++;
     _notify();
   }
 

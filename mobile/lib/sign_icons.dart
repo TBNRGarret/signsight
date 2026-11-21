@@ -84,3 +84,45 @@ Future<Uint8List> renderConfirmationBadge() async {
   picture.dispose();
   return bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes);
 }
+
+/// Route labels are local bitmaps, so A/B do not require remote map glyphs.
+final _routeEndpointImages = <String, Uint8List>{};
+Future<Uint8List> renderRouteEndpoint(String label, Color color) async {
+  final key = '$label:${color.toARGB32()}';
+  final cached = _routeEndpointImages[key];
+  if (cached != null) return cached;
+  final bytes = await _renderRouteEndpoint(label, color);
+  _routeEndpointImages[key] = bytes;
+  return bytes;
+}
+
+Future<Uint8List> _renderRouteEndpoint(String label, Color color) async {
+  final recorder = ui.PictureRecorder();
+  // Use one recorder for the complete marker, including its contrast ring.
+  final markerCanvas = Canvas(recorder);
+  markerCanvas.drawCircle(
+    const Offset(16, 16),
+    16,
+    Paint()..color = const Color(0xffffffff),
+  );
+  markerCanvas.drawCircle(const Offset(16, 16), 13, Paint()..color = color);
+  final text = TextPainter(
+    text: TextSpan(
+      text: label,
+      style: const TextStyle(
+        color: Color(0xffffffff),
+        fontSize: 18,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+    textDirection: TextDirection.ltr,
+  )..layout();
+  text.paint(markerCanvas, Offset(16 - text.width / 2, 16 - text.height / 2));
+  final picture = recorder.endRecording(),
+      image = await picture.toImage(32, 32);
+  final bytes = (await image.toByteData(format: ui.ImageByteFormat.png))!;
+  image.dispose();
+  picture.dispose();
+  text.dispose();
+  return bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes);
+}

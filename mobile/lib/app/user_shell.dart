@@ -292,16 +292,15 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Biển gần tuyến có thể thuộc chiều đường khác. Chọn lại điểm đến để áp dụng hành lang mới.',
+                'Đổi phạm vi sẽ cập nhật biển và giữ nguyên tuyến đã chọn. Biển gần tuyến có thể thuộc chiều đường khác.',
               ),
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: () {
-                  c.radius = radius;
-                  c.corridor = corridor;
                   Navigator.pop(context);
-                  c.clearRoute();
-                  unawaited(c.refreshNearby());
+                  unawaited(
+                    c.changeMapScope(radius: radius, corridor: corridor),
+                  );
                 },
                 child: const Text('Áp dụng'),
               ),

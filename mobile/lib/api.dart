@@ -203,6 +203,23 @@ class SignSightApi {
       ),
     ),
   );
+  Future<List<Sign>> routeSigns(
+    List<GeoPoint> geometry, {
+    required int buffer,
+  }) async {
+    final response = jsonMap(
+      await _json(
+        'POST',
+        '/navigation/route-signs',
+        body: {
+          'waypoints': geometry.map((p) => p.toJson()).toList(),
+          'buffer_meters': buffer,
+        },
+      ),
+    );
+    return DrivingRoute.decodeSigns(response['signs'] as List);
+  }
+
   Future<UploadedPhoto> upload(
     Uint8List bytes,
     String name, {

@@ -111,15 +111,18 @@ class DrivingRoute {
   final List<GeoPoint> geometry;
   final List<Sign> signs;
   final double distance, duration;
+  DrivingRoute withSigns(List<Sign> value) =>
+      DrivingRoute(geometry, value, distance, duration);
+  static List<Sign> decodeSigns(List<dynamic> values) => values.map((v) {
+    final r = jsonMap(v);
+    return Sign.fromJson(
+      jsonMap(r['sign']),
+      distance: number(r['distance_along_route_meters'] ?? 0),
+    );
+  }).toList();
   factory DrivingRoute.fromJson(Map<String, dynamic> j) => DrivingRoute(
     (j['geometry'] as List).map((p) => GeoPoint.fromJson(jsonMap(p))).toList(),
-    (j['signs'] as List).map((v) {
-      final r = jsonMap(v);
-      return Sign.fromJson(
-        jsonMap(r['sign']),
-        distance: number(r['distance_along_route_meters'] ?? 0),
-      );
-    }).toList(),
+    decodeSigns(j['signs'] as List),
     number(j['distance_meters']),
     number(j['duration_seconds']),
   );

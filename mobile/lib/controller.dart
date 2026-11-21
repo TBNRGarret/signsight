@@ -63,6 +63,12 @@ class AppController extends ChangeNotifier {
   set places(List<Place> value) => _mapState.places = value;
   DrivingRoute? get route => _mapState.route;
   set route(DrivingRoute? value) => _mapState.route = value;
+  Place? get routeDestination => _mapState.routeDestination;
+  GeoPoint? get routeOrigin => _mapState.routeOrigin;
+  int? get routeAppliedCorridor => _mapState.routeAppliedCorridor;
+  bool get routeSignsBusy => _mapState.routeSignsBusy;
+  String? get routeSignsError => _mapState.routeSignsError;
+  int get routeFitRevision => _mapState.routeFitRevision;
   Sign? get selectedSign => _mapState.selectedSign;
   set selectedSign(Sign? value) => _mapState.selectedSign = value;
   int get corridor => _mapState.corridor;
@@ -173,6 +179,7 @@ class AppController extends ChangeNotifier {
     _mapState.loadedNearby = null;
     places = [];
     route = null;
+    _resetRouteDetails();
     selectedSign = null;
     contributions = [];
     historyTotal = 0;
@@ -335,6 +342,10 @@ class AppController extends ChangeNotifier {
   void moveCenter(GeoPoint point) => _actionMoveCenter(point);
   Future<void> search(String query) => _actionSearch(query);
   Future<void> routeTo(Place place) => _actionRouteTo(place);
+  Future<void> changeMapScope({required int radius, required int corridor}) =>
+      _actionChangeMapScope(radius: radius, corridor: corridor);
+  Future<void> refreshRouteSigns() => _actionRefreshRouteSigns();
+  void showRoute() => _actionShowRoute();
   void clearRoute() => _actionClearRoute();
   void selectSign(Sign? sign) => _actionSelectSign(sign);
   Future<void> openSign(String id) => _actionOpenSign(id);

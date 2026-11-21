@@ -16,7 +16,9 @@ Khi kéo map hoặc đổi bán kính lúc nearby đang tải, app bỏ kết qu
 
 Một thanh tìm kiếm và một bảng tóm tắt trên bản đồ; không đưa các bảng công việc của staff vào app. Tài khoản và giao diện thiết bị/sáng/tối nằm trong menu góc trên. Lựa chọn theme hiện chỉ áp dụng trong lần mở app.
 
-Tuyến bắt đầu từ **điểm đang xem trên bản đồ**. Dùng nút GPS trước khi tìm tuyến nếu muốn xuất phát từ vị trí hiện tại. Nút **Phạm vi tìm biển** chọn bán kính gần điểm 100–1.000 m và hành lang tuyến 20/50/100 m. Sau khi đổi phạm vi, chọn lại điểm đến để dựng tuyến mới. App chưa có dẫn đường từng chặng, theo dõi nền hay cảnh báo giọng nói.
+Tuyến bắt đầu từ **điểm đang xem trên bản đồ**. Dùng nút GPS trước khi tìm tuyến nếu muốn xuất phát từ vị trí hiện tại. Tuyến có viền tương phản, mốc **A** xuất phát / **B** điểm đến, tên điểm đến, quãng đường/thời gian và nút **Xem toàn tuyến**. Map tự đưa toàn tuyến vào khung khi chọn điểm đến; nút xem toàn tuyến giúp quay lại sau khi kéo/zoom.
+
+Nút **Phạm vi tìm biển** chọn bán kính gần điểm 100–1.000 m và hành lang tuyến 20/50/100 m. Đổi bán kính chỉ tải lại biển quanh điểm xem; đổi hành lang truy vấn lại biển trên đúng geometry đang có. Tuyến, điểm xuất phát/đến và quãng đường/thời gian được giữ nguyên, kể cả sau khi kéo map. Lỗi tải biển hiển thị nút thử lại cùng hành lang thực sự đã tải; phản hồi cũ không ghi đè phạm vi mới. Chỉ **Xóa tuyến** mới bỏ lựa chọn trong luồng này. App chưa có dẫn đường từng chặng, theo dõi nền hay cảnh báo giọng nói.
 
 User phải xác nhận nhãn và vị trí; tọa độ GPS/EXIF chỉ gợi ý. Ảnh thiếu GPS vẫn đặt ghim được. Khi detect lỗi, thử lại dùng ảnh đã lưu, không upload trùng. Sau khi gửi thành công, user xem trạng thái trong **Của tôi**; bản đồ chỉ hiện biển sau khi staff duyệt.
 
