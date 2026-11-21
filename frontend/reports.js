@@ -65,7 +65,7 @@
       const version=epoch,generation=++selectGeneration;
       $('selected-sign').hidden=false;$('selected-title').textContent='Đang tải biển…';$('selected-meta').replaceChildren();
       $('selected-evidence').replaceChildren();$('report-form').hidden=true;status('');
-      $('selected-sign').scrollIntoView({behavior:'smooth',block:'start'});
+      if(!staff())$('selected-sign').scrollIntoView({behavior:'smooth',block:'start'});
       try{
         const detail=await api.request(`/signs/${encodeURIComponent(signId)}`);
         if(version!==epoch||generation!==selectGeneration)return;
@@ -79,7 +79,7 @@
         $('selected-evidence-button').hidden=!detail.evidence.length;
         $('report-form').hidden=staff()||Boolean(sign.merged_into_id)||sign.status==='removed';
         if(sign.merged_into_id)$('selected-meta').append(node('p','Biển này đã được gộp vào bản ghi khác; hãy báo cáo trên biển hiện tại.'));
-        showActionFields();map.flyTo([sign.latitude,sign.longitude],Math.max(map.getZoom(),17));
+        showActionFields();map.flyTo([sign.latitude,sign.longitude],Math.max(map.getZoom(),17),staff()?{duration:0}:{});
         $('report-class').disabled=true;$('report-class').replaceChildren();
         if(!staff()){
           try{

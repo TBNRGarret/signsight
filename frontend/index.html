@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SignSight - Nền Tảng Bản Đồ & Quản Lý Biển Báo Giao Thông Việt Nam</title>
   <script src="shared/theme.js?v=20261023-icons"></script>
-  <link rel="stylesheet" href="shared/sign_icons.css?v=20261109">
+  <link rel="stylesheet" href="shared/sign_icons.css?v=20261121-staff-inspection">
   <link rel="stylesheet" href="vendor/maplibre/maplibre-gl.css?v=6.15.0" integrity="sha256-qQeYoZUwF3kOWQ9+G9Nf8QOopCY5cstHKQt4rfhvjCA=" />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -367,17 +367,18 @@
   <script src="shared/sign_registry.js?v=20261109"></script>
   <script src="shared/sign_icons.js?v=20261109"></script>
   <script src="shared/sign_popup.js?v=20261109"></script>
-  <script src="map.js?v=20261109-icons"></script>
+  <script src="map.js?v=20261121-staff-inspection"></script>
   <script src="shared/auth.js?v=20261020-remember"></script>
   <script src="shared/catalog.js?v=20261030"></script>
   <script src="routing.js?v=20261115-scope"></script>
-  <script src="reports.js"></script>
+  <script src="reports.js?v=20261121-staff-inspection"></script>
   <script src="shared/sign_link.js?v=20261021"></script>
   <script>
     const { map } = window.signSightMap.mount({document});
 
     let markers = [];
     let markerCache = new Map();
+    let staffSelectedSign = null;
     let selectedCoords = [10.7769, 106.7009];
     let nearbyMapSigns = [], routeMapSigns = [], loadedMapScope = null;
 
@@ -419,6 +420,14 @@
     window.signSightSignLink.mount({
       api,environment:window,selectSign:id=>signReports.select(id),
       createMarker:sign=>{
+        if(staffInspection()){
+          staffSelectedSign=sign;
+          setOrigin(sign.latitude,sign.longitude);
+          renderScopedSigns();
+          return {remove(){
+            if(staffSelectedSign===sign){staffSelectedSign=null;renderScopedSigns();}
+          }};
+        }
         setOrigin(sign.latitude,sign.longitude);
         return map.addMarker([sign.latitude,sign.longitude],{radius:13,color:'#2563eb',highlight:true,label:'Biển từ đóng góp'});
       },
@@ -450,6 +459,7 @@
       map.closePopup();
       markers.forEach(marker => map.removeLayer(marker)); markers = [];
       markerCache.clear();
+      staffSelectedSign = null;
       nearbyMapSigns = []; routeMapSigns = []; loadedMapScope = null;
       document.getElementById('sign-list').replaceChildren();
       for (const id of ['stat-total', 'stat-active', 'stat-dup']) document.getElementById(id).textContent = '0';
@@ -524,13 +534,20 @@
       const inScope=window.signSightRouting.visibleSigns({nearby:nearbyMapSigns,route:routeMapSigns,
         center:selectedCoords,radius:Number(document.getElementById('nearby-radius').value)});
       const signs=inScope.filter(s=>(!classId||s.predicted_class===Number(classId))&&(!status||s.status===status));
+      // A record explicitly opened for staff inspection remains visible even
+      // when the user map's default status/radius would exclude it.
+      if(staffInspection()&&staffSelectedSign){
+        const index=signs.findIndex(s=>s.id===staffSelectedSign.id);
+        if(index<0)signs.push(staffSelectedSign);else signs[index]=staffSelectedSign;
+      }
       const next=new Map();
       for(const s of signs){
-        const signature=JSON.stringify(s),previous=markerCache.get(s.id);
+        const selected=staffSelectedSign?.id===s.id;
+        const signature=JSON.stringify([s,selected]),previous=markerCache.get(s.id);
         if(previous?.signature===signature){next.set(s.id,previous);continue;}
         if(previous)map.removeLayer(previous.marker);
         next.set(s.id,{signature,marker:map.addMarker([s.latitude,s.longitude],{
-          sign:s,radius:10,color:markerColor(s),label:s.qcvn_code+' · '+s.name_vi,popup:()=>popupFor(s)
+          sign:s,selected,radius:10,color:markerColor(s),label:s.qcvn_code+' · '+s.name_vi,popup:()=>popupFor(s)
         })});
       }
       for(const [id,entry] of markerCache)if(!next.has(id))map.removeLayer(entry.marker);

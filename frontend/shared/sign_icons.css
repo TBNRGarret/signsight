@@ -2,6 +2,7 @@
 .sign-marker-image{display:block;width:36px;height:36px;object-fit:contain;pointer-events:none}
 .sign-marker-revalidation{position:absolute;right:-4px;top:-5px;display:grid;place-items:center;width:20px;height:20px;background:#ffc85b;color:#422f00;border-radius:50%;font-weight:700;font-size:13px;pointer-events:none}
 .sign-map-icon-marker:focus-visible{outline:3px solid var(--primary);outline-offset:3px}
+.sign-map-icon-marker.sign-map-selected{z-index:1;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary),0 3px 6px #0002}
 .sign-popup-heading{display:flex;gap:12px;align-items:center;margin-bottom:10px}
 .sign-popup-icon{width:44px;height:44px;object-fit:contain;flex:none}
 .sign-popup-titles{min-width:0;overflow-wrap:anywhere}

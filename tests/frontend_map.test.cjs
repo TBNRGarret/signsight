@@ -51,6 +51,11 @@ test('style changes preserve markers, restore pending route geometry and never r
  a.map.removeLayer(route);assert.equal(a.routes.size,0);a.elements['map-source'].value='bright';a.elements['map-source'].onchange();a.ready();
  assert.equal(a.routes.size,0,'removed/private routes must not reappear on a style reload');
 });
+
+test('staff record inspection can move to distant coordinates without a long camera flight',()=>{
+ const a=setup();a.map.flyTo([21.03,105.8],17,{duration:0});
+ assert.deepEqual(a.views.at(-1),{center:[105.8,21.03],zoom:17,duration:0});
+});
 test('only allowlisted OFM styles can be saved and disabled browser storage remains usable',()=>{
  const store=new Map(),a=setup(store);a.elements['map-source'].value='bright';a.elements['map-source'].onchange();
  assert.match(setup(store).config.style,/styles\/bright$/);

@@ -30,7 +30,7 @@
   const map={
    native,enabled:!!native,
    on(name,fn){native?.on(name,name==='click'?event=>fn({...event,latlng:{lat:event.lngLat.lat,lng:event.lngLat.lng}}):fn);return map;},
-   flyTo(point,zoom){native?.flyTo({center:position(point),zoom});return map;},
+   flyTo(point,zoom,options={}){native?.flyTo({...options,center:position(point),zoom});return map;},
    getZoom:()=>native?.getZoom()??15,
    getBounds:()=>native?.getBounds()??{getSouth:()=>10.7769,getNorth:()=>10.7769,getWest:()=>106.7009,getEast:()=>106.7009},
    invalidateSize(){native?.resize();},
@@ -42,7 +42,8 @@
     const element=document.createElement('button');element.type='button';element.className='sign-map-marker';
     element.style.setProperty?.('--marker-color',options.fillColor||options.color||'#2563eb');
     element.style.width=element.style.height=((options.radius||9)*2)+'px';
-    if(options.sign){element.style.width=element.style.height='48px';signIcons.decorate(element,options.sign,document);}
+    if(options.sign){element.style.width=element.style.height='48px';signIcons.decorate(element,options.sign,document);element.setAttribute('data-sign-id',options.sign.id);}
+    if(options.selected)element.className+=' sign-map-selected';
     element.setAttribute('aria-label',options.label||'Vị trí biển báo');
     if(options.highlight){element.className+=' sign-map-highlight';element.tabIndex=-1;element.setAttribute('aria-hidden','true');}
     const marker=new maplibregl.Marker({element,draggable:!!options.draggable}).setLngLat(position(point)).addTo(native);
