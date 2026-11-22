@@ -162,6 +162,9 @@ def test_car35_notebook_runs_standalone_on_prepared_zip(tmp_path,monkeypatch,sta
         exec(cells['eda'],context)
     exec(cells['export'],context)
     assert context['RESULT_ZIP'].is_file()
+    with ZipFile(context['RESULT_ZIP']) as exported:
+        receipt = 'run/source_archive_verification.json' if stage=='train' else 'source_archive_verification.json'
+        assert receipt in exported.namelist()
     assert hashlib.sha256((context['DATASET_ROOT']/'manifest.json').read_bytes()).hexdigest()==manifest_sha
 
 

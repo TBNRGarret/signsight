@@ -40,7 +40,10 @@ subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-q', *packages])
 '''),_cell('markdown','config-guide','''## 1. Cấu hình
 
 Upload ZIP CAR35 đã được cung cấp lên Drive, chia sẻ file cho phép tải bằng link, rồi dán link vào SOURCE_URL.
-Giữ nguyên hai checksum để khóa đúng dữ liệu. Runtime/tài khoản mới chỉ cần notebook và link ZIP; gdown sẽ tải lại.
+Giữ nguyên checksum đã ghim. Runtime/tài khoản mới chỉ cần notebook và link ZIP; gdown sẽ tải lại.
+ALLOW_REPACKED_SOURCE=True cho phép ZIP V4 nén lại khi manifest khớp chính xác bản đã ghim.
+Toàn bộ ảnh/nhãn vẫn phải vượt qua kiểm tra hash, inventory, lớp và split trước khi train.
+Nếu manifest khác, notebook dừng và in hash thực tế; không tự nhận một dataset lạ.
 APPLY_REVIEWED_PATCH=True mặc định: thêm PATCH_URL là link ZIP patch nhỏ. False dùng baseline V4.
 Checksum patch và manifest revision được điền sẵn; không đổi chúng cho một file khác.
 V4 được giải nén một lần vào staging rồi sửa nhãn trên bản mới; không đổi ảnh, nhóm hay split.
@@ -56,6 +59,7 @@ os.environ['YOLO_CONFIG_DIR'] = str(WORK / '.ultralytics')
 SOURCE_URL = ''  # Dán link file ZIP CAR35 trên Drive, không phải folder
 DATASET_SHA256 = {handoff['zip_sha256']!r}
 EXPECTED_MANIFEST_SHA256 = {handoff['manifest_sha256']!r}
+ALLOW_REPACKED_SOURCE = True  # Chỉ chấp nhận nén lại nếu manifest/ảnh/nhãn vẫn đúng bản đã ghim
 APPLY_REVIEWED_PATCH = True  # False chỉ khi cần chạy baseline V4 gốc
 PATCH_URL = ''  # Link ZIP patch R3, không phải dataset ZIP
 PATCH_SHA256 = {review.get('patch_sha256','')!r}
@@ -90,8 +94,8 @@ for name in list(sys.modules):
         del sys.modules[name]
 sys.path.insert(0, str(CODE_ROOT))
 importlib.invalidate_caches()
-from training.data.downloads import download_drive_zip
-from training.data.car35_bundle import restore_car35_bundle, verify_car35
+from training.data.downloads import download_drive_zip, drive_file_id
+from training.data.car35_bundle import restore_car35_bundle, verify_car35, inspect_car35_archive
 from training.data.car35_revision import restore_car35_revision, pack_car35_revision
 from training.experiments.car35 import train_car35, evaluate_car35, export_car35_run
 print('Pipeline:', PIPELINE_ID[:16])
@@ -108,18 +112,27 @@ else:
     assert SOURCE_URL.strip(), 'Điền SOURCE_URL bằng link file ZIP CAR35 trên Drive.'
     if APPLY_REVIEWED_PATCH:
         assert PATCH_URL.strip(), 'Điền PATCH_URL bằng link ZIP patch R3 trước khi tải dataset.'
-    archive = download_drive_zip(SOURCE_URL, WORK / 'downloads' / 'car35_v4.zip', expected_sha256=DATASET_SHA256)
     if APPLY_REVIEWED_PATCH:
-        patch_archive = download_drive_zip(PATCH_URL, WORK / 'downloads' / ('patch_' + PATCH_SHA256[:12] + '.zip'),
+        patch_archive = download_drive_zip(PATCH_URL, WORK / 'downloads' / ('patch_' + drive_file_id(PATCH_URL) + '.zip'),
             expected_sha256=PATCH_SHA256)
+    # Container SHA may differ after repacking. Never trust a downloaded
+    # manifest as a new reference: its independently pinned hash must match.
+    archive = download_drive_zip(SOURCE_URL, WORK / 'downloads' / ('car35_' + drive_file_id(SOURCE_URL) + '.zip'))
+    source_identity = inspect_car35_archive(archive, expected_sha256=DATASET_SHA256,
+        expected_manifest_sha256=EXPECTED_MANIFEST_SHA256, allow_repacked=ALLOW_REPACKED_SOURCE)
+    (WORK / 'source_archive_verification.json').write_text(json.dumps(source_identity, indent=2), encoding='utf-8')
+    print('Source ZIP SHA-256:', source_identity['archive_sha256'])
+    if source_identity['repacked']:
+        print('ZIP khác cách đóng gói; manifest khớp. Tiếp tục kiểm tra toàn bộ ảnh/nhãn trước khi dùng.')
+    if APPLY_REVIEWED_PATCH:
         print('Khôi phục V4, replay patch và kiểm tra revision; không tạo bản sao thứ hai của toàn bộ ảnh...', flush=True)
         dataset_info = restore_car35_revision(archive, patch_archive, DATASET_ROOT,
-            expected_sha256=DATASET_SHA256, expected_source_manifest_sha256=EXPECTED_MANIFEST_SHA256,
+            expected_sha256=source_identity['archive_sha256'], expected_source_manifest_sha256=EXPECTED_MANIFEST_SHA256,
             expected_patch_sha256=PATCH_SHA256, dataset_version=REVISED_DATASET_VERSION,
             expected_manifest_sha256=EXPECTED_REVISED_MANIFEST_SHA256)
     else:
         dataset_info = restore_car35_bundle(archive, DATASET_ROOT,
-            expected_sha256=DATASET_SHA256, expected_manifest_sha256=EXPECTED_MANIFEST_SHA256)
+            expected_sha256=source_identity['archive_sha256'], expected_manifest_sha256=EXPECTED_MANIFEST_SHA256)
 manifest = json.loads((DATASET_ROOT / 'manifest.json').read_text(encoding='utf-8'))
 if APPLY_REVIEWED_PATCH:
     assert manifest.get('dataset_version') == REVISED_DATASET_VERSION
@@ -156,6 +169,8 @@ fig.tight_layout(); fig.savefig(EDA_ROOT / 'class_distribution.png', dpi=150); p
 (EDA_ROOT / 'summary.json').write_text(json.dumps(dataset_info, ensure_ascii=False, indent=2), encoding='utf-8')
 for name in ('manifest.json','data.yaml','report.html','dataset_report.json','README.md'):
     if (DATASET_ROOT / name).is_file(): shutil.copy2(DATASET_ROOT / name, EDA_ROOT / name)
+if (WORK / 'source_archive_verification.json').is_file():
+    shutil.copy2(WORK / 'source_archive_verification.json', EDA_ROOT / 'source_archive_verification.json')
 if (DATASET_ROOT / 'previews').is_dir(): shutil.copytree(DATASET_ROOT / 'previews', EDA_ROOT / 'previews', dirs_exist_ok=True)
 for name in ('v4_manifest.json','label_patch.json'):
     source = DATASET_ROOT / 'provenance' / name
@@ -221,6 +236,8 @@ ZIP gồm best.pt/last.pt, checkpoint định kỳ, plots/results.csv, training_
 Tải ZIP trước khi đóng runtime. Sau khi bạn gửi kết quả, mới rà chất lượng và mapping để tích hợp; notebook không đổi model đang phục vụ.
 '''),_cell('code','export','''from datetime import datetime, timezone
 name = RUN_NAME + '_' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+if RUN_DIR.is_dir() and (WORK / 'source_archive_verification.json').is_file():
+    shutil.copy2(WORK / 'source_archive_verification.json', RUN_DIR / 'source_archive_verification.json')
 RESULT_ZIP = export_car35_run(RUN_DIR, DATASET_ROOT, WORK / (name + '.zip'))
 print('Training result:', RESULT_ZIP)
 if DOWNLOAD_RESULTS:

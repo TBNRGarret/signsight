@@ -14,6 +14,35 @@ import yaml
 from training.data.common import CAR35, SPLITS, digest_file
 
 
+def inspect_car35_archive(archive, *, expected_sha256, expected_manifest_sha256, allow_repacked=False):
+    """Preflight container identity only; restore still verifies every image/label.
+
+    A changed ZIP checksum can mean compression/timestamps changed. Accept that
+    only with explicit opt-in and the exact independently pinned manifest bytes.
+    Never learn a new trusted manifest from the downloaded archive itself.
+    """
+    archive = Path(archive)
+    for label, value in (('archive', expected_sha256), ('manifest', expected_manifest_sha256)):
+        if not isinstance(value, str) or not re.fullmatch('[a-fA-F0-9]{64}', value):
+            raise ValueError(f'CAR35 {label} SHA-256 must be pinned (64 hexadecimal characters)')
+    expected_sha256, expected_manifest_sha256 = expected_sha256.lower(), expected_manifest_sha256.lower()
+    actual = digest_file(archive)
+    repacked = actual != expected_sha256
+    if repacked and not allow_repacked:
+        raise ValueError(f'CAR35 ZIP SHA-256 mismatch for {archive.name}: expected {expected_sha256}; actual {actual}')
+    with zipfile.ZipFile(archive) as source:
+        entries = [m for m in source.infolist() if m.filename.casefold() == 'manifest.json']
+        if len(entries) != 1 or entries[0].filename != 'manifest.json' or entries[0].file_size > 64*1024**2:
+            raise ValueError('Expected a flat prepared CAR35 ZIP with one manifest.json at its root; check SOURCE_URL')
+        manifest_sha = hashlib.sha256(source.read(entries[0])).hexdigest()
+    if manifest_sha != expected_manifest_sha256:
+        raise ValueError(f'CAR35 manifest SHA-256 mismatch for {archive.name}: expected {expected_manifest_sha256}; '
+                         f'actual {manifest_sha}. Check SOURCE_URL: use the prepared V4 ZIP, not raw SupSign, '
+                         'a patch ZIP or a training-results ZIP.')
+    return dict(archive_sha256=actual, expected_archive_sha256=expected_sha256,
+                manifest_sha256=manifest_sha, repacked=repacked)
+
+
 def verify_car35(root, *, expected_manifest_sha256='', workers=8):
     root=Path(root).resolve();manifest_file=root/'manifest.json'
     if expected_manifest_sha256 and digest_file(manifest_file)!=expected_manifest_sha256:

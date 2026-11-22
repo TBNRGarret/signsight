@@ -7,6 +7,10 @@ from urllib.parse import parse_qs, urlparse
 import zipfile
 
 
+class ZipChecksumMismatch(ValueError):
+    """Complete ZIP retained for diagnosis, never published as the expected file."""
+
+
 def drive_file_id(source):
     source = str(source).strip()
     if not source or 'YOUR_' in source or 'PASTE_' in source:
@@ -48,7 +52,9 @@ def download_drive_zip(source, target, *, expected_sha256='', downloader=None):
         if checksum:
             with path.open('rb') as stream:
                 actual = hashlib.file_digest(stream, 'sha256').hexdigest()
-            if actual != checksum: raise ValueError('Downloaded ZIP SHA-256 mismatch')
+            if actual != checksum:
+                raise ZipChecksumMismatch(f'Downloaded ZIP SHA-256 mismatch for {path.name}: '
+                    f'expected {checksum}; actual {actual}. Complete ZIP kept at {path}; check the source link/version.')
 
     known = receipt.exists()
     if known:
@@ -72,6 +78,8 @@ def download_drive_zip(source, target, *, expected_sha256='', downloader=None):
     if staging.exists():
         try:
             validate(staging)
+        except ZipChecksumMismatch:
+            raise
         except ValueError:
             staging.unlink()  # Only the staging file identified by our matching receipt.
     if not staging.exists():
@@ -88,6 +96,8 @@ def download_drive_zip(source, target, *, expected_sha256='', downloader=None):
             raise RuntimeError('Drive returned no download. Check public-link access and download quota.')
     try:
         validate(staging)
+    except ZipChecksumMismatch:
+        raise
     except ValueError:
         staging.unlink(missing_ok=True)
         raise

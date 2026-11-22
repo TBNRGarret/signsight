@@ -89,6 +89,25 @@ def test_changing_source_or_unknown_existing_file_never_overwrites_it(tmp_path):
     assert target.read_bytes() == original
 
 
+def test_checksum_error_identifies_the_file_and_keeps_a_complete_zip_for_diagnosis(tmp_path):
+    content = archive_bytes()
+    actual = hashlib.sha256(content).hexdigest()
+    calls = []
+    def download(**options):
+        calls.append(options)
+        Path(options['output']).write_bytes(content)
+        return options['output']
+    target = tmp_path/'patch_r3.zip'
+    for _ in range(2):
+        with pytest.raises(ValueError, match='SHA-256 mismatch') as error:
+            download_drive_zip(URL, target, expected_sha256='0'*64, downloader=download)
+        assert actual in str(error.value) and '0'*64 in str(error.value)
+        assert 'patch_r3.zip' in str(error.value)
+        assert target.with_name(target.name+'.download').read_bytes() == content
+    assert len(calls) == 1
+    assert not target.exists()
+
+
 @pytest.mark.parametrize('source', ['', 'YOUR_DRIVE_FILE_ID', 'https://example.com/file.zip',
                                   'https://drive.google.com/drive/folders/fixture12345678'])
 def test_invalid_or_folder_source_is_rejected_before_network(tmp_path, source):
