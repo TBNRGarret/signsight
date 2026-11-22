@@ -25,8 +25,9 @@ function app(request) {
   return {api,window,document,elements,context,calls,finish,
     get:id=>document.getElementById(id), run:name=>{if(name==='observations.js')vm.runInContext(read('contribution_history.js'),context);return vm.runInContext(read(name),context);}};
 }
-function mapApp(request) {
+function mapApp(request,{staff=false}={}) {
   const a=app(request), map={on(){},closePopup(){},removeLayer(){},getBounds:()=>({getSouth:()=>10.7,getNorth:()=>10.9,getWest:()=>106.6,getEast:()=>106.8})};
+  if(staff)a.window.location={search:'?staff_view=1&sign=12345678-1234-1234-1234-123456789abc'};
   a.window.signSightMap={mount:()=>({map})};
   a.window.signSightReports={mount:()=>({refreshPin(){},select(){}})};
   a.get('nearby-radius').value='1000';
@@ -42,9 +43,23 @@ test('restored map session enables destination search and loads nearby data with
   a.api.user={id:'u',username:'rider',role:'user'};a.finish();await tick();
   assert.equal(a.get('route-search-button').disabled,false);
   assert.equal(a.get('login-form').hidden,true);
-  assert.ok(a.calls.some(route=>route.startsWith('/map/signs?')));
+  const mapCall=a.calls.find(route=>route.startsWith('/map/signs?'));
+  assert.ok(mapCall);
+  const query=new URLSearchParams(mapCall.split('?')[1]);
+  assert.equal(query.get('min_lat'),'10.7');
+  assert.equal(query.get('radius_meters'),'1000');
+  assert.equal(query.get('latitude'),'10.7769');
   assert.ok(a.calls.some(route=>route.startsWith('/signs/nearby?')));
   assert.match(a.get('sign-list').children[0].textContent,/Chưa có biển được ghi nhận/);
+});
+
+test('staff inspection loads the viewport independently of the hidden user radius',async()=>{
+  const a=mapApp(async()=>page,{staff:true});
+  a.api.user={id:'m',username:'moderator',role:'manager'};a.finish();await tick();
+  const query=new URLSearchParams(a.calls.find(route=>route.startsWith('/map/signs?')).split('?')[1]);
+  assert.equal(query.get('min_lat'),'10.7');
+  assert.equal(query.get('radius_meters'),null);
+  assert.equal(query.get('latitude'),null);
 });
 
 test('logged-out map explains authentication instead of pretending the area has zero signs',async()=>{

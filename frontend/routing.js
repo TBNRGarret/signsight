@@ -14,6 +14,16 @@
     }
     return [...selected.values()];
   }
+  function markersInView({viewport=[],route=[],classId='',status=''}){
+    const selected=new Map();
+    for(const sign of [...viewport,...route]){
+      if(!sign||sign.id==null)continue;
+      if(classId!==''&&classId!=null&&Number(sign.predicted_class)!==Number(classId))continue;
+      if(status&&sign.status!==status)continue;
+      selected.set(sign.id,sign);
+    }
+    return [...selected.values()];
+  }
   class RouteController {
     constructor(api,view){this.api=api;this.view=view;this.generation=0;}
     reset(){this.generation++;this.view.clear();}
@@ -76,6 +86,6 @@
     };
     update();return controller;
   }
-  if(typeof module!=='undefined'&&module.exports)module.exports={RouteController,mount,visibleSigns};
-  else root.signSightRouting={RouteController,mount,visibleSigns};
+  if(typeof module!=='undefined'&&module.exports)module.exports={RouteController,mount,visibleSigns,markersInView};
+  else root.signSightRouting={RouteController,mount,visibleSigns,markersInView};
 })(typeof window==='undefined'?globalThis:window);

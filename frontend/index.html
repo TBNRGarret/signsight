@@ -370,7 +370,7 @@
   <script src="map.js?v=20261121-staff-inspection"></script>
   <script src="shared/auth.js?v=20261020-remember"></script>
   <script src="shared/catalog.js?v=20261030"></script>
-  <script src="routing.js?v=20261115-scope"></script>
+  <script src="routing.js?v=20261121-viewport"></script>
   <script src="reports.js?v=20261121-staff-inspection"></script>
   <script src="shared/sign_link.js?v=20261021"></script>
   <script>
@@ -380,7 +380,7 @@
     let markerCache = new Map();
     let staffSelectedSign = null;
     let selectedCoords = [10.7769, 106.7009];
-    let nearbyMapSigns = [], routeMapSigns = [], loadedMapScope = null;
+    let nearbyMapSigns = [], routeMapSigns = [];
 
     function setOrigin(latitude, longitude) {
       selectedCoords = [latitude, longitude];
@@ -460,7 +460,7 @@
       markers.forEach(marker => map.removeLayer(marker)); markers = [];
       markerCache.clear();
       staffSelectedSign = null;
-      nearbyMapSigns = []; routeMapSigns = []; loadedMapScope = null;
+      nearbyMapSigns = []; routeMapSigns = [];
       document.getElementById('sign-list').replaceChildren();
       for (const id of ['stat-total', 'stat-active', 'stat-dup']) document.getElementById(id).textContent = '0';
       document.getElementById('signs-count-badge').textContent = '0 biển';
@@ -531,11 +531,11 @@
     function renderScopedSigns() {
       if(!api.user)return;
       const classId=document.getElementById('filter-class').value,status=document.getElementById('filter-status').value;
-      const inScope=window.signSightRouting.visibleSigns({nearby:nearbyMapSigns,route:routeMapSigns,
-        center:selectedCoords,radius:Number(document.getElementById('nearby-radius').value)});
-      const signs=inScope.filter(s=>(!classId||s.predicted_class===Number(classId))&&(!status||s.status===status));
+      const candidates=staffInspection()?nearbyMapSigns:window.signSightRouting.visibleSigns({
+        nearby:nearbyMapSigns,route:[],center:selectedCoords,radius:Number(document.getElementById('nearby-radius').value)});
+      const signs=window.signSightRouting.markersInView({viewport:candidates,route:routeMapSigns,classId,status});
       // A record explicitly opened for staff inspection remains visible even
-      // when the user map's default status/radius would exclude it.
+      // when the current class or status filter would exclude it.
       if(staffInspection()&&staffSelectedSign){
         const index=signs.findIndex(s=>s.id===staffSelectedSign.id);
         if(index<0)signs.push(staffSelectedSign);else signs[index]=staffSelectedSign;
@@ -555,7 +555,7 @@
       document.getElementById('stat-total').textContent=signs.length;
       document.getElementById('stat-active').textContent=signs.filter(s=>s.status==='active').length;
       document.getElementById('stat-dup').textContent=signs.filter(needsConfirmation).length;
-      document.getElementById('signs-count-badge').textContent=`${signs.length} biển trong phạm vi / gần tuyến`;
+      document.getElementById('signs-count-badge').textContent=`${signs.length} biển ${staffInspection()?'trong khung nhìn':'trong phạm vi / gần tuyến'}`;
     }
     async function loadSigns() {
       if (!api.user) {
@@ -564,10 +564,11 @@
         return;
       }
       const generation = ++signsGeneration, auth = authGeneration;
-      const radius=document.getElementById('nearby-radius').value;
-      const scope=JSON.stringify([selectedCoords,radius]);
-      if(scope!==loadedMapScope){nearbyMapSigns=[];loadedMapScope=scope;renderScopedSigns();}
-      const params = new URLSearchParams({ ...clampedBounds(), latitude:selectedCoords[0], longitude:selectedCoords[1], radius_meters:radius, limit: '100' });
+      const params = new URLSearchParams({ ...clampedBounds(), limit: '100' });
+      if(!staffInspection()){
+        params.set('latitude',selectedCoords[0]);params.set('longitude',selectedCoords[1]);
+        params.set('radius_meters',document.getElementById('nearby-radius').value);
+      }
       const classId = document.getElementById('filter-class').value, status = document.getElementById('filter-status').value;
       if (classId) params.set('class_id', classId);
       if (status) params.set('status', status);
@@ -577,7 +578,7 @@
         if (generation !== signsGeneration || auth !== authGeneration || !api.user) return;
         nearbyMapSigns=page.items;
         renderScopedSigns();
-        if(page.total>page.items.length)document.getElementById('signs-count-badge').textContent+=` · ${page.items.length}/${page.total} biển gần điểm chọn`;
+        if(page.total>page.items.length)document.getElementById('signs-count-badge').textContent+=` · ${page.items.length}/${page.total} · phóng to để xem thêm`;
       } catch (err) {
         if (generation === signsGeneration) document.getElementById('signs-count-badge').textContent = err.message;
       }
@@ -619,7 +620,7 @@
         if (generation === nearbyGeneration) document.getElementById('nearby-count').textContent = err.message;
       }
     }
-    document.getElementById('nearby-radius').onchange = () => {loadNearby();loadSigns();};
+    document.getElementById('nearby-radius').onchange = () => {loadNearby();if(!staffInspection())loadSigns();};
 
     updateAuthUI();
   </script>

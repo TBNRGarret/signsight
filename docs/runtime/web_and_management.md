@@ -25,6 +25,8 @@ Link Xem vị trí mở bản đồ kiểm tra bản ghi; form báo cáo cá nh�
 
 Biển được mở để kiểm tra luôn có icon đúng loại, kể cả biển đã tháo hoặc không khớp bộ lọc mặc định của map user. Bấm icon để xem trạng thái và ảnh minh chứng đã duyệt. Biển đang chọn chỉ xuất hiện một lần; trên điện thoại, trang giữ bản đồ trong khung nhìn khi mở thay vì tự cuộn xuống chi tiết.
 
+Map kiểm tra của staff tải biển theo khung nhìn, không áp bán kính quanh pin của user. Kéo/zoom sẽ tải lại; nếu quá 100 biển, map nhắc phóng to để xem thêm. Map user vẫn lọc biển trong bán kính hoặc gần tuyến đã chọn; đổi bán kính không xóa tuyến.
+
 ## Chạy và kiểm tra
 
 Xem [local_development.md](../getting-started/local_development.md). Workspace có source signsight/ và dữ liệu ở thư mục cha dùng scripts/start_signsight.ps1 từ thư mục cha. Không chạy backend legacy.

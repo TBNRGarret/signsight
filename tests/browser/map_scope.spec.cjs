@@ -1,7 +1,7 @@
 const {test,expect}=require('@playwright/test');
 const {stubMaps}=require('./map_fixture.cjs');
 
-test('markers show nearby or route signs, never far off-route, and clear old route markers',async({page},testInfo)=>{
+test('user markers stay nearby or on route and changing radius preserves the route',async({page},testInfo)=>{
  await stubMaps(page);
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  const sign=(id,latitude,longitude)=>({id,predicted_class:0,qcvn_code:'P.127 (50)',name_vi:id,
@@ -10,7 +10,9 @@ test('markers show nearby or route signs, never far off-route, and clear old rou
   along=sign('along',10.79,106.701),far=sign('far-off-route',10.82,106.75);
  await page.route('**/api/v1/map/signs?*',route=>{
   const query=new URL(route.request().url()).searchParams;
-  expect(query.get('radius_meters')).toBeTruthy();expect(query.get('latitude')).toBeTruthy();
+  expect(query.get('min_lat')).toBeTruthy();
+  expect(query.get('radius_meters')).toBeTruthy();
+  expect(query.get('latitude')).toBeTruthy();
   return route.fulfill({json:{items:[near,shared,far],total:3}});
  });
  await page.route('**/api/v1/navigation/route',route=>route.fulfill({json:{
@@ -30,6 +32,7 @@ test('markers show nearby or route signs, never far off-route, and clear old rou
  await page.screenshot({path:testInfo.outputPath('nearby-and-route.png')});
  await page.locator('#nearby-radius').selectOption('100');
  await expect(page.locator('.sign-map-icon-marker')).toHaveCount(3);
+ await expect(page.locator('#nav-summary')).toContainText('1.5 km');
  await page.evaluate(()=>navigationController.reset());
  await expect(page.locator('.sign-map-icon-marker')).toHaveCount(1);
  await expect(page.locator('.sign-map-icon-marker[aria-label*="near"]')).toHaveCount(1);

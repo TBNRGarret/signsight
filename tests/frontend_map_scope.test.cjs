@@ -22,6 +22,14 @@ test('shrinking radius removes a near candidate but retains far on-route signs',
  assert.equal(routing.visibleSigns(scope).length,2);
  assert.deepEqual(routing.visibleSigns({...scope,radius:100}).map(s=>s.id),['along']);
 });
+test('the map shows every sign returned for the current view, including ones far from the selected pin',()=>{
+ assert.equal(typeof routing.markersInView,'function');
+ const rows=routing.markersInView({viewport:[near,far],route:[along],classId:'',status:''});
+ assert.deepEqual(new Set(rows.map(row=>row.id)),new Set(['near','far','along']));
+ assert.equal(rows.length,3);
+ assert.deepEqual(routing.markersInView({viewport:[near,far],route:[along],classId:'',status:'removed'}),[]);
+});
+
 test('invalid positions do not bypass nearby scope and longitude wrap works',()=>{
  assert.equal(typeof routing.visibleSigns,'function');
  const wrapped=sign('wrap',0,-179.999);
