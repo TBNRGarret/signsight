@@ -1,5 +1,7 @@
 # Train CAR35 V4 or the reviewed R3 revision on Colab
 
+This guide expects a **prepared CAR35 V4 ZIP with a root manifest.json**. If your file instead has 107 class names and `train/valid/test` roots, use the [Raw107 → CAR35 notebook](raw107_car35_colab.md); do not replace V4 hashes with the raw ZIP's checksum.
+
 Use the CAR35 ZIP prepared on 2026-11-06. Its 35 class IDs and train/validation/test splits are fixed. The original local SupSign source is no longer needed by these notebooks.
 
 1. Upload the supplied prepared CAR35 V4 ZIP to Google Drive as a file, then enable sharing that permits downloading through its link. The original archive checksum is prefilled. `ALLOW_REPACKED_SOURCE=True` also accepts a differently compressed ZIP only when its root manifest matches the independently pinned hash. Every image/label hash, inventory, class count and split is still verified before training. The actual container hash is recorded in `source_archive_verification.json` and included in the result export. Set this option to `False` to require the original archive bytes too.

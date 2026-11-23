@@ -75,9 +75,11 @@ Weights, dataset gốc, database và ảnh upload không nằm trong Git. App v�
 
 Đặt checkpoint tương thích tại `ai_engine/checkpoints/detection/best.pt`, giữ báo cáo huấn luyện cùng checkpoint, rồi khởi động lại server. Adapter mặc định nhận baseline 10 lớp; catalog mở rộng và mapping được rà soát theo checkpoint cho phép model mới mà giữ ID dữ liệu cũ. Không thay trực tiếp bằng weights khác taxonomy. Xem [ảnh và YOLO](docs/runtime/images_and_detection.md).
 
-Baseline dùng GTSRB ROI để kiểm tra pipeline, chưa chứng minh chất lượng ảnh đường phố Việt Nam. Taxonomy là mapping thử nghiệm của dự án, cần rà soát trước khi áp dụng thực tế. Hai notebook public để trống link nguồn/cache: tự điền `SOURCE_URL` hoặc `PREPARED_CACHE_URL` bằng nguồn bạn có quyền truy cập. Dataset và weights có điều kiện sử dụng riêng, không được phân phối kèm repo này.
+Baseline dùng GTSRB ROI để kiểm tra pipeline, chưa chứng minh chất lượng ảnh đường phố Việt Nam. Taxonomy là mapping thử nghiệm của dự án, cần rà soát trước khi áp dụng thực tế. Notebook public để trống link nguồn/cache: tự điền `SOURCE_URL` hoặc `PREPARED_CACHE_URL` bằng nguồn bạn có quyền truy cập. Dataset và weights có điều kiện sử dụng riêng, không được phân phối kèm repo này.
 
 Train dữ liệu Việt Nam: [hai notebook CAR35 V4 EDA và YOLO11s trên Colab](docs/training/car35_colab.md). Tải ZIP đã chia sẵn bằng gdown, không mount Drive; tải kết quả về trước khi ngắt runtime. Sau khi train, [rà mapping và tích hợp model trên runtime thử](docs/runtime/model_activation.md). Danh mục lớp trên API/web/Flutter lấy từ catalog đã cấu hình; model mới cần mapping được rà và đánh giá thực địa.
+
+Nếu file trên Drive là ZIP YOLO **107 lớp** với `train/valid/test`, dùng [notebook Raw107 → CAR35 → YOLO11s](docs/training/raw107_car35_colab.md). Bản này lọc/remap và chia nhóm trên Colab, chỉ cần một link gdown; không yêu cầu manifest hoặc patch của V4 cũ.
 
 Audit nguồn ViTSD bổ sung: [notebook rà dữ liệu ZIP có sẵn trên Drive](docs/training/vitsd_cleaning_review.md). Notebook này dùng Drive mount, đọc ZIP qua bản local và xuất báo cáo để duyệt; không tự chia lại dữ liệu hoặc train.
 
