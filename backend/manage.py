@@ -31,12 +31,31 @@ def main():
     restore = commands.add_parser('restore-runtime', help='Verify and restore into a NEW directory')
     restore.add_argument('--archive', required=True)
     restore.add_argument('--destination', required=True)
+    inventory = commands.add_parser('inventory-runtime', help='Read-only DB/image audit; never deletes files')
+    inventory.add_argument('--output', required=True)
+    inventory.add_argument('--older-than-days', type=int, default=30)
+    inventory.add_argument('--verify-images', action='store_true')
     commands.add_parser('expire-signs',help='Run the idempotent expiry job once (for an external scheduler)')
     bootstrap = commands.add_parser("bootstrap-admin", help="Create the first administrator (password prompted securely)")
     bootstrap.add_argument("--username", required=True)
     bootstrap.add_argument("--email", required=True)
     args = parser.parse_args()
     try:
+        if args.command == 'inventory-runtime':
+            import json
+            from pathlib import Path
+            from backend.app.core.settings import Settings
+            from backend.app.services.runtime_inventory import inventory_runtime
+            settings = Settings.from_env()
+            target = Path(args.output).resolve()
+            if target.is_relative_to(settings.storage_root):
+                raise ValueError('Inventory report must be outside image storage')
+            result = inventory_runtime(engine,settings.storage_root,older_than_days=args.older_than_days,
+                                       verify_images=args.verify_images)
+            target.parent.mkdir(parents=True,exist_ok=True)
+            with target.open('x',encoding='utf-8') as stream: json.dump(result,stream,indent=2)
+            print(f'Read-only inventory saved: {target}; no files or rows deleted.')
+            return
         if args.command == 'backup-runtime':
             from backend.app.core.settings import Settings
             from backend.app.services.runtime_backup import create_runtime_backup
