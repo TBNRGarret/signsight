@@ -22,6 +22,7 @@ from backend.app.db.migrations import require_current_database
 from backend.app.services.image_store import ImageStore
 from ai_engine.detection import YoloDetector
 from backend.app.core.upload_limit import UploadLimitMiddleware
+from backend.app.core.inference_capacity import InferenceCapacity
 from backend.app.services.policy_service import initialize_policy
 from backend.app.services.routing_service import RoutingProvider,make_place_provider
 from backend.app.services.lifecycle_service import expire_due_records
@@ -65,6 +66,7 @@ def create_app(database_engine=None, settings: Settings | None = None, *, user_a
     application.state.session_factory = sessionmaker(autocommit=False, autoflush=False, bind=db_engine)
     application.state.auth_limiter = AuthRateLimiter()
     application.state.image_store = ImageStore(settings.storage_root)
+    application.state.inference_capacity = InferenceCapacity(settings.max_concurrent_detections)
     application.state.detector = YoloDetector(settings.yolo_weights, settings.yolo_device,
                                             confidence=settings.yolo_confidence,
                                             catalog=application.state.catalog,mapping_path=settings.yolo_mapping_path)

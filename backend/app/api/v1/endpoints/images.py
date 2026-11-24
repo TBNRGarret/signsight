@@ -128,15 +128,16 @@ def image_thumbnail(image_id: str, request: Request, user: User = Depends(get_cu
 @router.post("/images/{image_id}/detect", response_model=RunResponse)
 def detect(image_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     image = authorized_image(db, image_id, user, owner_only=True)
-    data = request.app.state.image_store.read(image.storage_key, image.sha256)
     db.expunge(image)
     db.rollback()  # A GPU inference must not hold a SQLite read lock.
-    try:
-        with Image.open(io.BytesIO(data)) as source:
-            result = request.app.state.detector.predict(source.convert("RGB"))
-        return run_response(persist_run(db, image, "yolo", result,request.app.state.catalog),request.app.state.catalog)
-    except DetectorUnavailable as error:
-        raise HTTPException(503, str(error)) from error
+    with request.app.state.inference_capacity.claim():
+        data = request.app.state.image_store.read(image.storage_key, image.sha256)
+        try:
+            with Image.open(io.BytesIO(data)) as source:
+                result = request.app.state.detector.predict(source.convert("RGB"))
+            return run_response(persist_run(db, image, "yolo", result,request.app.state.catalog),request.app.state.catalog)
+        except DetectorUnavailable as error:
+            raise HTTPException(503, str(error)) from error
 
 
 @router.post("/images/{image_id}/classify", deprecated=True)

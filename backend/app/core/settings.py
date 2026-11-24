@@ -20,6 +20,7 @@ class Settings:
     yolo_weights: Path = field(default_factory=lambda: PROJECT_ROOT / "ai_engine" / "checkpoints" / "detection" / "best.pt")
     yolo_device: str | None = None
     yolo_confidence: float = 0.65
+    max_concurrent_detections: int = 1
     catalog_path: Path | None = None
     yolo_mapping_path: Path | None = None
     routing_base_url: str = 'https://router.project-osrm.org'
@@ -41,6 +42,8 @@ class Settings:
                                else 'https://nominatim.openstreetmap.org')
         if not math.isfinite(self.yolo_confidence) or not 0 < self.yolo_confidence <= 1:
             raise ValueError("YOLO confidence must be finite and greater than 0, up to 1")
+        if type(self.max_concurrent_detections) is not int or not 1 <= self.max_concurrent_detections <= 8:
+            raise ValueError('Maximum concurrent detections must be 1..8')
         for url in (self.routing_base_url,self.places_base_url):
             parsed=urlparse(url)
             if parsed.scheme not in ('http','https') or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
@@ -90,6 +93,7 @@ class Settings:
             ("SIGNSIGHT_YOLO_WEIGHTS", "yolo_weights", Path),
             ("SIGNSIGHT_YOLO_DEVICE", "yolo_device", str),
             ("SIGNSIGHT_YOLO_CONFIDENCE", "yolo_confidence", float),
+            ('SIGNSIGHT_MAX_CONCURRENT_DETECTIONS', 'max_concurrent_detections', int),
             ('SIGNSIGHT_CATALOG_PATH','catalog_path',Path),
             ('SIGNSIGHT_YOLO_MAPPING_PATH','yolo_mapping_path',Path),
             ('SIGNSIGHT_ROUTING_BASE_URL','routing_base_url',str),
