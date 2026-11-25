@@ -17,8 +17,18 @@ extension _MapScreen on _UserShellState {
               selectedSignId: selected?.id,
               route: c.route?.geometry ?? const [],
               routeFitRevision: c.routeFitRevision,
-              onSign: c.selectSign,
+              userLocation: c.signedIn ? _driving.fix : null,
+              userLocationStale: !_driving.fresh,
+              followUser:
+                  _driving.driving && _driving.following && _driving.fresh,
+              followRevision: _driving.followRevision,
+              onUserGesture: _driving.browse,
+              onSign: (sign) {
+                if (_driving.driving) _driving.browse();
+                c.selectSign(sign);
+              },
               onIdle: (point) {
+                if (_driving.driving && _driving.following) return;
                 if ((point.latitude - c.center.latitude).abs() > .0001 ||
                     (point.longitude - c.center.longitude).abs() > .0001) {
                   c.moveCenter(point);
@@ -28,108 +38,150 @@ extension _MapScreen on _UserShellState {
             ),
           ),
         ),
-        Positioned(
-          left: 16,
-          right: 16,
-          top: 12,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Material(
-                elevation: 1,
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(14),
-                child: TextField(
-                  controller: _query,
-                  textInputAction: TextInputAction.search,
-                  onSubmitted: (value) {
-                    if (c.signedIn) {
-                      unawaited(c.search(value));
-                    } else {
-                      unawaited(_account());
-                    }
-                  },
-                  decoration: InputDecoration(
-                    hintText: 'Bạn muốn đi đâu?',
-                    filled: false,
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: c.mapBusy
-                        ? const Padding(
-                            padding: EdgeInsets.all(14),
-                            child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+        if (!_driving.driving)
+          Positioned(
+            left: 16,
+            right: 16,
+            top: 12,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Material(
+                  elevation: 1,
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  child: TextField(
+                    controller: _query,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (value) {
+                      if (c.signedIn) {
+                        unawaited(c.search(value));
+                      } else {
+                        unawaited(_account());
+                      }
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Bạn muốn đi đâu?',
+                      filled: false,
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: c.mapBusy
+                          ? const Padding(
+                              padding: EdgeInsets.all(14),
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            )
+                          : IconButton(
+                              tooltip: 'Tìm điểm đến',
+                              onPressed: () {
+                                if (c.signedIn) {
+                                  unawaited(c.search(_query.text));
+                                } else {
+                                  unawaited(_account());
+                                }
+                              },
+                              icon: const Icon(Icons.arrow_forward),
                             ),
-                          )
-                        : IconButton(
-                            tooltip: 'Tìm điểm đến',
-                            onPressed: () {
-                              if (c.signedIn) {
-                                unawaited(c.search(_query.text));
-                              } else {
-                                unawaited(_account());
-                              }
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.all(16),
+                    ),
+                  ),
+                ),
+                if (c.places.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(top: 6),
+                    constraints: const BoxConstraints(maxHeight: 230),
+                    child: Material(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      clipBehavior: Clip.antiAlias,
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: c.places.length,
+                        itemBuilder: (context, i) {
+                          final place = c.places[i];
+                          return ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.place_outlined),
+                            title: Text(
+                              place.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () {
+                              FocusScope.of(context).unfocus();
+                              unawaited(c.routeTo(place));
                             },
-                            icon: const Icon(Icons.arrow_forward),
-                          ),
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(
-                        color: Theme.of(context).colorScheme.primary,
-                        width: 2,
+                          );
+                        },
                       ),
                     ),
-                    contentPadding: const EdgeInsets.all(16),
                   ),
+                if (c.mapError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Material(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(c.mapError!),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        if (_driving.driving)
+          Positioned(
+            left: 16,
+            right: 16,
+            top: 12,
+            child: Material(
+              elevation: 2,
+              borderRadius: BorderRadius.circular(16),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    Icon(
+                      _driving.fresh ? Icons.gps_fixed : Icons.gps_not_fixed,
+                      color: _driving.fresh
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.error,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _driving.busy
+                            ? 'Đang tìm vị trí GPS…'
+                            : _driving.error ??
+                                  (!_driving.fresh
+                                      ? 'GPS chưa cập nhật. Vị trí hiển thị là lần cuối.'
+                                      : 'GPS${_driving.fix?.accuracy == null ? '' : ' · ±${_driving.fix!.accuracy!.round()} m'}'),
+                      ),
+                    ),
+                    if (!_driving.fresh && !_driving.busy)
+                      TextButton(
+                        onPressed: () => _driving.resume(),
+                        child: const Text('Thử lại'),
+                      ),
+                  ],
                 ),
               ),
-              if (c.places.isNotEmpty)
-                Container(
-                  margin: const EdgeInsets.only(top: 6),
-                  constraints: const BoxConstraints(maxHeight: 230),
-                  child: Material(
-                    color: Theme.of(context).colorScheme.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    clipBehavior: Clip.antiAlias,
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: c.places.length,
-                      itemBuilder: (context, i) {
-                        final place = c.places[i];
-                        return ListTile(
-                          dense: true,
-                          leading: const Icon(Icons.place_outlined),
-                          title: Text(
-                            place.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          onTap: () {
-                            FocusScope.of(context).unfocus();
-                            unawaited(c.routeTo(place));
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              if (c.mapError != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Material(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text(c.mapError!),
-                    ),
-                  ),
-                ),
-            ],
+            ),
           ),
-        ),
         if (MediaQuery.viewInsetsOf(context).bottom == 0 && c.places.isEmpty)
           Positioned(
             left: 16,
@@ -143,10 +195,27 @@ extension _MapScreen on _UserShellState {
                   alignment: Alignment.centerRight,
                   child: IconButton.filledTonal(
                     tooltip: 'Vị trí của tôi',
-                    onPressed: c.signedIn ? () => _gps() : _account,
+                    onPressed: c.signedIn
+                        ? () {
+                            if (_driving.driving) {
+                              _driving.follow();
+                            } else {
+                              unawaited(_gps());
+                            }
+                          }
+                        : _account,
                     icon: const Icon(Icons.my_location),
                   ),
                 ),
+                if (_driving.driving && !_driving.following)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                      onPressed: _driving.follow,
+                      icon: const Icon(Icons.navigation),
+                      label: const Text('Theo dõi lại'),
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 Material(
                   elevation: 2,
@@ -304,7 +373,10 @@ extension _MapScreen on _UserShellState {
           ),
           IconButton(
             tooltip: 'Xóa tuyến',
-            onPressed: c.clearRoute,
+            onPressed: () {
+              _stopDrive();
+              c.clearRoute();
+            },
             icon: const Icon(Icons.close),
           ),
         ],
@@ -313,24 +385,24 @@ extension _MapScreen on _UserShellState {
         '${(c.route!.distance / 1000).toStringAsFixed(1)} km · ${(c.route!.duration / 60).ceil()} phút',
         style: Theme.of(context).textTheme.titleMedium,
       ),
-      const SizedBox(height: 6),
-      const Wrap(
-        spacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          Text('A · Xuất phát'),
-          Icon(Icons.arrow_forward, size: 16),
-          Text('B · Điểm đến'),
-        ],
+      Text(
+        _driving.driving ? 'Toàn tuyến · Ước tính ban đầu' : 'Xem trước tuyến',
+        style: Theme.of(context).textTheme.bodySmall,
       ),
       Text(
         '${c.route!.signs.length} biển gần tuyến · hành lang ${c.routeAppliedCorridor ?? c.corridor} m',
         style: Theme.of(context).textTheme.bodySmall,
       ),
-      Text(
-        'Biển quanh điểm xem: ${c.radius} m',
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
+      if (!_driving.driving && c.userLocation?.usableAt(DateTime.now()) != true)
+        const Text(
+          'Điểm xuất phát đang là điểm xem trên bản đồ. Bắt đầu sẽ dùng GPS.',
+          style: TextStyle(fontSize: 12),
+        ),
+      if (!_driving.driving && _driving.error != null)
+        Text(
+          _driving.error!,
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
+        ),
       if (c.routeSignsBusy) ...[
         const SizedBox(height: 8),
         const LinearProgressIndicator(),
@@ -347,12 +419,27 @@ extension _MapScreen on _UserShellState {
         ),
       ],
       const SizedBox(height: 8),
+      SizedBox(
+        width: double.infinity,
+        child: _driving.driving
+            ? OutlinedButton.icon(
+                onPressed: _stopDrive,
+                icon: const Icon(Icons.stop_circle_outlined),
+                label: const Text('Kết thúc'),
+              )
+            : FilledButton.icon(
+                onPressed: _startingDrive ? null : _startDrive,
+                icon: const Icon(Icons.navigation),
+                label: const Text('Bắt đầu'),
+              ),
+      ),
+      const SizedBox(height: 4),
       Wrap(
         spacing: 8,
         runSpacing: 4,
         children: [
           OutlinedButton.icon(
-            onPressed: c.showRoute,
+            onPressed: _showWholeRoute,
             icon: const Icon(Icons.zoom_out_map),
             label: const Text('Xem toàn tuyến'),
           ),

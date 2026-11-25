@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'models.dart';
+import 'driving_tracker.dart';
 
 class PickedPhoto {
   const PickedPhoto(this.bytes, this.name);
@@ -34,7 +35,7 @@ class DeviceServices {
         : PickedPhoto(await file.readAsBytes(), file.name);
   }
 
-  Future<GeoPoint> locate() async {
+  Future<void> _locationPermission() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
       throw StateError('Bật vị trí trên thiết bị rồi thử lại.');
     }
@@ -48,6 +49,10 @@ class DeviceServices {
         'Chưa có quyền vị trí. Bạn vẫn có thể chạm bản đồ để đặt biển.',
       );
     }
+  }
+
+  Future<GeoPoint> locate() async {
+    await _locationPermission();
     final p = await Geolocator.getCurrentPosition(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
@@ -55,5 +60,22 @@ class DeviceServices {
       ),
     );
     return GeoPoint(p.latitude, p.longitude);
+  }
+
+  Stream<LocationFix> watchLocation() async* {
+    await _locationPermission();
+    yield* Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 3,
+      ),
+    ).map(
+      (p) => LocationFix(
+        GeoPoint(p.latitude, p.longitude),
+        p.timestamp.toUtc(),
+        accuracy: p.accuracy,
+        bearing: p.speed.isFinite && p.speed >= 2 ? p.heading : null,
+      ),
+    );
   }
 }

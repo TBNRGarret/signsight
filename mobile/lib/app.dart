@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'controller.dart';
 import 'device_services.dart';
+import 'driving_tracker.dart';
 import 'feedback.dart';
 import 'map_canvas.dart';
 import 'models.dart';

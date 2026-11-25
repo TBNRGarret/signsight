@@ -35,6 +35,7 @@ class _MapState {
   String? mapError;
   bool mapBusy = false;
   GeoPoint center = const GeoPoint(10.7769, 106.7009);
+  LocationFix? userLocation;
   List<Sign> nearbySigns = [];
   int nearbyTotal = 0;
   int radius = 500;
@@ -195,7 +196,11 @@ extension _MapActions on AppController {
     places = [];
     route = null;
     _resetRouteDetails();
-    final origin = center, buffer = corridor;
+    final current = userLocation;
+    final origin = current?.usableAt(DateTime.now()) == true
+        ? current!.point
+        : center;
+    final buffer = corridor;
     _mapState.routeOrigin = origin;
     _mapState.routeDestination = place;
     _notify();

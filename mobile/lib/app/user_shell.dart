@@ -23,17 +23,108 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
   String? _notice;
   final _query = TextEditingController();
   bool _picking = false;
+  late final DrivingTracker _driving;
+  LocationFix? _lastDrivingFix;
+  DateTime? _lastDrivingNearby;
+  bool _startingDrive = false;
   String? _loadedUser;
   AppController get c => widget.controller;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _driving = DrivingTracker(() => widget.devices.watchLocation());
+    _driving.addListener(_drivingChanged);
     c.addListener(_changed);
   }
 
+  void _drivingChanged() {
+    if (!mounted) return;
+    final fix = _driving.fix;
+    if (c.signedIn &&
+        _driving.fresh &&
+        fix != null &&
+        !identical(fix, _lastDrivingFix)) {
+      _lastDrivingFix = fix;
+      c.updateUserLocation(fix);
+      final now = DateTime.now();
+      if (_driving.driving &&
+          _driving.following &&
+          (_lastDrivingNearby == null ||
+              (now.difference(_lastDrivingNearby!) >=
+                      const Duration(seconds: 10) &&
+                  c.center.distanceTo(fix.point) >= 100))) {
+        _lastDrivingNearby = now;
+        c.moveCenter(fix.point);
+        unawaited(c.refreshNearby());
+      }
+    }
+    setState(() {});
+  }
+
+  Future<void> _startDrive() async {
+    if (_startingDrive ||
+        !c.signedIn ||
+        c.route == null ||
+        c.routeDestination == null) {
+      return;
+    }
+    final destination = c.routeDestination!;
+    final owner = c.user?.id;
+    _startingDrive = true;
+    try {
+      if (!await _driving.start() ||
+          !mounted ||
+          !c.signedIn ||
+          c.user?.id != owner ||
+          !_driving.driving) {
+        return;
+      }
+      if (c.routeDestination?.id != destination.id) {
+        _driving.stop();
+        return;
+      }
+      final fix = _driving.fix!;
+      c.updateUserLocation(fix);
+      if (c.routeOrigin == null || c.routeOrigin!.distanceTo(fix.point) > 20) {
+        await c.routeTo(destination);
+      }
+      if (!mounted) return;
+      if (c.route == null || c.routeDestination?.id != destination.id) {
+        _driving.stop();
+        return;
+      }
+      if (_driving.driving) {
+        c.selectSign(null);
+        _driving.follow();
+      }
+    } finally {
+      if (mounted) setState(() => _startingDrive = false);
+    }
+  }
+
+  void _stopDrive() {
+    _driving.stop();
+    _lastDrivingNearby = null;
+    if (mounted) setState(() => _startingDrive = false);
+  }
+
+  void _showWholeRoute() {
+    _driving.browse();
+    c.showRoute();
+  }
+
   void _changed() {
+    if (_driving.driving &&
+        (!c.signedIn || (c.route == null && !_startingDrive))) {
+      _stopDrive();
+    }
     if (_loadedUser != c.user?.id) {
+      if (_loadedUser != null || !c.signedIn) {
+        _driving.stop(clearLocation: true);
+        _lastDrivingFix = null;
+        _lastDrivingNearby = null;
+      }
       _loadedUser = c.user?.id;
       if (!c.signedIn) {
         _query.clear();
@@ -54,6 +145,16 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Native permission dialogs temporarily make the app inactive.
+    if (state == AppLifecycleState.inactive) return;
+    if (state != AppLifecycleState.resumed) {
+      _driving.pause();
+      return;
+    }
+    if (_driving.driving) {
+      if (_tab == 0 && _driving.paused) unawaited(_driving.resume());
+      return;
+    }
     if (state == AppLifecycleState.resumed && c.signedIn && !c.authBusy) {
       unawaited(c.initialize());
     }
@@ -63,6 +164,8 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     c.removeListener(_changed);
+    _driving.removeListener(_drivingChanged);
+    _driving.dispose();
     _query.dispose();
     super.dispose();
   }
@@ -136,6 +239,13 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
 
   void _changeTab(int value) {
     setState(() => _tab = value);
+    if (_driving.driving) {
+      if (value == 0) {
+        unawaited(_driving.resume());
+      } else {
+        _driving.pause();
+      }
+    }
     if (value == 2 && c.signedIn) unawaited(c.loadHistory());
   }
 
@@ -168,6 +278,9 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
       if (forDraft) {
         c.suggestLocation(point);
       } else {
+        final fix = LocationFix(point, DateTime.now().toUtc());
+        c.updateUserLocation(fix);
+        _driving.preview(fix);
         c.moveCenter(point);
         await c.refreshNearby();
       }
@@ -319,7 +432,11 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
         constraints: const BoxConstraints(maxWidth: 600),
         child: Scaffold(
           appBar: AppBar(
-            title: Text(['SignSight', 'Đóng góp', 'Của tôi'][_tab]),
+            title: Text(
+              _driving.driving
+                  ? 'Hành trình'
+                  : ['SignSight', 'Đóng góp', 'Của tôi'][_tab],
+            ),
             actions: [
               if (_tab == 0 && c.signedIn)
                 IconButton(
@@ -359,27 +476,29 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
               ),
             ],
           ),
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: _tab,
-            onDestinationSelected: _changeTab,
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.map_outlined),
-                selectedIcon: Icon(Icons.map),
-                label: 'Bản đồ',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.add_a_photo_outlined),
-                selectedIcon: Icon(Icons.add_a_photo),
-                label: 'Đóng góp',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.inbox_outlined),
-                selectedIcon: Icon(Icons.inbox),
-                label: 'Của tôi',
-              ),
-            ],
-          ),
+          bottomNavigationBar: _driving.driving
+              ? null
+              : NavigationBar(
+                  selectedIndex: _tab,
+                  onDestinationSelected: _changeTab,
+                  destinations: const [
+                    NavigationDestination(
+                      icon: Icon(Icons.map_outlined),
+                      selectedIcon: Icon(Icons.map),
+                      label: 'Bản đồ',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.add_a_photo_outlined),
+                      selectedIcon: Icon(Icons.add_a_photo),
+                      label: 'Đóng góp',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.inbox_outlined),
+                      selectedIcon: Icon(Icons.inbox),
+                      label: 'Của tôi',
+                    ),
+                  ],
+                ),
         ),
       ),
     ),

@@ -71,6 +71,6 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Chọn ảnh biển báo bạn muốn đóng góp.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Gợi ý vị trí biển báo để bạn kiểm tra và xác nhận.</string>
+	<string>Hiển thị vị trí của bạn và theo dõi hành trình khi ứng dụng đang mở; gợi ý vị trí biển để bạn xác nhận.</string>
 </dict>
 </plist>

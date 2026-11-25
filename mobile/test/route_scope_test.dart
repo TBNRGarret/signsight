@@ -11,6 +11,7 @@ import 'package:signsight_user/controller.dart';
 import 'package:signsight_user/map_canvas.dart';
 import 'package:signsight_user/models.dart';
 import 'package:signsight_user/session_store.dart';
+import 'package:signsight_user/driving_tracker.dart';
 
 const destination = Place('p', 'Bến Bạch Đằng', GeoPoint(10.78, 106.71));
 const geometry = [GeoPoint(10.7769, 106.7009), GeoPoint(10.78, 106.71)];
@@ -92,6 +93,24 @@ class RouteHarness {
 }
 
 void main() {
+  test('route origin uses fresh GPS even when the map was panned', () async {
+    final h = RouteHarness();
+    h.c.updateUserLocation(
+      LocationFix(
+        const GeoPoint(10.75, 106.68),
+        DateTime.now().toUtc(),
+        accuracy: 6,
+      ),
+    );
+    h.c.moveCenter(const GeoPoint(10.9, 106.9));
+    await h.c.routeTo(destination);
+    expect(h.c.routeOrigin!.latitude, 10.75);
+    expect(h.c.center.latitude, 10.9);
+    final request = h.requests.firstWhere(
+      (r) => r.url.path.endsWith('/navigation/route'),
+    );
+    expect(jsonDecode(request.body)['origin']['latitude'], 10.75);
+  });
   Future<void> settleRequests() async {
     for (var i = 0; i < 8; i++) {
       await Future<void>.delayed(Duration.zero);

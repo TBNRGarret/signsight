@@ -19,5 +19,5 @@ Read `../PRODUCT.md` for the shared users, purpose, workflows, constraints, term
 
 ## Evidence on Hand
 
-- `../docs/flutter_user_app.md`: app behavior, device integration, build/run steps, and recovery limits.
-- `../docs/core_completion.md`: current native verification evidence and remaining acceptance work.
+- `../docs/getting-started/flutter_user_app.md`: app behavior, device integration, build/run steps, and recovery limits.
+- `../docs/runtime/core_completion.md`: current native verification evidence and remaining acceptance work.

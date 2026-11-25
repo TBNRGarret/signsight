@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
 import 'models.dart';
 import 'sign_icons.dart';
+import 'driving_tracker.dart';
+import 'location_puck.dart';
 
 class MapScene {
   const MapScene({
@@ -18,6 +21,11 @@ class MapScene {
     this.pinOnly = false,
     this.selectedSignId,
     this.routeFitRevision = 0,
+    this.userLocation,
+    this.userLocationStale = false,
+    this.followUser = false,
+    this.followRevision = 0,
+    this.onUserGesture,
   });
   final GeoPoint center;
   final List<Sign> signs;
@@ -28,6 +36,10 @@ class MapScene {
   final bool pinOnly;
   final String? selectedSignId;
   final int routeFitRevision;
+  final LocationFix? userLocation;
+  final bool userLocationStale, followUser;
+  final int followRevision;
+  final VoidCallback? onUserGesture;
 }
 
 typedef MapBuilder = Widget Function(BuildContext context, MapScene scene);
@@ -56,6 +68,12 @@ class _SignMapState extends State<SignMap> {
   String _style = '';
   List<GeoPoint>? _drawnRoute;
   int? _lastFitRevision;
+  Future<void> _locationPending = Future.value();
+  bool _locationSourceAdded = false;
+  int _locationRevision = 0;
+  String? _locationSignature;
+  Offset? _pointerOrigin;
+  bool _gestureSent = false;
   bool _samePoint(GeoPoint a, GeoPoint b) =>
       a.latitude == b.latitude && a.longitude == b.longitude;
   bool _sameRoute(List<GeoPoint>? a, List<GeoPoint> b) =>
@@ -100,7 +118,8 @@ class _SignMapState extends State<SignMap> {
     _updateStyle();
     final current = _controller?.cameraPosition?.target;
     final wanted = widget.scene.center;
-    if (current != null &&
+    if (!widget.scene.followUser &&
+        current != null &&
         !_samePoint(old.scene.center, wanted) &&
         ((current.latitude - wanted.latitude).abs() > 0.00001 ||
             (current.longitude - wanted.longitude).abs() > 0.00001)) {
@@ -117,7 +136,124 @@ class _SignMapState extends State<SignMap> {
             }),
       );
     }
-    _sync();
+    final previous = old.scene, next = widget.scene;
+    final sameSigns =
+        previous.signs.length == next.signs.length &&
+        Iterable<int>.generate(next.signs.length)
+            .every((i) => identical(previous.signs[i], next.signs[i]));
+    final samePin =
+        previous.pin == null && next.pin == null ||
+        previous.pin != null &&
+            next.pin != null &&
+            _samePoint(previous.pin!, next.pin!);
+    if (!sameSigns ||
+        !samePin ||
+        previous.selectedSignId != next.selectedSignId ||
+        previous.pinOnly != next.pinOnly ||
+        !_sameRoute(previous.route, next.route) ||
+        previous.routeFitRevision != next.routeFitRevision) {
+      _sync();
+    }
+    _syncLocation();
+  }
+
+  void _syncLocation() {
+    final controller = _controller;
+    if (!_loaded || controller == null || widget.scene.pinOnly) return;
+    final scene = widget.scene;
+    if (scene.userLocation == null && !_locationSourceAdded) return;
+    final data = locationGeoJson(
+      scene.userLocation,
+      stale: scene.userLocationStale,
+    );
+    final signature = jsonEncode([
+      data,
+      scene.followUser,
+      scene.followRevision,
+    ]);
+    if (signature == _locationSignature) return;
+    final revision = ++_locationRevision, style = _style;
+    bool valid() =>
+        mounted && _loaded && controller == _controller && style == _style;
+    _locationPending = _locationPending.catchError((_) {}).then((_) async {
+      if (!valid() || revision != _locationRevision) return;
+      try {
+        if (!_locationSourceAdded) {
+          await controller.addGeoJsonSource('user-location', data);
+          if (!valid()) return;
+          await controller.addFillLayer(
+            'user-location',
+            'user-location-accuracy',
+            const FillLayerProperties(
+              fillColor: ['get', 'color'],
+              fillOpacity: .14,
+            ),
+            filter: [
+              '==',
+              ['get', 'kind'],
+              'accuracy',
+            ],
+          );
+          if (!valid()) return;
+          await controller.addFillLayer(
+            'user-location',
+            'user-location-heading',
+            const FillLayerProperties(fillColor: '#2563eb', fillOpacity: .45),
+            filter: [
+              '==',
+              ['get', 'kind'],
+              'heading',
+            ],
+          );
+          if (!valid()) return;
+          await controller.addCircleLayer(
+            'user-location',
+            'user-location-dot',
+            const CircleLayerProperties(
+              circleColor: ['get', 'color'],
+              circleRadius: 8,
+              circleStrokeColor: '#ffffff',
+              circleStrokeWidth: 3,
+            ),
+            filter: [
+              '==',
+              ['get', 'kind'],
+              'position',
+            ],
+          );
+          if (!valid()) return;
+          _locationSourceAdded = true;
+        } else {
+          await controller.setGeoJsonSource('user-location', data);
+          if (!valid()) return;
+        }
+        _locationSignature = signature;
+        if (revision == _locationRevision &&
+            scene.followUser &&
+            !scene.userLocationStale &&
+            widget.scene.followUser &&
+            scene.userLocation != null) {
+          await controller.animateCamera(
+            CameraUpdate.newCameraPosition(
+              CameraPosition(
+                target: point(scene.userLocation!.point),
+                zoom: 17,
+                tilt: 40,
+                bearing:
+                    scene.userLocation!.direction ??
+                    controller.cameraPosition?.bearing ??
+                    0,
+              ),
+            ),
+            duration: const Duration(milliseconds: 600),
+          );
+        }
+      } catch (_) {
+        if (valid()) {
+          setState(() => _error = 'Không thể cập nhật bản đồ. Thử tải lại.');
+        }
+      }
+    });
   }
 
   void _sync() {
@@ -288,6 +424,7 @@ class _SignMapState extends State<SignMap> {
         }
         if (mounted &&
             generation == _generation &&
+            !scene.followUser &&
             scene.route.length > 1 &&
             _lastFitRevision != scene.routeFitRevision) {
           var minLat = scene.route.first.latitude, maxLat = minLat;
@@ -335,69 +472,89 @@ class _SignMapState extends State<SignMap> {
   Widget build(BuildContext context) => Stack(
     fit: StackFit.expand,
     children: [
-      MapLibreMap(
-        key: ValueKey(_instance),
-        styleString: _style,
-        // The picker needs one dot, not asynchronous annotation-manager setup.
-        annotationOrder: widget.scene.pinOnly
-            ? const []
-            : const [
-                AnnotationType.line,
-                AnnotationType.circle,
-                AnnotationType.symbol,
-                AnnotationType.fill,
-              ],
-        initialCameraPosition: CameraPosition(
-          target: point(widget.scene.center),
-          zoom: 15,
-        ),
-        trackCameraPosition: true,
-        onMapCreated: (controller) {
-          _controller = controller;
-          controller.onCircleTapped.add((circle) {
-            final id = circle.data?['id'];
-            final sign = widget.scene.signs
-                .where((s) => s.id == id)
-                .firstOrNull;
-            if (sign != null) widget.scene.onSign?.call(sign);
-          });
-          controller.onSymbolTapped.add((symbol) {
-            final sign = widget.scene.signs
-                .where((s) => s.id == symbol.data?['id'])
-                .firstOrNull;
-            if (sign != null) widget.scene.onSign?.call(sign);
-          });
+      Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: (event) {
+          _pointerOrigin = event.position;
+          _gestureSent = false;
         },
-        onStyleLoadedCallback: () {
-          if (!mounted) return;
-          _loaded = true;
-          _pinSourceAdded = false;
-          _drawnRoute = null;
-          _icons.clear();
-          if (!widget.scene.pinOnly) {
-            unawaited(
-              _controller!.setSymbolIconAllowOverlap(true).catchError((_) {
-                if (mounted) {
-                  setState(
-                    () => _error = 'Không thể cập nhật bản đồ. Thử tải lại.',
-                  );
-                }
-              }),
-            );
-          }
-          _timeout?.cancel();
-          if (mounted) setState(() => _error = null);
-          _sync();
-        },
-        onMapClick: (_, position) => widget.scene.onTap?.call(
-          GeoPoint(position.latitude, position.longitude),
-        ),
-        onCameraIdle: () {
-          final p = _controller?.cameraPosition?.target;
-          if (p != null) {
-            widget.scene.onIdle?.call(GeoPoint(p.latitude, p.longitude));
+        onPointerMove: (event) {
+          if (!_gestureSent &&
+              _pointerOrigin != null &&
+              (event.position - _pointerOrigin!).distance > 8) {
+            _gestureSent = true;
+            widget.scene.onUserGesture?.call();
           }
         },
+        onPointerSignal: (_) => widget.scene.onUserGesture?.call(),
+        child: MapLibreMap(
+          key: ValueKey(_instance),
+          styleString: _style,
+          // The picker needs one dot, not asynchronous annotation-manager setup.
+          annotationOrder: widget.scene.pinOnly
+              ? const []
+              : const [
+                  AnnotationType.line,
+                  AnnotationType.circle,
+                  AnnotationType.symbol,
+                  AnnotationType.fill,
+                ],
+          initialCameraPosition: CameraPosition(
+            target: point(widget.scene.center),
+            zoom: 15,
+          ),
+          trackCameraPosition: true,
+          onMapCreated: (controller) {
+            _controller = controller;
+            controller.onCircleTapped.add((circle) {
+              final id = circle.data?['id'];
+              final sign = widget.scene.signs
+                  .where((s) => s.id == id)
+                  .firstOrNull;
+              if (sign != null) widget.scene.onSign?.call(sign);
+            });
+            controller.onSymbolTapped.add((symbol) {
+              final sign = widget.scene.signs
+                  .where((s) => s.id == symbol.data?['id'])
+                  .firstOrNull;
+              if (sign != null) widget.scene.onSign?.call(sign);
+            });
+          },
+          onStyleLoadedCallback: () {
+            if (!mounted) return;
+            _loaded = true;
+            _pinSourceAdded = false;
+            _locationSourceAdded = false;
+            _locationSignature = null;
+            _locationRevision++;
+            _drawnRoute = null;
+            _icons.clear();
+            if (!widget.scene.pinOnly) {
+              unawaited(
+                _controller!.setSymbolIconAllowOverlap(true).catchError((_) {
+                  if (mounted) {
+                    setState(
+                      () => _error = 'Không thể cập nhật bản đồ. Thử tải lại.',
+                    );
+                  }
+                }),
+              );
+            }
+            _timeout?.cancel();
+            if (mounted) setState(() => _error = null);
+            _sync();
+            _syncLocation();
+          },
+          onMapClick: (_, position) => widget.scene.onTap?.call(
+            GeoPoint(position.latitude, position.longitude),
+          ),
+          onCameraIdle: () {
+            final p = _controller?.cameraPosition?.target;
+            if (p != null) {
+              widget.scene.onIdle?.call(GeoPoint(p.latitude, p.longitude));
+            }
+          },
+        ),
       ),
       if (_error != null)
         Center(

@@ -7,6 +7,7 @@ import 'models.dart';
 import 'session_store.dart';
 import 'draft_store.dart';
 import 'device_services.dart';
+import 'driving_tracker.dart';
 
 part 'features/map/map_state.dart';
 part 'features/capture/capture_state.dart';
@@ -39,6 +40,12 @@ class AppController extends ChangeNotifier {
   set mapBusy(bool value) => _mapState.mapBusy = value;
   GeoPoint get center => _mapState.center;
   set center(GeoPoint value) => _mapState.center = value;
+  LocationFix? get userLocation => _mapState.userLocation;
+  void updateUserLocation(LocationFix fix) {
+    if (!fix.usableAt(DateTime.now())) return;
+    _mapState.userLocation = fix;
+  }
+
   List<Sign> get nearbySigns => _mapState.nearbySigns;
   set nearbySigns(List<Sign> value) => _mapState.nearbySigns = value;
   List<Sign> get mapSigns {
@@ -190,6 +197,7 @@ class AppController extends ChangeNotifier {
     feedbackError = reportError = null;
     authBusy = false;
     center = const GeoPoint(10.7769, 106.7009);
+    _mapState.userLocation = null;
     captureBusy = false;
     mapBusy = false;
     historyBusy = false;

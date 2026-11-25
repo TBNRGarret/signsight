@@ -24,6 +24,8 @@ async function registerAndLogin(page){
 }
 
 test('changing sign scope keeps the selected route and endpoints',async({page},testInfo)=>{
+ await page.context().grantPermissions(['geolocation']);
+ await page.context().setGeolocation({latitude:10.7769,longitude:106.7009,accuracy:8});
  await page.emulateMedia({colorScheme:testInfo.project.name==='phone'?'dark':'light'});
  await registerAndLogin(page);
  const geometry=[{latitude:10.7769,longitude:106.7009},{latitude:10.7769,longitude:106.706},
@@ -57,7 +59,7 @@ test('changing sign scope keeps the selected route and endpoints',async({page},t
  await page.getByRole('button',{name:'Áp dụng',exact:true}).click();
  expect((await refreshed).status()).toBe(200);
  await expect(page.getByText('Đến Bến Bạch Đằng',{exact:true})).toBeVisible();
- await expect(page.getByText('Biển quanh điểm xem: 1000 m',{exact:true})).toBeVisible();
+ await expect(page.getByText('Xem trước tuyến',{exact:true})).toBeVisible();
  await expect(page.getByText(/biển gần tuyến · hành lang 100 m/)).toBeVisible();
  expect(scopeBody).toEqual({waypoints:geometry,buffer_meters:100});expect(drivingRequests).toBe(1);
  await page.getByRole('button',{name:'Xem toàn tuyến',exact:true}).click();
@@ -66,6 +68,26 @@ test('changing sign scope keeps the selected route and endpoints',async({page},t
   const fs=require('node:fs');fs.mkdirSync(process.env.SIGNSIGHT_SCREENSHOT_DIR,{recursive:true});
   await page.screenshot({path:path.join(process.env.SIGNSIGHT_SCREENSHOT_DIR,'route-scope-'+testInfo.project.name+'.png')});
  }
+ await page.getByRole('button',{name:'Bắt đầu',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Kết thúc',exact:true})).toBeVisible();
+ await expect(page.getByText('Toàn tuyến · Ước tính ban đầu',{exact:true})).toBeVisible();
+ await page.context().setGeolocation({latitude:10.7772,longitude:106.7015,accuracy:6});
+ await expect(page.getByText(/GPS · ±6 m/)).toBeVisible();
+ expect(drivingRequests).toBe(1);
+ if(process.env.SIGNSIGHT_SCREENSHOT_DIR){
+  await page.screenshot({path:path.join(process.env.SIGNSIGHT_SCREENSHOT_DIR,'tracking-'+testInfo.project.name+'.png')});
+ }
+ const map=await page.getByRole('region',{name:'Map',exact:true}).boundingBox();
+ await page.mouse.move(map.x+map.width*.5,map.y+map.height*.4);
+ await page.mouse.down();await page.mouse.move(map.x+map.width*.7,map.y+map.height*.45,{steps:10});await page.mouse.up();
+ await expect(page.getByRole('button',{name:'Theo dõi lại',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Theo dõi lại',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Theo dõi lại',exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:'Kết thúc',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Bắt đầu',exact:true})).toBeVisible();
+ await expect(page.getByRole('textbox')).toBeVisible();
+ await expect(page.getByText('Đến Bến Bạch Đằng',{exact:true})).toBeVisible();
+ await expect(page.getByText('Không thể cập nhật bản đồ. Thử tải lại.',{exact:true})).toHaveCount(0);
 });
 
 test('compact guest shell requires login for contribution',async({page})=>{

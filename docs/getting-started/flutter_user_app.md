@@ -53,6 +53,27 @@ Dùng tài khoản **user** (hoặc đăng ký trong app). Tài khoản owner/ad
 
 Web preview ở địa chỉ HTTP LAN có thể không dùng được GPS; thử camera/GPS trên trình duyệt điện thoại cần HTTPS. Camera trên Flutter web do trình duyệt chọn hỗ trợ capture; không đồng nghĩa đã nghiệm thu camera Android/iOS native.
 
+## Theo dõi vị trí khi xem hành trình
+
+Tìm điểm đến, chọn kết quả rồi bấm **Bắt đầu**. App xin quyền vị trí và chờ GPS đủ chính xác;
+nếu điểm xuất phát xem trước khác GPS hơn 20 m, app lấy lại tuyến từ GPS trước khi theo dõi.
+Chấm xanh có vòng sai số và hướng di chuyển khi thiết bị cung cấp hướng ở tốc độ từ 2 m/s.
+GPS được tách khỏi tâm bản đồ và ghim đóng góp: kéo bản đồ không làm đổi vị trí của bạn.
+
+Camera theo vị trí mới. Kéo/zoom bản đồ chuyển sang xem tự do; bấm **Theo dõi lại** hoặc nút vị trí
+để camera theo tiếp. **Xem toàn tuyến** giữ hành trình và tạm ngừng camera theo vị trí.
+Đổi phạm vi tìm biển vẫn giữ tuyến. **Kết thúc** ngắt GPS liên tục và trở lại màn xem trước tuyến.
+
+Theo dõi chỉ chạy khi app ở foreground. Khi chuyển nền, app hủy subscription GPS; trở lại sẽ
+xin bản cập nhật mới nếu hành trình đã bắt đầu. Hộp thoại quyền vị trí không hủy lượt lấy GPS đầu tiên.
+Lỗi GPS tạm thời giữ luồng để nhận vị trí tiếp theo; mất quyền, hết thời gian chờ hoặc luồng kết thúc
+hiện thông báo để thử lại. Vị trí quá 15 giây không được dùng để kéo camera; chấm cũ chuyển xám.
+Tọa độ không hợp lệ hoặc sai số hơn 80 m bị bỏ qua. Chưa có theo dõi nền.
+
+Khoảng cách/thời gian đang hiển thị là **toàn tuyến lúc lập kế hoạch**, chưa tính phần còn lại,
+chỉ dẫn rẽ, giao thông hoặc tự tìm lại tuyến khi đi lệch. GPS không được lưu thành lịch sử hành trình.
+Thử bằng GPS giả lập trên emulator trước; kiểm thử thiết bị thật khi đứng yên hoặc với người thử ở ghế phụ.
+
 ## Android trên laptop
 
 Cài Android Studio, Android SDK/Command-line Tools và tạo emulator x86_64 có Google APIs hoặc Google Play. Build hiện tại cần Android SDK Platform 36, Build Tools 36 và **NDK (Side by side) 28.2.13676358**. Emulator có thể chạy API khác với compile SDK. CI dùng JDK 21; MapLibre cần Java 21 trở lên. Kiểm tra:
