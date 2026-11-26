@@ -1,5 +1,7 @@
 # Technical guides
 
+- [Demo and MVP acceptance](getting-started/demo.md)
+
 - [Approved map icons and reviewed photos](runtime/sign_marker_images.md)
 
 - [runtime](runtime/): [authentication_setup](runtime/authentication_setup.md), [deployment](runtime/deployment.md), [images_and_detection](runtime/images_and_detection.md), [maplibre](runtime/maplibre.md), [model_activation](runtime/model_activation.md), [web_and_management](runtime/web_and_management.md), [core_completion](runtime/core_completion.md)

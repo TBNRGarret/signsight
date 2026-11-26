@@ -2,6 +2,12 @@
 
 The laptop runs FastAPI/Uvicorn, SQLite, the managed image store and YOLO. FastAPI also serves the staff web UI and the optional Flutter web build. Native Android connects to the same API. Docker is optional.
 
+The laptop default admits one detection request at a time per process. A concurrent request gets
+HTTP 503 with a short Vietnamese retry message and `Retry-After: 2`, before image decoding;
+it is not queued. The slot is released even if storage, inference or persistence fails.
+`SIGNSIGHT_MAX_CONCURRENT_DETECTIONS` accepts 1–8; keep 1 for the single-model laptop demo.
+This is a capacity limit, not a job queue or an end-to-end processing timeout. Use one API worker.
+
 ## Laptop
 
 From the canonical source checkout, use the existing external runtime directory; do not copy its database or uploads into Git:
@@ -38,6 +44,23 @@ Backups contain private accounts, password hashes, images and metadata. Keep the
 For a custom model, preserve the exact catalog JSON and reviewed mapping JSON alongside the weights and environment configuration. The DB backup includes the catalog identity registry, but not these external configuration files. Restore with matching `SIGNSIGHT_CATALOG_PATH` and `SIGNSIGHT_YOLO_MAPPING_PATH`; startup rejects missing/reassigned catalog identities. See [model_activation.md](model_activation.md).
 
 ## Prepared server configuration
+
+### Read-only storage audit
+
+With the runtime's `DATABASE_URL` and `SIGNSIGHT_STORAGE_ROOT` configured:
+
+```powershell
+python -m backend.manage inventory-runtime --output .cache/private-inventory.json --older-than-days 30 --verify-images
+```
+
+The audit opens SQLite read-only, checks integrity/foreign keys, compares managed image hashes
+when requested, and lists missing/corrupt/untracked files and old unused uploads. Contribution,
+report and legacy evidence references are protected. It never deletes rows/files or changes migrations.
+Old candidates can still belong to a device draft or write receipt; inspect them manually and take
+a verified backup before any retention action. Keep the report private. An online audit is not a
+stable deletion plan; no automatic cleanup is enabled.
+
+### HTTPS and release preparation
 
 1. Install the project's Python dependencies plus `ai_engine/requirements-yolo.txt`; build Flutter web if needed. Keep the runtime directory outside the source checkout.
 2. Configure absolute database, image-store and checkpoint paths. Run `python -m backend.manage migrate` and bootstrap the initial administrator interactively.

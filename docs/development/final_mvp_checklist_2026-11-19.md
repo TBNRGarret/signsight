@@ -1,5 +1,21 @@
 # Final MVP closeout — 19 November 2026
 
+## Progress recorded 25 November
+
+- [x] Foreground GPS location dot/follow/browse/recenter and start/stop; route remains selected on scope changes. Native emulator rendered-feature test passed with synthetic GPS/API. Physical acceptance remains separate.
+- [x] One in-flight inference by default per process, immediate busy response and cleanup on failure.
+- [x] Read-only DB/image inventory and candidate retention report, with contribution/report/evidence protection; no automatic deletion.
+- [x] Private demo copy recovery: original snapshot retained, seven missing-user references marked unknown only on the copy, all 16 images verified, restore sessions revoked; contribution/review/map passed on a further synthetic QA clone.
+- [x] Laptop debug ARM64 APK, web build and [demo instructions](../getting-started/demo.md).
+- [x] Current runtime configuration and known model failures measured; quality remains unresolved despite fast inference.
+- [ ] Receive/evaluate the fine-tuned checkpoint and choose whether to activate it.
+- [ ] Physical Android camera/gallery/GPS, denied permissions, process closure and real network acceptance.
+- [ ] Trusted HTTPS, private production signing and final remote CI/release; off-laptop private backup.
+
+Fresh automated results and limitations: [core_completion.md](../runtime/core_completion.md).
+The tables below preserve the 19 November gaps and acceptance criteria; checked implementation above
+does not mark the remaining physical/model/release criteria complete.
+
 Scope: Flutter user app, staff web workspace, FastAPI/SQLite/image storage and server-side CAR35 detection on a laptop. The contribution/review/history/map/report core exists. Completion now depends on measured model quality, a working device build and a reproducible demo/runtime, rather than adding another client or database.
 
 This list supersedes older completion snapshots for prioritization. Code implemented, synthetic automated tests, and real device/field acceptance are different evidence levels. Do not mark an item complete from an older screenshot or synthetic test alone.

@@ -1,5 +1,40 @@
 # Core implementation and acceptance
 
+## Current closeout — 25 November 2026
+
+The laptop MVP includes Flutter user flows, staff web queues, contribution/report review, icon/photo
+map records, foreground GPS tracking, destination routes that survive scope changes, draft/receipt
+recovery and configurable revalidation. The demo runs CAR35 V4 with its bound catalog/mapping;
+fine-tune candidates are not automatically activated.
+
+New operational work: inference admission defaults to one request per process, with immediate
+503/Retry-After when busy and release on failure; `inventory-runtime` audits SQLite/images read-only
+and identifies old unused candidates without deleting evidence or drafts. See [deployment.md](deployment.md).
+
+Verified on 25 November:
+
+- Python: **526 passed, 4 skipped**; JavaScript: **126 passed**. Public-source policy: zero findings.
+- Flutter unit/widget: **108 passed** in the tracking run; final analysis has no issues and formatting passes.
+- Web browser: **34 passed**; Flutter preview: **12 passed**, both on desktop/phone fixtures. Current evidence is tracked in the [closeout checklist](../development/final_mvp_checklist_2026-11-19.md).
+- Android emulator: the new native tracking test passed. A rendered GPS feature was queried from real
+  MapLibre, with synthetic GPS/API, then browse/recenter, scope preservation and stop were checked.
+  This is not physical GPS/camera or actual road navigation acceptance.
+- Read-only audit of the private demo found seven orphan actor references and 16 valid images. On a
+  separate copy only, nullable actor fields were marked unknown, retaining original values in a private
+  repair report and untouched DB snapshot. Backup/restore verified all images, zero FK violations and
+  revoked restored sessions. A further QA clone passed synthetic contribution → approval → exact record.
+- Live OSRM/Photon smoke returned route geometry and validated search results over the local network.
+- Actual V4 checkpoint HTTP detection on two supplied failure images had warm p50 about 90/126 ms
+  on an RTX 3060 Laptop GPU, five samples each. Both still returned zero detections at confidence .35.
+  These timings exclude phone/Wi-Fi and do not establish accuracy or representative tail latency.
+
+The debug ARM64 APK and web build exist. Model field quality, physical Android camera/GPS/recovery,
+trusted HTTPS/release signing, independent test data and final remote CI/release acceptance remain open.
+The current implementation does not establish store/iOS release or production readiness.
+Use [the demo runbook](../getting-started/demo.md) for the three core flows.
+
+## Historical acceptance snapshot — 30 October 2026
+
 Updated 30 October 2026. Staff use the web management UI; ordinary users use Flutter. The laptop hosts FastAPI, SQLite, managed images and YOLO. Code implementation, automated verification and physical acceptance are separate statuses below.
 
 | Area | Implemented | Acceptance still needed |

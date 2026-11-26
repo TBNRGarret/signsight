@@ -24,6 +24,8 @@ Bản đồ chỉ hiển thị biển đã được ghi nhận/duyệt trong Sig
 
 ## Chạy trên máy mới
 
+Để trình diễn user → staff → map/report và hành trình GPS, xem [hướng dẫn demo](docs/getting-started/demo.md).
+
 Nếu đã có database, ảnh và weights local, xem [cách dùng lại dữ liệu](docs/getting-started/local_development.md).
 
 Cần Python 3.11; Node.js 24 dùng cho kiểm thử frontend. Clone repo GitHub của bạn rồi chạy từ thư mục gốc.

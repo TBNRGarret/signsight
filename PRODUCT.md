@@ -45,14 +45,14 @@ The current mechanism combines backend YOLO detection, user confirmation of the 
 ### Map and recovery
 
 - Support nearby sign discovery, destination search, car routes, and configurable nearby radius/route corridor.
-- Routing starts from the point being viewed; the user can use GPS to move to their current position first.
+- Routing uses fresh GPS when available, otherwise the viewed point. Starting a journey acquires GPS and recalculates from it when necessary. Foreground tracking shows a moving location dot; dragging pauses camera follow, and changing sign scope preserves the route.
 - Native contribution recovery retains one draft scoped to the account and API origin, with retry using an existing upload when available. Web preview drafts are memory-only; report forms are retained only while open.
 - Turn-by-turn/voice navigation, lane/direction applicability guarantees, continuous dashcam processing, full offline maps/synchronization, background submission, and push notifications are outside the current core.
 
 ### Model, data, and deployment
 
 - YOLO detections require human confirmation and review. Automated fixtures and legacy ROI samples do not establish accuracy on Vietnam street scenes.
-- The served adapter uses the project's 10-class taxonomy. The SupSign 35-class training candidate requires reviewed mappings and a tested migration before integration; do not swap incompatible weights directly.
+- The adapter preserves legacy catalog IDs and supports CAR35 checkpoints through reviewed, hash-bound mappings. Runtime configuration selects checkpoint/catalog/mapping together. The local demo uses CAR35 V4; raw107/fine-tune candidates require evaluation before activation.
 - Preserve existing personal database, uploads, weights, credentials, and modified academic worklogs. Keep private data and academic documents out of the public application repository.
 - Physical camera/GPS, permission denial, recovery, real-provider behavior, and independent field accuracy still require acceptance. iOS has not been built or accepted here.
 - Production HTTPS deployment, production signing, store release, and source-code licensing remain open decisions or unfinished operational work. Do not imply that they have shipped.
@@ -66,12 +66,12 @@ The current mechanism combines backend YOLO detection, user confirmation of the 
 ## Evidence on Hand
 
 - `README.md`: product overview, features, stack, and local entry points.
-- `docs/contribution_flow.md`: contribution and review workflow.
-- `docs/flutter_user_app.md`: user app behavior, recovery limits, build instructions, and native acceptance limits.
-- `docs/web_and_management.md`: staff workflows and permissions.
-- `docs/core_completion.md`: implementation and verification evidence, separately from remaining physical acceptance. Read its current contents rather than treating test counts as permanent product facts.
-- `docs/local_development.md` and `docs/deployment.md`: source/runtime separation, deployment, and recovery procedures.
-- `data/`, `notebooks/`, and `docs/supsign_yolo11s_colab.md`: taxonomy and model-development material. Weights, original datasets, runtime database, and uploads are not distributed with the public source.
+- `docs/getting-started/contribution_flow.md`: contribution and review workflow.
+- `docs/getting-started/flutter_user_app.md`: app behavior, build/run steps and acceptance limits.
+- `docs/runtime/web_and_management.md`: staff workflows and permissions.
+- `docs/runtime/core_completion.md`: current verification evidence and remaining physical acceptance.
+- `docs/getting-started/local_development.md` and `docs/runtime/deployment.md`: source/runtime separation, deployment and recovery.
+- `data/`, `notebooks/`, and `docs/training/`: taxonomy and model development. Weights, original datasets, database and uploads are not distributed with public source.
 - No confirmed testimonials, customer counts, production deployment evidence, or independent field-accuracy guarantees were supplied for product copy.
 
 ## Product Principles
