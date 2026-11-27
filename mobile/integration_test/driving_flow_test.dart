@@ -95,13 +95,25 @@ void main() {
     await tester.tap(find.text('Bắt đầu'));
     await tester.pump();
     devices.fixes.add(
-      LocationFix(origin, DateTime.now().toUtc(), accuracy: 8, bearing: 60),
+      LocationFix(
+        origin,
+        DateTime.now().toUtc(),
+        accuracy: 8,
+        bearing: 60,
+        speed: 12,
+      ),
     );
     await waitFor(tester, () => scene?.followUser == true);
     await tester.pump(const Duration(seconds: 2));
     const moved = GeoPoint(10.7772, 106.7015);
     devices.fixes.add(
-      LocationFix(moved, DateTime.now().toUtc(), accuracy: 6, bearing: 60),
+      LocationFix(
+        moved,
+        DateTime.now().toUtc(),
+        accuracy: 6,
+        bearing: 60,
+        speed: 12,
+      ),
     );
     await waitFor(
       tester,
@@ -120,6 +132,18 @@ void main() {
     }
     expect(find.text('Không thể cập nhật bản đồ. Thử tải lại.'), findsNothing);
     expect(dots, isNotEmpty);
+    expect(scene!.routeProgress!.distanceAlong, greaterThan(20));
+    final completed = await surface!.queryRenderedFeaturesInRect(
+      const Rect.fromLTWH(0, 0, 2000, 4000),
+      ['journey-completed'],
+      null,
+    );
+    expect(completed, isNotEmpty);
+    await tester.tap(find.byTooltip('Bắc ở trên'));
+    await tester.pump(const Duration(seconds: 1));
+    expect(scene!.headingUp, false);
+    await tester.tap(find.byTooltip('Theo hướng xe'));
+    await tester.pump(const Duration(seconds: 1));
     await reviewFrame(tester, 'native-tracking');
     await tester.drag(find.byType(MapLibreMap), const Offset(70, 60));
     await waitFor(tester, () => scene?.followUser == false);

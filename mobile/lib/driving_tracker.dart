@@ -7,10 +7,23 @@ import 'models.dart';
 
 /// A device fix, distinct from the map camera and a contribution's sign pin.
 class LocationFix {
-  const LocationFix(this.point, this.timestamp, {this.accuracy, this.bearing});
+  const LocationFix(
+    this.point,
+    this.timestamp, {
+    this.accuracy,
+    this.bearing,
+    this.speed,
+  });
   final GeoPoint point;
   final DateTime timestamp;
   final double? accuracy, bearing;
+
+  /// Device-reported meters/second, not a road's speed limit.
+  final double? speed;
+  double? get usableSpeed =>
+      speed != null && speed!.isFinite && speed! >= 0 && speed! <= 75
+      ? speed
+      : null;
 
   bool usableAt(DateTime now) {
     final age = now.toUtc().difference(timestamp.toUtc());

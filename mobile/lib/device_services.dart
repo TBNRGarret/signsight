@@ -74,6 +74,7 @@ class DeviceServices {
         GeoPoint(p.latitude, p.longitude),
         p.timestamp.toUtc(),
         accuracy: p.accuracy,
+        speed: p.speed,
         bearing: p.speed.isFinite && p.speed >= 2 ? p.heading : null,
       ),
     );

@@ -17,6 +17,8 @@ extension _MapScreen on _UserShellState {
               selectedSignId: selected?.id,
               route: c.route?.geometry ?? const [],
               routeFitRevision: c.routeFitRevision,
+              routeProgress: _driving.driving ? _journeyProgress : null,
+              headingUp: _headingUp,
               userLocation: c.signedIn ? _driving.fix : null,
               userLocationStale: !_driving.fresh,
               followUser:
@@ -148,38 +150,74 @@ extension _MapScreen on _UserShellState {
             left: 16,
             right: 16,
             top: 12,
-            child: Material(
-              elevation: 2,
-              borderRadius: BorderRadius.circular(16),
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Row(
-                  children: [
-                    Icon(
-                      _driving.fresh ? Icons.gps_fixed : Icons.gps_not_fixed,
-                      color: _driving.fresh
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.error,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Material(
+                  elevation: 2,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _driving.fresh
+                              ? Icons.gps_fixed
+                              : Icons.gps_not_fixed,
+                          color: _driving.fresh
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.error,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _driving.busy
+                                ? 'Đang tìm vị trí GPS…'
+                                : _driving.error ??
+                                      (!_driving.fresh
+                                          ? 'GPS chưa cập nhật. Vị trí hiển thị là lần cuối.'
+                                          : _offRoute
+                                          ? 'Bạn đang ngoài tuyến. Chưa tính lại tuyến.'
+                                          : 'GPS${_driving.fix?.accuracy == null ? '' : ' · ±${_driving.fix!.accuracy!.round()} m'}'),
+                          ),
+                        ),
+                        if (!_driving.fresh && !_driving.busy)
+                          TextButton(
+                            onPressed: () => _driving.resume(),
+                            child: const Text('Thử lại'),
+                          ),
+                        Semantics(
+                          label: _headingUp ? 'Bắc ở trên' : 'Theo hướng xe',
+                          container: true,
+                          button: true,
+                          onTap: _toggleHeading,
+                          excludeSemantics: true,
+                          child: Tooltip(
+                            message: _headingUp
+                                ? 'Bắc ở trên'
+                                : 'Theo hướng xe',
+                            excludeFromSemantics: true,
+                            child: IconButton(
+                              onPressed: _toggleHeading,
+                              icon: Icon(
+                                _headingUp
+                                    ? Icons.explore_outlined
+                                    : Icons.navigation_outlined,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _driving.busy
-                            ? 'Đang tìm vị trí GPS…'
-                            : _driving.error ??
-                                  (!_driving.fresh
-                                      ? 'GPS chưa cập nhật. Vị trí hiển thị là lần cuối.'
-                                      : 'GPS${_driving.fix?.accuracy == null ? '' : ' · ±${_driving.fix!.accuracy!.round()} m'}'),
-                      ),
-                    ),
-                    if (!_driving.fresh && !_driving.busy)
-                      TextButton(
-                        onPressed: () => _driving.resume(),
-                        child: const Text('Thử lại'),
-                      ),
-                  ],
+                  ),
                 ),
-              ),
+                if (_driving.fresh &&
+                    !_offRoute &&
+                    !c.routeSignsBusy &&
+                    c.routeSignsError == null &&
+                    _journeyProgress != null)
+                  _upcomingSign(context),
+              ],
             ),
           ),
         if (MediaQuery.viewInsetsOf(context).bottom == 0 && c.places.isEmpty)
@@ -191,22 +229,23 @@ extension _MapScreen on _UserShellState {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: IconButton.filledTonal(
-                    tooltip: 'Vị trí của tôi',
-                    onPressed: c.signedIn
-                        ? () {
-                            if (_driving.driving) {
-                              _driving.follow();
-                            } else {
-                              unawaited(_gps());
+                if (!_driving.driving)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: IconButton.filledTonal(
+                      tooltip: 'Vị trí của tôi',
+                      onPressed: c.signedIn
+                          ? () {
+                              if (_driving.driving) {
+                                _driving.follow();
+                              } else {
+                                unawaited(_gps());
+                              }
                             }
-                          }
-                        : _account,
-                    icon: const Icon(Icons.my_location),
+                          : _account,
+                      icon: const Icon(Icons.my_location),
+                    ),
                   ),
-                ),
                 if (_driving.driving && !_driving.following)
                   Align(
                     alignment: Alignment.centerRight,
@@ -382,11 +421,20 @@ extension _MapScreen on _UserShellState {
         ],
       ),
       Text(
-        '${(c.route!.distance / 1000).toStringAsFixed(1)} km · ${(c.route!.duration / 60).ceil()} phút',
+        _driving.driving &&
+                _driving.fresh &&
+                !_offRoute &&
+                _journeyProgress != null
+            ? 'Còn khoảng ${(_journeyProgress!.remainingMeters / 1000).toStringAsFixed(1)} km'
+            : '${(c.route!.distance / 1000).toStringAsFixed(1)} km · ${(c.route!.duration / 60).ceil()} phút',
         style: Theme.of(context).textTheme.titleMedium,
       ),
       Text(
-        _driving.driving ? 'Toàn tuyến · Ước tính ban đầu' : 'Xem trước tuyến',
+        !_driving.driving
+            ? 'Xem trước tuyến'
+            : _driving.fresh && !_offRoute && _journeyProgress != null
+            ? 'Khoảng cách dọc tuyến đã chọn'
+            : 'Toàn tuyến · Ước tính ban đầu',
         style: Theme.of(context).textTheme.bodySmall,
       ),
       Text(
@@ -452,4 +500,68 @@ extension _MapScreen on _UserShellState {
       ),
     ],
   );
+
+  Widget _upcomingSign(BuildContext context) {
+    final upcoming = _journeyProgress!.upcoming(c.route?.signs ?? const []);
+    if (upcoming == null) return const SizedBox.shrink();
+    final sign = upcoming.sign;
+    final image = _drivingIcons.putIfAbsent(
+      '${sign.code}:${sign.name}',
+      () => renderSignIcon(sign.code, name: sign.name),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Material(
+        key: const ValueKey('upcoming-sign'),
+        elevation: 2,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              FutureBuilder<Uint8List>(
+                future: image,
+                builder: (context, snapshot) => SizedBox(
+                  width: 56,
+                  height: 56,
+                  child: snapshot.hasData
+                      ? Image.memory(
+                          snapshot.data!,
+                          fit: BoxFit.contain,
+                          semanticLabel: sign.name,
+                        )
+                      : const Icon(Icons.traffic_outlined, size: 40),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      upcoming.meters < 1000
+                          ? '${(upcoming.meters / 10).round() * 10} m phía trước'
+                          : '${(upcoming.meters / 1000).toStringAsFixed(1)} km phía trước',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    Text(
+                      sign.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      sign.needsConfirmation
+                          ? 'Biển gần tuyến · cần xác nhận lại'
+                          : 'Biển gần tuyến · kiểm tra chiều/làn',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

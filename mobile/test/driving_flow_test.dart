@@ -23,6 +23,107 @@ class DrivingDevices extends DeviceServices {
 
 void main() {
   testWidgets(
+    'driving shows route progress and only upcoming signs; off-route freezes progress',
+    (tester) async {
+      final h = RouteHarness();
+      await h.c.routeTo(destination);
+      h.c.route = DrivingRoute(
+        geometry,
+        [
+          Sign(
+            'near',
+            'P.127',
+            'Biển phía trước đầu tiên',
+            geometry.first,
+            distance: 100,
+          ),
+          Sign(
+            'next',
+            'P.102',
+            'Biển phía trước tiếp theo',
+            geometry.last,
+            distance: 800,
+          ),
+        ],
+        1200,
+        180,
+      );
+      final devices = DrivingDevices();
+      MapScene? scene;
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        SignSightApp(
+          controller: h.c,
+          devices: devices,
+          mapBuilder: (_, s) {
+            scene = s;
+            return const SizedBox.expand();
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Bắt đầu'));
+      await tester.pump();
+      final time = DateTime.now().toUtc();
+      devices.positions.add(
+        LocationFix(geometry.first, time, accuracy: 5, bearing: 60, speed: 12),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Biển phía trước đầu tiên'), findsOneWidget);
+      expect(find.byKey(const ValueKey('upcoming-sign')), findsOneWidget);
+      devices.positions.add(
+        LocationFix(
+          GeoPoint(
+            (geometry.first.latitude + geometry.last.latitude) / 2,
+            (geometry.first.longitude + geometry.last.longitude) / 2,
+          ),
+          time.add(const Duration(seconds: 1)),
+          accuracy: 5,
+          bearing: 60,
+          speed: 12,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Biển phía trước đầu tiên'), findsNothing);
+      expect(find.text('Biển phía trước tiếp theo'), findsOneWidget);
+      expect(scene!.routeProgress!.distanceAlong, greaterThan(400));
+      expect(find.textContaining('Còn khoảng'), findsOneWidget);
+      await tester.tap(find.byTooltip('Bắc ở trên'));
+      await tester.pumpAndSettle();
+      expect(scene!.headingUp, false);
+      expect(scene!.followUser, true);
+      final distance = scene!.routeProgress!.distanceAlong;
+      await h.c.changeMapScope(radius: 1000, corridor: 100);
+      await tester.pumpAndSettle();
+      expect(scene!.routeProgress!.distanceAlong, closeTo(distance, 1));
+      devices.positions.add(
+        LocationFix(
+          const GeoPoint(10.80, 106.75),
+          time.add(const Duration(seconds: 2)),
+          accuracy: 5,
+          speed: 12,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Bạn đang ngoài tuyến. Chưa tính lại tuyến.'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('upcoming-sign')), findsNothing);
+      expect(scene!.routeProgress!.distanceAlong, closeTo(distance, 1));
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('Kết thúc'));
+      await tester.pumpAndSettle();
+      expect(scene!.routeProgress, isNull);
+      expect(h.c.route, isNotNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      unawaited(devices.positions.close());
+    },
+  );
+  testWidgets(
     'logout stops GPS and the next account never inherits the previous location',
     (tester) async {
       final h = RouteHarness();

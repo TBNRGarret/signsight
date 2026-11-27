@@ -24,20 +24,37 @@ async function registerAndLogin(page){
 }
 
 test('changing sign scope keeps the selected route and endpoints',async({page},testInfo)=>{
+ // Observe the actual renderer in this disposable test, without exposing a
+ // production map/debug API. Wait for its camera, not only Flutter text updates.
+ await page.route('**/web/vendor/maplibre/maplibre-gl.js',async route=>{
+  const response=await route.fetch();
+  await route.fulfill({response,body:(await response.text())+`
+   window.__drivingMaps=[];
+   const drivingOriginalOn=maplibregl.Map.prototype.on;
+   maplibregl.Map.prototype.on=function(...args){
+    if(!window.__drivingMaps.includes(this))window.__drivingMaps.push(this);
+    return drivingOriginalOn.apply(this,args);
+   };
+  `});
+ });
  await page.context().grantPermissions(['geolocation']);
  await page.context().setGeolocation({latitude:10.7769,longitude:106.7009,accuracy:8});
  await page.emulateMedia({colorScheme:testInfo.project.name==='phone'?'dark':'light'});
  await registerAndLogin(page);
  const geometry=[{latitude:10.7769,longitude:106.7009},{latitude:10.7769,longitude:106.706},
   {latitude:10.78,longitude:106.706},{latitude:10.78,longitude:106.71}];
+ const signs=[
+  {sign:{id:'fixture-speed',qcvn_code:'P.127 (50)',name_vi:'Giới hạn tốc độ 50 km/h',latitude:10.7769,longitude:106.70365,status:'active',verification_status:'current'},distance_to_route_meters:0,distance_along_route_meters:300},
+  {sign:{id:'fixture-warning',qcvn_code:'W.224',name_vi:'Đường người đi bộ cắt ngang',latitude:10.779,longitude:106.706,status:'active',verification_status:'current'},distance_to_route_meters:0,distance_along_route_meters:800}
+ ];
  let drivingRequests=0,scopeBody;
  await page.route('**/api/v1/places/search?*',route=>route.fulfill({json:{items:[
   {id:'destination',name:'Bến Bạch Đằng',latitude:10.78,longitude:106.71}]}}));
  await page.route('**/api/v1/navigation/route',route=>{
-  drivingRequests++;return route.fulfill({json:{geometry,signs:[],distance_meters:1200,duration_seconds:180,buffer_meters:50}});
+  drivingRequests++;return route.fulfill({json:{geometry,signs,distance_meters:1200,duration_seconds:180,buffer_meters:50}});
  });
  await page.route('**/api/v1/navigation/route-signs',async route=>{
-  scopeBody=route.request().postDataJSON();await route.continue();
+  scopeBody=route.request().postDataJSON();await route.fulfill({json:{signs}});
  });
  // Inline semantics refresh can remove autocapitalize on an active editor.
  // Verify the real submitted query instead of using the modal-input marker.
@@ -70,9 +87,29 @@ test('changing sign scope keeps the selected route and endpoints',async({page},t
  }
  await page.getByRole('button',{name:'Bắt đầu',exact:true}).click();
  await expect(page.getByRole('button',{name:'Kết thúc',exact:true})).toBeVisible();
- await expect(page.getByText('Toàn tuyến · Ước tính ban đầu',{exact:true})).toBeVisible();
- await page.context().setGeolocation({latitude:10.7772,longitude:106.7015,accuracy:6});
+ await expect(page.getByText(/Còn khoảng .* km/)).toBeVisible();
+ await expect(page.getByText('Giới hạn tốc độ 50 km/h',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Bắc ở trên',exact:true}).click();
+ await page.getByRole('button',{name:'Theo hướng xe',exact:true}).click();
+ await page.context().setGeolocation({latitude:10.7769,longitude:106.7045,accuracy:6});
  await expect(page.getByText(/GPS · ±6 m/)).toBeVisible();
+ await expect(page.getByText('Đường người đi bộ cắt ngang',{exact:true})).toBeVisible();
+ await expect(page.getByText('Giới hạn tốc độ 50 km/h',{exact:true})).toHaveCount(0);
+ await expect.poll(()=>page.evaluate(()=>{
+  const map=window.__drivingMaps?.at(-1);
+  if(!map)return {visible:false,maps:window.__drivingMaps?.length};
+  const layer=!!map.getLayer('user-location-dot'),canvas=map.getCanvas();
+  const features=layer?map.queryRenderedFeatures({layers:['user-location-dot']}):[];
+  const visible=features.some(feature=>{
+   const [lon,lat]=feature.geometry.coordinates,p=map.project([lon,lat]),canvas=map.getCanvas();
+   return Math.abs(lon-106.7045)<1e-6&&Math.abs(lat-10.7769)<1e-6&&
+    p.x>16&&p.x<canvas.clientWidth-16&&p.y>16&&p.y<canvas.clientHeight-16;
+  });
+  const source=map.getStyle().sources['user-location']?.data;
+  const coords=source?.features?.find(f=>f.properties.kind==='position')?.geometry.coordinates;
+  return {visible,moving:map.isMoving(),layer,center:map.getCenter(),zoom:map.getZoom(),
+   size:[canvas.clientWidth,canvas.clientHeight],features,coords,pixel:coords?map.project(coords):null};
+ })).toMatchObject({visible:true,moving:false});
  expect(drivingRequests).toBe(1);
  if(process.env.SIGNSIGHT_SCREENSHOT_DIR){
   await page.screenshot({path:path.join(process.env.SIGNSIGHT_SCREENSHOT_DIR,'tracking-'+testInfo.project.name+'.png')});
@@ -83,6 +120,10 @@ test('changing sign scope keeps the selected route and endpoints',async({page},t
  await expect(page.getByRole('button',{name:'Theo dõi lại',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Theo dõi lại',exact:true}).click();
  await expect(page.getByRole('button',{name:'Theo dõi lại',exact:true})).toHaveCount(0);
+ await page.context().setGeolocation({latitude:10.79,longitude:106.73,accuracy:7});
+ await expect(page.getByText('Bạn đang ngoài tuyến. Chưa tính lại tuyến.',{exact:true})).toBeVisible();
+ await expect(page.getByText('Đường người đi bộ cắt ngang',{exact:true})).toHaveCount(0);
+ expect(drivingRequests).toBe(1);
  await page.getByRole('button',{name:'Kết thúc',exact:true}).click();
  await expect(page.getByRole('button',{name:'Bắt đầu',exact:true})).toBeVisible();
  await expect(page.getByRole('textbox')).toBeVisible();

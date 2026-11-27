@@ -8,6 +8,7 @@ import 'models.dart';
 import 'sign_icons.dart';
 import 'driving_tracker.dart';
 import 'location_puck.dart';
+import 'driving_presentation.dart';
 
 class MapScene {
   const MapScene({
@@ -26,6 +27,8 @@ class MapScene {
     this.followUser = false,
     this.followRevision = 0,
     this.onUserGesture,
+    this.routeProgress,
+    this.headingUp = true,
   });
   final GeoPoint center;
   final List<Sign> signs;
@@ -40,6 +43,8 @@ class MapScene {
   final bool userLocationStale, followUser;
   final int followRevision;
   final VoidCallback? onUserGesture;
+  final RouteProgress? routeProgress;
+  final bool headingUp;
 }
 
 typedef MapBuilder = Widget Function(BuildContext context, MapScene scene);
@@ -74,6 +79,11 @@ class _SignMapState extends State<SignMap> {
   String? _locationSignature;
   Offset? _pointerOrigin;
   bool _gestureSent = false;
+  final _cameraMotion = DrivingCameraMotion();
+  Future<void> _progressPending = Future.value();
+  bool _progressSourceAdded = false;
+  String? _progressSignature;
+  int _progressRevision = 0;
   bool _samePoint(GeoPoint a, GeoPoint b) =>
       a.latitude == b.latitude && a.longitude == b.longitude;
   bool _sameRoute(List<GeoPoint>? a, List<GeoPoint> b) =>
@@ -155,12 +165,18 @@ class _SignMapState extends State<SignMap> {
       _sync();
     }
     _syncLocation();
+    _syncProgress();
   }
 
   void _syncLocation() {
     final controller = _controller;
     if (!_loaded || controller == null || widget.scene.pinOnly) return;
     final scene = widget.scene;
+    if (!scene.followUser ||
+        scene.userLocation == null ||
+        scene.userLocationStale) {
+      _cameraMotion.reset();
+    }
     if (scene.userLocation == null && !_locationSourceAdded) return;
     final data = locationGeoJson(
       scene.userLocation,
@@ -170,6 +186,9 @@ class _SignMapState extends State<SignMap> {
       data,
       scene.followUser,
       scene.followRevision,
+      scene.headingUp,
+      scene.userLocation?.usableSpeed,
+      scene.userLocation?.timestamp.toIso8601String(),
     ]);
     if (signature == _locationSignature) return;
     final revision = ++_locationRevision, style = _style;
@@ -233,21 +252,93 @@ class _SignMapState extends State<SignMap> {
             !scene.userLocationStale &&
             widget.scene.followUser &&
             scene.userLocation != null) {
+          final pose = _cameraMotion.update(
+            scene.userLocation!,
+            headingUp: scene.headingUp,
+          );
           await controller.animateCamera(
             CameraUpdate.newCameraPosition(
               CameraPosition(
-                target: point(scene.userLocation!.point),
-                zoom: 17,
-                tilt: 40,
-                bearing:
-                    scene.userLocation!.direction ??
-                    controller.cameraPosition?.bearing ??
-                    0,
+                target: point(pose.target),
+                zoom: pose.zoom,
+                tilt: pose.tilt,
+                bearing: pose.bearing,
               ),
             ),
             duration: const Duration(milliseconds: 600),
           );
         }
+      } catch (_) {
+        if (valid()) {
+          setState(() => _error = 'Không thể cập nhật bản đồ. Thử tải lại.');
+        }
+      }
+    });
+  }
+
+  void _syncProgress() {
+    final controller = _controller;
+    if (!_loaded || controller == null || widget.scene.pinOnly) return;
+    final progress = widget.scene.routeProgress;
+    if (progress == null && !_progressSourceAdded) {
+      _progressRevision++;
+      return;
+    }
+    final data = routeProgressGeoJson(progress);
+    final signature = jsonEncode(data);
+    if (signature == _progressSignature) return;
+    final revision = ++_progressRevision, style = _style;
+    bool valid() =>
+        mounted && _loaded && controller == _controller && style == _style;
+    _progressPending = _progressPending.catchError((_) {}).then((_) async {
+      // Base-route lines and sign symbols must finish before adding the overlay.
+      await _pending;
+      if (!valid() || revision != _progressRevision) return;
+      try {
+        if (!_progressSourceAdded) {
+          await controller.addGeoJsonSource(
+            'journey-progress',
+            routeProgressGeoJson(null),
+          );
+          if (!valid()) return;
+          for (final part in [
+            ('completed', '#94a3b8'),
+            ('remaining', '#2563eb'),
+          ]) {
+            await controller.addLineLayer(
+              'journey-progress',
+              'journey-${part.$1}',
+              LineLayerProperties(
+                lineColor: part.$2,
+                lineWidth: 7,
+                lineCap: 'round',
+                lineJoin: 'round',
+              ),
+              belowLayerId:
+                  controller.circleManager?.layerIds.firstOrNull ??
+                  (_locationSourceAdded ? 'user-location-accuracy' : null),
+              filter: [
+                '==',
+                ['get', 'part'],
+                part.$1,
+              ],
+            );
+            if (!valid()) return;
+          }
+          _progressSourceAdded = true;
+        }
+        if (!valid()) return;
+        // Initialization can outlive stop/logout; never publish the old geometry.
+        if (revision != _progressRevision) {
+          await controller.setGeoJsonSource(
+            'journey-progress',
+            routeProgressGeoJson(null),
+          );
+          _progressSignature = null;
+          return;
+        }
+        await controller.setGeoJsonSource('journey-progress', data);
+        if (valid()) _progressSignature = signature;
       } catch (_) {
         if (valid()) {
           setState(() => _error = 'Không thể cập nhật bản đồ. Thử tải lại.');
@@ -525,6 +616,10 @@ class _SignMapState extends State<SignMap> {
             _loaded = true;
             _pinSourceAdded = false;
             _locationSourceAdded = false;
+            _progressSourceAdded = false;
+            _progressSignature = null;
+            _progressRevision++;
+            _cameraMotion.reset();
             _locationSignature = null;
             _locationRevision++;
             _drawnRoute = null;
@@ -544,6 +639,7 @@ class _SignMapState extends State<SignMap> {
             if (mounted) setState(() => _error = null);
             _sync();
             _syncLocation();
+            _syncProgress();
           },
           onMapClick: (_, position) => widget.scene.onTap?.call(
             GeoPoint(position.latitude, position.longitude),

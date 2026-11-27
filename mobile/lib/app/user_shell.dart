@@ -27,6 +27,10 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
   LocationFix? _lastDrivingFix;
   DateTime? _lastDrivingNearby;
   bool _startingDrive = false;
+  RouteProgress? _journeyProgress;
+  List<GeoPoint>? _journeyGeometry;
+  bool _offRoute = false, _headingUp = true;
+  final _drivingIcons = <String, Future<Uint8List>>{};
   String? _loadedUser;
   AppController get c => widget.controller;
   @override
@@ -40,6 +44,7 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
 
   void _drivingChanged() {
     if (!mounted) return;
+    _updateJourney();
     final fix = _driving.fix;
     if (c.signedIn &&
         _driving.fresh &&
@@ -60,6 +65,29 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
       }
     }
     setState(() {});
+  }
+
+  void _updateJourney() {
+    final route = c.route;
+    if (!_driving.driving || route == null) {
+      _journeyProgress = null;
+      _journeyGeometry = null;
+      _offRoute = false;
+      return;
+    }
+    if (!identical(_journeyGeometry, route.geometry)) {
+      _journeyProgress = null;
+      _journeyGeometry = route.geometry;
+    }
+    if (!_driving.fresh || _driving.fix == null) return;
+    final projection = projectRoute(
+      route.geometry,
+      _driving.fix!.point,
+      previousDistance: _journeyProgress?.distanceAlong,
+    );
+    _offRoute =
+        projection != null && !projection.onRoute(_driving.fix!.accuracy);
+    if (!_offRoute) _journeyProgress = projection;
   }
 
   Future<void> _startDrive() async {
@@ -114,6 +142,8 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
     c.showRoute();
   }
 
+  void _toggleHeading() => setState(() => _headingUp = !_headingUp);
+
   void _changed() {
     if (_driving.driving &&
         (!c.signedIn || (c.route == null && !_startingDrive))) {
@@ -140,6 +170,7 @@ class _UserShellState extends State<UserShell> with WidgetsBindingObserver {
         });
       }
     }
+    _updateJourney();
     if (mounted) setState(() {});
   }
 
