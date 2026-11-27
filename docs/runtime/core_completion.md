@@ -1,5 +1,25 @@
 # Core implementation and acceptance
 
+## Driving presentation — 27 November 2026
+
+Foreground journeys now use a damped camera heading, device-speed zoom and a look-ahead position,
+with an explicit north-up/heading-up control. Raw GPS remains separate from camera smoothing and
+route projection. The completed route is gray, the remaining route blue; a separate GeoJSON source
+updates progress without rebuilding sign markers or resetting the selected route.
+
+A single upcoming-sign card uses along-route distance, skips passed/inactive signs and limits its
+look-ahead to 1,500 m. GPS interruption, off-route positions or pending/failed route-sign refresh
+suppress that card. Scope changes retain progress; stopping restores the route preview. Off-route
+positions freeze progress and show a message; automatic rerouting, live ETA, turn instructions and
+background tracking remain outside this increment. The app does not infer lane/direction applicability.
+
+Verification: 114 Flutter tests, clean analyzer/formatting, 126 JavaScript tests, 12 Flutter browser
+tests across desktop/phone, release web build and ARM64 debug APK build. Native emulator integration
+queries rendered GPS and completed-route layers with synthetic API/GPS and verifies compass mode,
+scope, browse/recenter and stop. Browser acceptance also queries the rendered GPS dot after camera
+animation. No personal runtime or real checkpoint is used by these tests. Physical driving/GPS and
+iOS acceptance are still pending. See the [user guide](../getting-started/flutter_user_app.md).
+
 ## Current closeout — 25 November 2026
 
 The laptop MVP includes Flutter user flows, staff web queues, contribution/report review, icon/photo

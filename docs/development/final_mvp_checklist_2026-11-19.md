@@ -1,5 +1,18 @@
 # Final MVP closeout — 19 November 2026
 
+## Progress recorded 27 November
+
+- [x] Driving camera smoothing, speed-based zoom, north-up/heading-up, completed/remaining route display and a single upcoming-sign card; radius/corridor changes preserve the selected route and progress.
+- [x] Latest increment verified with 114 Flutter tests, 12 desktop/phone browser tests, native MapLibre renderer with synthetic GPS/API, clean analysis/formatting and an ARM64 debug APK. [Current evidence](../runtime/core_completion.md).
+- [x] Fine-tuned candidate evaluated against raw107 on the same validation set. The measured improvement is marginal and the known real-photo regressions remain unresolved; no candidate activation is justified by that result. The serving demo remains V4.
+- [x] Controlled fine-tune and active-learning review tooling prepared. MTSD is the selected external supplement; only its annotation-inspection notebook is ready, and no MTSD images have been acquired or merged yet.
+- [ ] Independent annotated Vietnam car-view evaluation and an accepted detector/threshold configuration.
+- [ ] Physical Android camera/GPS, permissions, offline/retry and app/process restart acceptance over the real demo network.
+- [ ] Trusted HTTPS, release signing, off-laptop private backup and final release-commit CI acceptance.
+
+The core is implemented and has automated/emulator evidence. This is not a production/field acceptance claim.
+Automatic rerouting, live ETA and turn-by-turn/voice guidance are not part of the latest driving increment.
+
 ## Progress recorded 25 November
 
 - [x] Foreground GPS location dot/follow/browse/recenter and start/stop; route remains selected on scope changes. Native emulator rendered-feature test passed with synthetic GPS/API. Physical acceptance remains separate.
@@ -8,7 +21,7 @@
 - [x] Private demo copy recovery: original snapshot retained, seven missing-user references marked unknown only on the copy, all 16 images verified, restore sessions revoked; contribution/review/map passed on a further synthetic QA clone.
 - [x] Laptop debug ARM64 APK, web build and [demo instructions](../getting-started/demo.md).
 - [x] Current runtime configuration and known model failures measured; quality remains unresolved despite fast inference.
-- [ ] Receive/evaluate the fine-tuned checkpoint and choose whether to activate it.
+- [x] Fine-tuned checkpoint received and evaluated on 25 November; current evidence does not justify activation (see the 27 November update).
 - [ ] Physical Android camera/gallery/GPS, denied permissions, process closure and real network acceptance.
 - [ ] Trusted HTTPS, private production signing and final remote CI/release; off-laptop private backup.
 

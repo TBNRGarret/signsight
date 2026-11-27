@@ -139,6 +139,23 @@ Release không dùng debug key. Cấu hình bốn biến `SIGNSIGHT_KEYSTORE_PAT
 
 Đã build APK debug x86_64 trên Windows sau khi cài NDK 28.2.13676358, SDK 36/35 và CMake 3.22.1, đồng thời tắt Kotlin incremental cache khác ổ. Đã cài và mở màn hình guest trên emulator Android 17/API 37, quan sát nền bản đồ và ba tab. Kiểm tra TCP từ UID app tới backend `10.0.2.2:8000` thành công; backend host trả HTTP 200. Đây là smoke test khởi động và kết nối, chưa nghiệm thu camera/GPS, luồng đóng góp native có đăng nhập hoặc chất lượng model trên ảnh thật. 22 test Flutter đạt và analyze không có issue.
 
+## Chế độ lái xe — 27/11/2026
+
+Chọn điểm đến → xem trước tuyến → **Bắt đầu**. App dùng GPS foreground để di chuyển chấm vị trí,
+camera nhìn phía trước theo hướng xe và zoom ra khi tốc độ GPS tăng. Góc xoay được làm mượt qua hướng Bắc;
+khi đứng yên không dùng hướng GPS dao động để xoay camera. Nút la bàn chuyển giữa **Bắc ở trên** (2D)
+và **Theo hướng xe**. Kéo bản đồ chỉ dừng camera bám theo; **Theo dõi lại** đưa camera về xe.
+
+Tuyến đã đi có màu xám, phần còn lại màu xanh. Khoảng cách còn lại là ước lượng hình học dọc tuyến,
+không phải ETA trực tiếp. Thẻ biển kế tiếp dùng khoảng cách dọc tuyến, bỏ biển đã đi qua và chỉ xét tối đa
+1.500 m phía trước trong dữ liệu biển trên tuyến hiện có; không dự đoán biển chưa có trong database.
+Icon giữ đúng hình đã duyệt, kèm trạng thái cần xác nhận nếu có. Biển gần tuyến chưa đảm bảo áp dụng đúng chiều/làn.
+
+Đổi bán kính/hành lang không xóa tuyến hay tiến độ. GPS mất/cũ hoặc vị trí ngoài tuyến làm ẩn thẻ biển,
+ngừng cập nhật tiến độ; vị trí vẫn là GPS thực, không bị ép vào đường. Đi ngoài tuyến có thông báo,
+chưa tự tính lại tuyến. Kết thúc hành trình giữ tuyến xem trước; logout xóa vị trí và tiến độ khỏi tài khoản.
+Chưa có dẫn đường từng ngã rẽ, giọng nói, tracking nền hoặc kết luận chất lượng trên đường thực tế.
+
 ## Kiểm thử
 
 Cập nhật 30/10: trong tab **Đóng góp**, mở **Sửa loại biển nếu AI nhận sai** để chọn nhãn từ catalog backend và nhập lý do. Cần xác nhận lại nhãn trước khi gửi. Đổi bbox sẽ xóa phần sửa của bbox trước; bản nháp giữ phần sửa cho tài khoản/API hiện tại. Lịch sử hiện nhãn đề xuất, còn nhãn AI gốc giữ ở backend để đối chiếu. Bản đồ chính giữ nguyên khi chuyển giữa ba tab để tránh hủy renderer lúc đang nạp.
